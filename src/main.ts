@@ -1,21 +1,10 @@
 import { Renderer } from './engine/renderer'
-import { createTrack } from './engine/track'
+import { createDefaultTrack } from './engine/track'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 
-/** 可配置赛道：直道 + 右弯 + 左弯 + 缓弯，总曲率回环为 0（460 段，约 15 秒/圈） */
-const track = createTrack([
-  { curve: 0, count: 60 },
-  { curve: 0.02, count: 50 },
-  { curve: 0, count: 40 },
-  { curve: -0.02, count: 50 },
-  { curve: 0, count: 60 },
-  { curve: 0.01, count: 50 },
-  { curve: 0, count: 40 },
-  { curve: -0.01, count: 50 },
-  { curve: 0, count: 60 },
-])
+const track = createDefaultTrack()
 const renderer = new Renderer(canvas, track, window.innerWidth, window.innerHeight)
 
 const carConfig = createCarConfig()

@@ -30,6 +30,21 @@ export function createStraightTrack(count: number): Segment[] {
   return createTrack([{ curve: 0, count }])
 }
 
+/** 默认环形赛道：直道+左右弯交替，总曲率回环为 0（460 段，约 15 秒/圈） */
+export function createDefaultTrack(): Segment[] {
+  return createTrack([
+    { curve: 0, count: 60 },
+    { curve: 0.02, count: 50 },
+    { curve: 0, count: 40 },
+    { curve: -0.02, count: 50 },
+    { curve: 0, count: 60 },
+    { curve: 0.01, count: 50 },
+    { curve: 0, count: 40 },
+    { curve: -0.01, count: 50 },
+    { curve: 0, count: 60 },
+  ])
+}
+
 /** 全赛道曲率之和（回环赛道设计约束应接近 0） */
 export function totalCurve(track: Segment[]): number {
   return track.reduce((sum, segment) => sum + segment.curve, 0)
