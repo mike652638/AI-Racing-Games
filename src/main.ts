@@ -11,6 +11,7 @@ import {
   updateDrift,
 } from './physics/drift'
 import { createInputManager } from './game/input'
+import { JoystickUI } from './ui/joystick'
 import { formatSpeed, formatTime, formatLap, formatLapTimes, lapFromZ } from './ui/format'
 import { loadBestTime, saveBestTime, loadBestDriftScore, saveBestDriftScore } from './ui/save'
 import { EngineSound } from './audio/engine'
@@ -75,7 +76,9 @@ const carState2: CarState = { position: 0, speed: 0 }
 let driftState = createDriftState()
 let driftState2 = createDriftState()
 
-const input = createInputManager(window, canvas)
+const input = createInputManager(window)
+const joystick = new JoystickUI()
+joystick.attach(canvas)
 let phase: Phase = PHASE_MENU
 let engineSound: EngineSound | null = null
 let music: MusicPlayer | null = null
@@ -123,8 +126,8 @@ let last = performance.now()
   get selectedTrack(): string {
     return trackDef.id
   },
-  get touchPoints(): number {
-    return input.touchPoints.size
+  get touchActive(): boolean {
+    return joystick.isActive()
   },
 }
 
@@ -253,7 +256,7 @@ function frame(now: number): void {
   if (phase === PHASE_RACING) {
     updateTraffic(traffic, dt, lapLength)
 
-    const input1 = input.getP1Input()
+    const input1 = joystick.isActive() ? joystick.getInput() : input.getP1Input()
     const input2 = SPLIT_MODE
       ? input.getP2Input()
       : { throttle: 0, brake: false, steer: 0 }
