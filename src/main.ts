@@ -14,6 +14,7 @@ import {
   PLAYER2_MAPPING,
 } from './physics/input'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
+import { loadBestTime, saveBestTime } from './ui/save'
 import { EngineSound } from './audio/engine'
 import {
   nextPhase,
@@ -26,6 +27,7 @@ import {
 const SPLIT_MODE = new URLSearchParams(window.location.search).has('split')
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
+const hudBest = document.getElementById('hud-best') as HTMLDivElement
 const hudSpeed = document.getElementById('hud-speed') as HTMLDivElement
 const hudLap = document.getElementById('hud-lap') as HTMLDivElement
 const hudTime = document.getElementById('hud-time') as HTMLDivElement
@@ -39,6 +41,7 @@ const startScreen = document.getElementById('start-screen') as HTMLDivElement
 const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
 const finishSpeed = document.getElementById('finish-speed') as HTMLParagraphElement
+const finishBest = document.getElementById('finish-best') as HTMLParagraphElement
 
 const TOTAL_LAPS = 3
 const track = createDefaultTrack()
@@ -67,6 +70,7 @@ let cameraZ = 0
 let cameraZ2 = 0
 let raceTime = 0
 let raceTime2 = 0
+let bestTime: number | null = loadBestTime()
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -83,6 +87,9 @@ let last = performance.now()
   get split(): boolean {
     return SPLIT_MODE
   },
+  get bestTime(): number | null {
+    return bestTime
+  },
 }
 
 function resetRace(): void {
@@ -98,6 +105,7 @@ function resetRace(): void {
   raceTime2 = 0
   last = performance.now()
   finishShown = false
+  bestTime = loadBestTime()
 }
 
 function applyPhase(newPhase: Phase): void {
@@ -118,6 +126,14 @@ function applyPhase(newPhase: Phase): void {
       const avgSpeed = cameraZ / Math.max(raceTime, 0.001)
       finishTime.textContent = `总用时 ${formatTime(raceTime)}`
       finishSpeed.textContent = `平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
+      const isRecord = saveBestTime(raceTime)
+      bestTime = loadBestTime()
+      if (isRecord) {
+        finishBest.textContent = 'NEW RECORD!'
+      }
+      else {
+        finishBest.textContent = `最佳 ${formatTime(bestTime ?? raceTime)}`
+      }
     }
   }
 }
@@ -184,6 +200,10 @@ function frame(now: number): void {
   hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)
   hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), TOTAL_LAPS)
   hudTime.textContent = formatTime(raceTime)
+  hudBest.hidden = bestTime === null
+  if (bestTime !== null) {
+    hudBest.textContent = `BEST ${formatTime(bestTime)}`
+  }
   if (SPLIT_MODE) {
     hudSpeed2.textContent = formatSpeed(carState2.speed, carConfig.maxSpeed)
     hudLap2.textContent = formatLap(lapFromZ(cameraZ2, lapLength), TOTAL_LAPS)
