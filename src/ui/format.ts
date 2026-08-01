@@ -22,3 +22,14 @@ export function formatLap(lap: number, totalLaps: number): string {
 export function lapFromZ(cameraZ: number, lapLength: number): number {
   return Math.floor(cameraZ / lapLength) + 1
 }
+
+/**
+ * 累计时间数组 → 每圈单圈用时格式化
+ * lapTimes[0] = 第 1 圈用时，lapTimes[i] - lapTimes[i-1] = 第 i+1 圈用时
+ */
+export function formatLapTimes(lapTimes: number[]): string[] {
+  return lapTimes.map((cum, i) => {
+    const lapSec = i === 0 ? cum : cum - lapTimes[i - 1]
+    return `LAP ${i + 1}: ${formatTime(lapSec)}`
+  })
+}

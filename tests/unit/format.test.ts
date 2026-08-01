@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatSpeed, formatTime, formatLap, lapFromZ } from '../../src/ui/format'
+import { formatSpeed, formatTime, formatLap, formatLapTimes, lapFromZ } from '../../src/ui/format'
 
 describe('formatSpeed', () => {
   test('速度按 maxSpeed=6000 → 320km/h 线性换算', () => {
@@ -26,5 +26,14 @@ describe('formatLap / lapFromZ', () => {
   })
   test('formatLap 显示 1/3 形式', () => {
     expect(formatLap(1, 3)).toBe('LAP 1/3')
+  })
+})
+
+describe('formatLapTimes', () => {
+  test('格式化每圈用时列表', () => {
+    expect(formatLapTimes([25.123, 50.456])).toEqual(['LAP 1: 0:25.123', 'LAP 2: 0:25.333'])
+  })
+  test('空数组返回空', () => {
+    expect(formatLapTimes([])).toEqual([])
   })
 })

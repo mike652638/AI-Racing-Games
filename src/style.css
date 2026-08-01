@@ -157,6 +157,14 @@ canvas {
   display: none;
 }
 
+#finish-laps {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.8;
+  line-height: 1.6;
+  text-align: left;
+}
+
 @media (pointer: coarse) {
   #touch-hint {
     display: block;

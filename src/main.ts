@@ -17,7 +17,7 @@ import {
   touchToCarInput,
   type TouchPoint,
 } from './physics/input'
-import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
+import { formatSpeed, formatTime, formatLap, formatLapTimes, lapFromZ } from './ui/format'
 import { loadBestTime, saveBestTime, loadBestDriftScore, saveBestDriftScore } from './ui/save'
 import { EngineSound } from './audio/engine'
 import { MusicPlayer } from './audio/music'
@@ -51,6 +51,7 @@ const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
 const finishSpeed = document.getElementById('finish-speed') as HTMLParagraphElement
 const finishBest = document.getElementById('finish-best') as HTMLParagraphElement
+const finishLaps = document.getElementById('finish-laps') as HTMLDivElement
 const pauseScreen = document.getElementById('pause-screen') as HTMLDivElement
 const trackName = document.getElementById('track-name') as HTMLSpanElement
 const trackOptions = [
@@ -95,6 +96,8 @@ let globalBestDriftScore: number | null = loadBestDriftScore(trackDef.id)
 let traffic = createTraffic(lapLength)
 let collisionCount = 0
 let collisionCooldown = 0
+let lapTimes: number[] = []
+let lastLap = 1
 const touchPoints = new Map<number, TouchPoint>()
 let last = performance.now()
 
@@ -171,6 +174,8 @@ function resetRace(): void {
   traffic = createTraffic(lapLength)
   collisionCount = 0
   collisionCooldown = 0
+  lapTimes = []
+  lastLap = 1
 }
 
 function applyPhase(newPhase: Phase): void {
@@ -215,6 +220,8 @@ function applyPhase(newPhase: Phase): void {
           finishScore.textContent += ` (最高 ${globalBestDriftScore})`
         }
       }
+      const lapTexts = formatLapTimes(lapTimes)
+      finishLaps.textContent = lapTexts.join('  ')
     }
   }
 }
@@ -289,6 +296,12 @@ function frame(now: number): void {
     updateCar(dt, input1, carState, carConfig, effectiveTurnRate(carConfig, driftState))
     cameraZ += carState.speed * dt
     raceTime += dt
+
+    const currentLap = lapFromZ(cameraZ, lapLength)
+    if (currentLap > lastLap) {
+      lapTimes.push(raceTime)
+      lastLap = currentLap
+    }
 
     collisionCooldown = Math.max(collisionCooldown - dt, 0)
     const hit =
