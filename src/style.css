@@ -39,3 +39,55 @@ canvas {
   font-size: 20px;
   opacity: 0.9;
 }
+
+#start-screen,
+#finish-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: 'Consolas', 'Courier New', monospace;
+  text-align: center;
+  user-select: none;
+}
+
+#start-screen h1,
+#finish-screen h1 {
+  font-size: 64px;
+  margin: 0 0 16px;
+  letter-spacing: 6px;
+  background: linear-gradient(180deg, #ffd166, #ef476f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+#start-screen p,
+#finish-screen p {
+  font-size: 18px;
+  margin: 6px 0;
+  opacity: 0.85;
+}
+
+#start-screen .hint,
+#finish-screen .hint {
+  margin-top: 32px;
+  font-size: 14px;
+  opacity: 0.6;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
