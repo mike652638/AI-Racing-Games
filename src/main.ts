@@ -14,6 +14,8 @@ import {
   inputFromKeys,
   PLAYER1_MAPPING,
   PLAYER2_MAPPING,
+  touchToCarInput,
+  type TouchPoint,
 } from './physics/input'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 import { loadBestTime, saveBestTime } from './ui/save'
@@ -89,6 +91,7 @@ let bestTime: number | null = loadBestTime()
 let traffic = createTraffic(lapLength)
 let collisionCount = 0
 let collisionCooldown = 0
+const touchPoints = new Map<number, TouchPoint>()
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -119,6 +122,9 @@ let last = performance.now()
   },
   get selectedTrack(): string {
     return trackDef.id
+  },
+  get touchPoints(): number {
+    return touchPoints.size
   },
 }
 
@@ -215,6 +221,26 @@ window.addEventListener('keyup', (e) => {
   pressed.delete(e.code)
 })
 
+// 移动端触控：仅收集真实触摸点（pointerType=touch），鼠标/笔不影响键盘操作。
+// 全部挂 canvas：pointer capture 后原生事件目标即为 canvas，与合成测试一致
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return
+  canvas.setPointerCapture(e.pointerId)
+  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+})
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'touch' || !touchPoints.has(e.pointerId)) return
+  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
+})
+canvas.addEventListener('pointerup', (e) => {
+  if (e.pointerType !== 'touch') return
+  touchPoints.delete(e.pointerId)
+})
+canvas.addEventListener('pointercancel', (e) => {
+  if (e.pointerType !== 'touch') return
+  touchPoints.delete(e.pointerId)
+})
+
 function resize(): void {
   const dpr = window.devicePixelRatio || 1
   renderer.setViewport(canvas, window.innerWidth, window.innerHeight, dpr)
@@ -227,7 +253,9 @@ function frame(now: number): void {
   if (phase === PHASE_RACING) {
     updateTraffic(traffic, dt, lapLength)
 
-    const input1 = inputFromKeys(pressed, PLAYER1_MAPPING)
+    const input1 = touchPoints.size > 0
+      ? touchToCarInput([...touchPoints.values()], window.innerWidth, window.innerHeight)
+      : inputFromKeys(pressed, PLAYER1_MAPPING)
     const input2 = SPLIT_MODE
       ? inputFromKeys(pressed, PLAYER2_MAPPING)
       : { throttle: 0, brake: false, steer: 0 }
