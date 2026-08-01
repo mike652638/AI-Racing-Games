@@ -60,3 +60,12 @@ export function updateCar(
   }
   return false
 }
+
+/** 两玩家碰撞检测：返回 true 表示碰撞 */
+export function collidePlayers(
+  z1: number, x1: number,
+  z2: number, x2: number,
+  zTol = 80, xTol = 0.9,
+): boolean {
+  return Math.abs(z1 - z2) <= zTol && Math.abs(x1 - x2) <= xTol
+}

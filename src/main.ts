@@ -3,7 +3,7 @@ import { SEGMENT_LENGTH } from './engine/track'
 import { createRoadsideSprites } from './engine/sprites'
 import { createTrackFromDef, TRACK_DEFS, type TrackDef } from './engine/tracks'
 import { collideWithPlayer, createTraffic, updateTraffic } from './engine/traffic'
-import { createCarConfig, updateCar, type CarState } from './physics/car'
+import { createCarConfig, updateCar, collidePlayers, type CarState } from './physics/car'
 import {
   createDriftState,
   driftSpeedFactor,
@@ -292,6 +292,12 @@ function frame(now: number): void {
     updateCar(dt, input2, carState2, carConfig, effectiveTurnRate(carConfig, driftState2))
     cameraZ2 += carState2.speed * dt
     raceTime2 += dt
+
+    if (SPLIT_MODE && collidePlayers(cameraZ, carState.position, cameraZ2, carState2.position)) {
+      carState.speed *= 0.5
+      carState2.speed *= 0.5
+      collisionCount++
+    }
 
     const finishedP1 = lapFromZ(cameraZ, lapLength) > totalLaps
     const finishedP2 = SPLIT_MODE && lapFromZ(cameraZ2, lapLength) > totalLaps

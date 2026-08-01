@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { type CarConfig, type CarInput, type CarState, createCarConfig, updateCar } from '../../src/physics/car'
+import {
+  type CarConfig, type CarInput, type CarState,
+  createCarConfig, updateCar, collidePlayers,
+} from '../../src/physics/car'
 
 const config: CarConfig = createCarConfig({
   maxSpeed: 100,
@@ -114,5 +117,17 @@ describe('路缘限制与出界减速', () => {
     updateCar(1, idle, s, config)
     expect(s.speed).toBe(80)
     expect(s.position).toBe(0.5)
+  })
+})
+
+describe('collidePlayers', () => {
+  it('同位置碰撞', () => {
+    expect(collidePlayers(0, 0, 0, 0)).toBe(true)
+  })
+  it('z 超出容差不碰撞', () => {
+    expect(collidePlayers(0, 0, 200, 0)).toBe(false)
+  })
+  it('x 超出容差不碰撞', () => {
+    expect(collidePlayers(0, 0, 0, 1.5)).toBe(false)
   })
 })
