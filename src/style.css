@@ -40,6 +40,15 @@ canvas {
   opacity: 0.9;
 }
 
+#drift-indicator {
+  margin-top: 12px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ff8c1a;
+  letter-spacing: 2px;
+  animation: pulse 0.3s ease-in-out infinite alternate;
+}
+
 #start-screen,
 #finish-screen {
   position: fixed;

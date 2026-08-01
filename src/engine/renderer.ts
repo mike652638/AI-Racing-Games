@@ -2,6 +2,7 @@ import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
 import { curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
+import type { SmokeParticle } from '../physics/drift'
 
 /** 路面半宽（世界单位） */
 export const ROAD_HALF_WIDTH = 1
@@ -130,8 +131,8 @@ export class Renderer {
     this.camera.x = x
   }
 
-  /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 */
-  render(cameraZ: number): void {
+  /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
+  render(cameraZ: number, smoke: SmokeParticle[] = []): void {
     const { ctx, opts } = this
     this.camera.z = cameraZ
 
@@ -180,6 +181,32 @@ export class Renderer {
       curveSum += segment.curve
     }
     this.drawSprites(cameraZ)
+    this.drawSmoke(smoke, cameraZ)
+  }
+
+  /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */
+  private drawSmoke(smoke: SmokeParticle[], cameraZ: number): void {
+    const { ctx } = this
+    for (const particle of smoke) {
+      const dz = particle.z - cameraZ
+      if (dz <= 0) {
+        continue
+      }
+      const proj = project(this.opts, this.camera, {
+        x: particle.x - this.camera.x,
+        y: 0,
+        z: particle.z,
+      })
+      if (!proj) {
+        continue
+      }
+      const radius = Math.max(proj.scale * this.opts.height * 0.06, 2)
+      const alpha = Math.max(1 - particle.t / 0.6, 0) * 0.4
+      ctx.fillStyle = `rgba(200, 200, 210, ${alpha.toFixed(3)})`
+      ctx.beginPath()
+      ctx.arc(proj.x, proj.y - radius * 0.5, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
 
   /** 绘制路边景物（远→近） */

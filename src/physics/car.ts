@@ -33,7 +33,13 @@ export function createCarConfig(overrides: Partial<CarConfig> = {}): CarConfig {
   return { ...DEFAULT_CAR_CONFIG, ...overrides }
 }
 
-export function updateCar(dt: number, input: CarInput, state: CarState, config: CarConfig): boolean {
+export function updateCar(
+  dt: number,
+  input: CarInput,
+  state: CarState,
+  config: CarConfig,
+  turnRateOverride?: number,
+): boolean {
   if (input.throttle > 0) {
     state.speed = Math.min(config.maxSpeed, state.speed + config.acceleration * input.throttle * dt)
   }
@@ -44,7 +50,8 @@ export function updateCar(dt: number, input: CarInput, state: CarState, config: 
     state.speed = Math.max(0, state.speed - config.deceleration * dt)
   }
 
-  state.position += input.steer * config.turnRate * (state.speed / config.maxSpeed) * dt
+  state.position +=
+    input.steer * (turnRateOverride ?? config.turnRate) * (state.speed / config.maxSpeed) * dt
 
   if (Math.abs(state.position) > config.roadHalfWidth) {
     state.speed = Math.max(0, state.speed - config.offRoadDeceleration * dt)

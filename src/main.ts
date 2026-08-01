@@ -2,6 +2,7 @@ import { Renderer } from './engine/renderer'
 import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
 import { createRoadsideSprites } from './engine/sprites'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
+import { driftSpeedFactor, effectiveTurnRate, updateDrift, type DriftState } from './physics/drift'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 import { EngineSound } from './audio/engine'
 import { nextPhase, PHASE_MENU, PHASE_RACING, PHASE_FINISHED, type Phase } from './ui/gamestate'
@@ -10,6 +11,7 @@ const canvas = document.getElementById('game') as HTMLCanvasElement
 const hudSpeed = document.getElementById('hud-speed') as HTMLDivElement
 const hudLap = document.getElementById('hud-lap') as HTMLDivElement
 const hudTime = document.getElementById('hud-time') as HTMLDivElement
+const driftIndicator = document.getElementById('drift-indicator') as HTMLDivElement
 const startScreen = document.getElementById('start-screen') as HTMLDivElement
 const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
@@ -29,6 +31,7 @@ const renderer = new Renderer(
 
 const carConfig = createCarConfig()
 const carState: CarState = { position: 0, speed: 0 }
+let driftState: DriftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
 
 const pressed = new Set<string>()
 let phase: Phase = PHASE_MENU
@@ -47,11 +50,15 @@ let last = performance.now()
   get phase(): Phase {
     return phase
   },
+  get driftActive(): boolean {
+    return driftState.active
+  },
 }
 
 function resetRace(): void {
   carState.position = 0
   carState.speed = 0
+  driftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
   cameraZ = 0
   raceTime = 0
   last = performance.now()
@@ -105,11 +112,14 @@ function frame(now: number): void {
     const steer
       = (pressed.has('ArrowRight') || pressed.has('KeyD') ? 1 : 0)
       - (pressed.has('ArrowLeft') || pressed.has('KeyA') ? 1 : 0)
-    updateCar(dt, {
+    const input = {
       throttle: pressed.has('ArrowUp') || pressed.has('KeyW') ? 1 : 0,
       brake: pressed.has('ArrowDown') || pressed.has('KeyS'),
       steer,
-    }, carState, carConfig)
+    }
+    driftState = updateDrift(dt, input, carState, carConfig, driftState, cameraZ)
+    carState.speed *= driftSpeedFactor(driftState)
+    updateCar(dt, input, carState, carConfig, effectiveTurnRate(carConfig, driftState))
 
     cameraZ += carState.speed * dt
     raceTime += dt
@@ -118,8 +128,9 @@ function frame(now: number): void {
     }
   }
 
+  driftIndicator.hidden = !driftState.active
   renderer.setCameraX(carState.position)
-  renderer.render(cameraZ)
+  renderer.render(cameraZ, driftState.smoke)
 
   hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)
   hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), TOTAL_LAPS)
