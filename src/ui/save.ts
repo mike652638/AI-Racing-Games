@@ -1,6 +1,11 @@
-/** 最佳圈速存档（localStorage，不可用时安全降级） */
+/** 最佳圈速存档（按赛道 ID 分 key，localStorage 不可用时安全降级） */
 
-export const BEST_TIME_KEY = 'outrun-pseudo3d-best-time'
+const BEST_TIME_PREFIX = 'outrun-pseudo3d-best-'
+
+/** 生成赛道对应存档 key */
+export function bestTimeKey(trackId: string): string {
+  return BEST_TIME_PREFIX + trackId
+}
 
 function getStorage(): Storage | null {
   try {
@@ -14,12 +19,12 @@ function getStorage(): Storage | null {
   return null
 }
 
-/** 读取最佳圈速（秒），无存档返回 null */
-export function loadBestTime(storage: Storage | null = getStorage()): number | null {
+/** 读取指定赛道最佳圈速（秒），无存档返回 null */
+export function loadBestTime(trackId: string, storage: Storage | null = getStorage()): number | null {
   if (!storage) {
     return null
   }
-  const raw = storage.getItem(BEST_TIME_KEY)
+  const raw = storage.getItem(bestTimeKey(trackId))
   if (raw === null) {
     return null
   }
@@ -27,15 +32,15 @@ export function loadBestTime(storage: Storage | null = getStorage()): number | n
   return Number.isFinite(sec) ? sec : null
 }
 
-/** 写入最佳圈速；仅当快于旧纪录时写入，返回是否刷新纪录 */
-export function saveBestTime(sec: number, storage: Storage | null = getStorage()): boolean {
+/** 写入指定赛道最佳圈速；仅当快于旧纪录时写入，返回是否刷新纪录 */
+export function saveBestTime(sec: number, trackId: string, storage: Storage | null = getStorage()): boolean {
   if (!storage) {
     return false
   }
-  const best = loadBestTime(storage)
+  const best = loadBestTime(trackId, storage)
   if (best !== null && best <= sec) {
     return false
   }
-  storage.setItem(BEST_TIME_KEY, String(sec))
+  storage.setItem(bestTimeKey(trackId), String(sec))
   return true
 }

@@ -90,7 +90,7 @@ let cameraZ = 0
 let cameraZ2 = 0
 let raceTime = 0
 let raceTime2 = 0
-let bestTime: number | null = loadBestTime()
+let bestTime: number | null = loadBestTime(trackDef.id)
 let traffic = createTraffic(lapLength)
 let collisionCount = 0
 let collisionCooldown = 0
@@ -165,7 +165,7 @@ function resetRace(): void {
   raceTime2 = 0
   last = performance.now()
   finishShown = false
-  bestTime = loadBestTime()
+  bestTime = loadBestTime(trackDef.id)
   traffic = createTraffic(lapLength)
   collisionCount = 0
   collisionCooldown = 0
@@ -194,8 +194,8 @@ function applyPhase(newPhase: Phase): void {
       const avgSpeed = cameraZ / Math.max(raceTime, 0.001)
       finishTime.textContent = `总用时 ${formatTime(raceTime)}`
       finishSpeed.textContent = `平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
-      const isRecord = saveBestTime(raceTime)
-      bestTime = loadBestTime()
+      const isRecord = saveBestTime(raceTime, trackDef.id)
+      bestTime = loadBestTime(trackDef.id)
       if (isRecord) {
         finishBest.textContent = 'NEW RECORD!'
       }

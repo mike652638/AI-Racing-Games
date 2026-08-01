@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BEST_TIME_KEY,
+  bestTimeKey,
   loadBestTime,
   saveBestTime,
 } from '../../src/ui/save'
@@ -22,32 +22,43 @@ function fakeStorage(): Storage {
 describe('save 存档', () => {
   it('无存档时 loadBestTime 返回 null', () => {
     const storage = fakeStorage()
-    expect(loadBestTime(storage)).toBeNull()
+    expect(loadBestTime('classic', storage)).toBeNull()
   })
 
   it('首次 saveBestTime 写入并返回 true', () => {
     const storage = fakeStorage()
-    expect(saveBestTime(30.5, storage)).toBe(true)
-    expect(storage.getItem(BEST_TIME_KEY)).toBe('30.5')
-    expect(loadBestTime(storage)).toBe(30.5)
+    expect(saveBestTime(30.5, 'classic', storage)).toBe(true)
+    expect(storage.getItem(bestTimeKey('classic'))).toBe('30.5')
+    expect(loadBestTime('classic', storage)).toBe(30.5)
   })
 
   it('更慢的成绩不覆盖旧纪录', () => {
     const storage = fakeStorage()
-    saveBestTime(30.5, storage)
-    expect(saveBestTime(31.2, storage)).toBe(false)
-    expect(loadBestTime(storage)).toBe(30.5)
+    saveBestTime(30.5, 'classic', storage)
+    expect(saveBestTime(31.2, 'classic', storage)).toBe(false)
+    expect(loadBestTime('classic', storage)).toBe(30.5)
   })
 
   it('更快的成绩覆盖旧纪录并返回 true', () => {
     const storage = fakeStorage()
-    saveBestTime(30.5, storage)
-    expect(saveBestTime(29.1, storage)).toBe(true)
-    expect(loadBestTime(storage)).toBe(29.1)
+    saveBestTime(30.5, 'classic', storage)
+    expect(saveBestTime(29.1, 'classic', storage)).toBe(true)
+    expect(loadBestTime('classic', storage)).toBe(29.1)
   })
 
   it('storage 不可用（null）时安全返回', () => {
-    expect(loadBestTime(null)).toBeNull()
-    expect(saveBestTime(30, null)).toBe(false)
+    expect(loadBestTime('classic', null)).toBeNull()
+    expect(saveBestTime(30, 'classic', null)).toBe(false)
+  })
+
+  it('不同赛道独立存档', () => {
+    const storage = fakeStorage()
+    saveBestTime(25.0, 'highway', storage)
+    saveBestTime(30.0, 's-curve', storage)
+    expect(loadBestTime('highway', storage)).toBe(25.0)
+    expect(loadBestTime('s-curve', storage)).toBe(30.0)
+    saveBestTime(24.0, 'highway', storage)
+    expect(loadBestTime('highway', storage)).toBe(24.0)
+    expect(loadBestTime('s-curve', storage)).toBe(30.0)
   })
 })
