@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "superpowers@git+https://github.com/obra/superpowers.git"
+  ],
+  "permission": {
+    "*": "allow",
+    "skill": {
+      "*": "allow",
+      "brainstorming": "deny",
+      "subagent-driven-development": "deny",
+      "using-git-worktrees": "deny",
+      "writing-skills": "deny"
+    }
+  },
+  "command": {
+    "test": {
+      "template": "Run the real test suite: execute `npm test` (or `npx vitest run` if npm test is unavailable) in the project root. Report pass/fail counts per test file, and fix any failing tests. If node_modules is missing, run `npm install` first.",
+      "description": "Run the actual test suite (Vitest) and report results"
+    },
+    "lint": {
+      "template": "Run the real linter: execute `npm run lint` (or `npx eslint .` if unavailable) in the project root. Report all errors and warnings, then fix them. If no lint script exists, report the actual lint configuration found.",
+      "description": "Run the actual linter (ESLint) and fix issues"
+    },
+    "typecheck": {
+      "template": "Run the real type checker: execute `npm run typecheck` (or `npx tsc --noEmit` if unavailable) in the project root. Report all type errors and fix them. If no tsconfig exists, report that typecheck is not applicable.",
+      "description": "Run the actual TypeScript type checker"
+    }
+  }
+}
