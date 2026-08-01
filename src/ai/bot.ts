@@ -1,5 +1,5 @@
 import type { Segment } from '../engine/track'
-import { SEGMENT_LENGTH, trackIndexForCameraZ } from '../engine/track'
+import { trackIndexForCameraZ } from '../engine/track'
 import type { CarInput, CarState } from '../physics/car'
 
 export interface BotConfig {
