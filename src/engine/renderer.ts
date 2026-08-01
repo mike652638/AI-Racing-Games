@@ -2,6 +2,7 @@ import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
 import { curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
+import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
 
 /** 路面半宽（世界单位） */
@@ -13,6 +14,7 @@ export const DRAW_DISTANCE = 120
 
 const ROAD_COLORS = ['#4a4a4a', '#3c3c3c']
 const SIDE_COLORS = ['#d03030', '#e8e8e8']
+const TRAFFIC_COLORS = ['#d84a4a', '#4a8ad8', '#d8c04a', '#4ad88a']
 
 interface MountainLayer {
   profile: number[]
@@ -80,6 +82,7 @@ export class Renderer {
     height: number,
     dpr = 1,
     private readonly sprites: Sprite[] = [],
+    private traffic: TrafficCar[] = [],
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
@@ -129,6 +132,11 @@ export class Renderer {
   /** 设置相机横向偏移（跟随车辆位置） */
   setCameraX(x: number): void {
     this.camera.x = x
+  }
+
+  /** 更新车流引用（赛道切换/重置时调用） */
+  setTraffic(traffic: TrafficCar[]): void {
+    this.traffic = traffic
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
@@ -207,7 +215,36 @@ export class Renderer {
       curveSum += segment.curve
     }
     this.drawSprites(cameraZ, opts)
+    this.drawTraffic(cameraZ, opts)
     this.drawSmoke(smoke, cameraZ, opts)
+  }
+
+  /** 绘制车流（车身 + 车窗，远→近） */
+  private drawTraffic(cameraZ: number, opts: ProjectionOptions): void {
+    const { ctx } = this
+    if (this.traffic.length === 0) {
+      return
+    }
+    const seen = this.traffic
+      .filter((car) => car.z > cameraZ)
+      .sort((a, b) => b.z - a.z)
+    for (const car of seen) {
+      const cx = car.offset - this.camera.x
+      const bottom = project(opts, this.camera, { x: cx, y: 0, z: car.z })
+      if (!bottom) {
+        continue
+      }
+      const top = project(opts, this.camera, { x: cx, y: 1.4, z: car.z })
+      if (!top) {
+        continue
+      }
+      const w = Math.max(bottom.scale * opts.height * 0.9, 3)
+      const h = bottom.y - top.y
+      ctx.fillStyle = TRAFFIC_COLORS[car.colorIndex % TRAFFIC_COLORS.length]
+      ctx.fillRect(bottom.x - w / 2, top.y, w, h)
+      ctx.fillStyle = '#1b2430'
+      ctx.fillRect(bottom.x - w / 4, top.y + h * 0.3, w / 2, h * 0.4)
+    }
   }
 
   /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */

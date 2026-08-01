@@ -1,6 +1,7 @@
 import { Renderer } from './engine/renderer'
 import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
 import { createRoadsideSprites } from './engine/sprites'
+import { collideWithPlayer, createTraffic, updateTraffic } from './engine/traffic'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
 import {
   driftSpeedFactor,
@@ -53,6 +54,7 @@ const renderer = new Renderer(
   window.innerHeight,
   undefined,
   createRoadsideSprites(track),
+  createTraffic(lapLength),
 )
 
 const carConfig = createCarConfig()
@@ -71,6 +73,8 @@ let cameraZ2 = 0
 let raceTime = 0
 let raceTime2 = 0
 let bestTime: number | null = loadBestTime()
+let traffic = createTraffic(lapLength)
+let collisionCount = 0
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -90,6 +94,12 @@ let last = performance.now()
   get bestTime(): number | null {
     return bestTime
   },
+  get trafficCount(): number {
+    return traffic.length
+  },
+  get collisions(): number {
+    return collisionCount
+  },
 }
 
 function resetRace(): void {
@@ -106,6 +116,8 @@ function resetRace(): void {
   last = performance.now()
   finishShown = false
   bestTime = loadBestTime()
+  traffic = createTraffic(lapLength)
+  collisionCount = 0
 }
 
 function applyPhase(newPhase: Phase): void {
@@ -160,6 +172,8 @@ function frame(now: number): void {
   last = now
 
   if (phase === PHASE_RACING) {
+    updateTraffic(traffic, dt, lapLength)
+
     const input1 = inputFromKeys(pressed, PLAYER1_MAPPING)
     const input2 = SPLIT_MODE
       ? inputFromKeys(pressed, PLAYER2_MAPPING)
@@ -170,6 +184,12 @@ function frame(now: number): void {
     updateCar(dt, input1, carState, carConfig, effectiveTurnRate(carConfig, driftState))
     cameraZ += carState.speed * dt
     raceTime += dt
+
+    const hit = collideWithPlayer(traffic, cameraZ, carState.position)
+    if (hit) {
+      carState.speed *= 0.5
+      collisionCount++
+    }
 
     driftState2 = updateDrift(dt, input2, carState2, carConfig, driftState2, cameraZ2)
     carState2.speed *= driftSpeedFactor(driftState2)
