@@ -19,7 +19,7 @@ function getStorage(): Storage | null {
   return null
 }
 
-/** 读取指定赛道最佳圈速（秒），无存档返回 null */
+/** 指定赛道最佳圈速（秒），无存档返回 null */
 export function loadBestTime(trackId: string, storage: Storage | null = getStorage()): number | null {
   if (!storage) {
     return null
@@ -42,5 +42,36 @@ export function saveBestTime(sec: number, trackId: string, storage: Storage | nu
     return false
   }
   storage.setItem(bestTimeKey(trackId), String(sec))
+  return true
+}
+
+/** 漂移最高分存档 key */
+export function bestDriftScoreKey(trackId: string): string {
+  return 'outrun-pseudo3d-best-drift-' + trackId
+}
+
+/** 读取指定赛道漂移最高分，无存档返回 null */
+export function loadBestDriftScore(trackId: string, storage: Storage | null = getStorage()): number | null {
+  if (!storage) {
+    return null
+  }
+  const raw = storage.getItem(bestDriftScoreKey(trackId))
+  if (raw === null) {
+    return null
+  }
+  const sec = Number(raw)
+  return Number.isFinite(sec) ? sec : null
+}
+
+/** 写入漂移最高分；仅当更高时写入，返回是否刷新纪录 */
+export function saveBestDriftScore(score: number, trackId: string, storage: Storage | null = getStorage()): boolean {
+  if (!storage) {
+    return false
+  }
+  const best = loadBestDriftScore(trackId, storage)
+  if (best !== null && best >= score) {
+    return false
+  }
+  storage.setItem(bestDriftScoreKey(trackId), String(score))
   return true
 }

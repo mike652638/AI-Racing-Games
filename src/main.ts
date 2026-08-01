@@ -18,7 +18,7 @@ import {
   type TouchPoint,
 } from './physics/input'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
-import { loadBestTime, saveBestTime } from './ui/save'
+import { loadBestTime, saveBestTime, loadBestDriftScore, saveBestDriftScore } from './ui/save'
 import { EngineSound } from './audio/engine'
 import { MusicPlayer } from './audio/music'
 import {
@@ -91,6 +91,7 @@ let cameraZ2 = 0
 let raceTime = 0
 let raceTime2 = 0
 let bestTime: number | null = loadBestTime(trackDef.id)
+let globalBestDriftScore: number | null = loadBestDriftScore(trackDef.id)
 let traffic = createTraffic(lapLength)
 let collisionCount = 0
 let collisionCooldown = 0
@@ -166,6 +167,7 @@ function resetRace(): void {
   last = performance.now()
   finishShown = false
   bestTime = loadBestTime(trackDef.id)
+  globalBestDriftScore = loadBestDriftScore(trackDef.id)
   traffic = createTraffic(lapLength)
   collisionCount = 0
   collisionCooldown = 0
@@ -203,6 +205,16 @@ function applyPhase(newPhase: Phase): void {
         finishBest.textContent = `最佳 ${formatTime(bestTime ?? raceTime)}`
       }
       finishScore.textContent = `漂移得分 ${Math.round(driftState.score)}`
+      if (driftState.score > 0) {
+        const isDriftRecord = saveBestDriftScore(Math.round(driftState.score), trackDef.id)
+        globalBestDriftScore = loadBestDriftScore(trackDef.id)
+        if (isDriftRecord) {
+          finishScore.textContent += ' NEW DRIFT RECORD!'
+        }
+        else if (globalBestDriftScore !== null) {
+          finishScore.textContent += ` (最高 ${globalBestDriftScore})`
+        }
+      }
     }
   }
 }
