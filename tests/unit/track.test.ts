@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import {
   SEGMENT_LENGTH,
+  createDefaultTrack,
+  createSmoothTrack,
   createStraightTrack,
   createTrack,
   totalCurve,
@@ -78,5 +80,38 @@ describe('可配置曲线赛道生成', () => {
       { curve: -0.02, count: 50 },
     ])
     expect(trackIndexForCameraZ(track, 100 * SEGMENT_LENGTH)).toBe(0)
+  })
+})
+
+describe('平滑弯道（曲线控制点插值）', () => {
+  test('控制点之间线性插值 curve', () => {
+    const track = createSmoothTrack([
+      { z: 0, curve: 0 },
+      { z: 800, curve: 0.4 },
+      { z: 1600, curve: 0 },
+    ])
+    expect(track).toHaveLength(9)
+    expect(track.map((s) => s.curve)).toEqual([0, 0.1, 0.2, 0.3, 0.4, 0.3, 0.2, 0.1, 0])
+  })
+
+  test('首尾控制点值保留在端点', () => {
+    const track = createSmoothTrack([
+      { z: 0, curve: -0.5 },
+      { z: 400, curve: 0.2 },
+    ])
+    expect(track[0].curve).toBe(-0.5)
+    expect(track[track.length - 1].curve).toBeCloseTo(0.2, 5)
+  })
+
+  test('空控制点返回空赛道', () => {
+    expect(createSmoothTrack([])).toEqual([])
+  })
+
+  test('createDefaultTrack 改用控制点后仍为闭环且可跑圈', () => {
+    const track = createDefaultTrack()
+    expect(track).toHaveLength(460)
+    expect(totalCurve(track)).toBeCloseTo(0, 5)
+    expect(trackIndexForCameraZ(track, 460 * SEGMENT_LENGTH - 100)).toBe(459)
+    expect(trackIndexForCameraZ(track, 460 * SEGMENT_LENGTH + 50)).toBe(0)
   })
 })
