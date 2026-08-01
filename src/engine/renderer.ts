@@ -133,7 +133,33 @@ export class Renderer {
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
   render(cameraZ: number, smoke: SmokeParticle[] = []): void {
-    const { ctx, opts } = this
+    this.renderWithOpts(cameraZ, this.opts, smoke)
+  }
+
+  /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移 */
+  renderRegion(
+    cameraZ: number,
+    viewX: number,
+    viewW: number,
+    smoke: SmokeParticle[] = [],
+  ): void {
+    const { ctx } = this
+    const opts = this.buildOpts(viewW, this.opts.height)
+    ctx.save()
+    ctx.translate(viewX, 0)
+    ctx.beginPath()
+    ctx.rect(0, 0, viewW, this.opts.height)
+    ctx.clip()
+    this.renderWithOpts(cameraZ, opts, smoke)
+    ctx.restore()
+  }
+
+  private renderWithOpts(
+    cameraZ: number,
+    opts: ProjectionOptions,
+    smoke: SmokeParticle[],
+  ): void {
+    const { ctx } = this
     this.camera.z = cameraZ
 
     ctx.fillStyle = '#0d1b2a'
@@ -154,8 +180,8 @@ export class Renderer {
         continue
       }
       const segment = this.track[(baseIndex + k) % this.track.length]
-      const cur = this.projectQuad(z, curveSum)
-      const next = this.projectQuad(z + SEGMENT_LENGTH, curveSum + segment.curve)
+      const cur = this.projectQuad(z, curveSum, opts)
+      const next = this.projectQuad(z + SEGMENT_LENGTH, curveSum + segment.curve, opts)
       if (!cur || !next) {
         continue
       }
@@ -167,7 +193,7 @@ export class Renderer {
 
       if (k % 2 === 0) {
         const cw = (cur.r1.x - cur.l1.x) * 0.06
-        const centerProj = project(this.opts, this.camera, { x: curveSum, y: 0, z })
+        const centerProj = project(opts, this.camera, { x: curveSum, y: 0, z })
         const centerX = centerProj ? centerProj.x : opts.width / 2
         drawQuad(
           ctx,
@@ -180,19 +206,19 @@ export class Renderer {
       }
       curveSum += segment.curve
     }
-    this.drawSprites(cameraZ)
-    this.drawSmoke(smoke, cameraZ)
+    this.drawSprites(cameraZ, opts)
+    this.drawSmoke(smoke, cameraZ, opts)
   }
 
   /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */
-  private drawSmoke(smoke: SmokeParticle[], cameraZ: number): void {
+  private drawSmoke(smoke: SmokeParticle[], cameraZ: number, opts: ProjectionOptions): void {
     const { ctx } = this
     for (const particle of smoke) {
       const dz = particle.z - cameraZ
       if (dz <= 0) {
         continue
       }
-      const proj = project(this.opts, this.camera, {
+      const proj = project(opts, this.camera, {
         x: particle.x - this.camera.x,
         y: 0,
         z: particle.z,
@@ -200,7 +226,7 @@ export class Renderer {
       if (!proj) {
         continue
       }
-      const radius = Math.max(proj.scale * this.opts.height * 0.06, 2)
+      const radius = Math.max(proj.scale * opts.height * 0.06, 2)
       const alpha = Math.max(1 - particle.t / 0.6, 0) * 0.4
       ctx.fillStyle = `rgba(200, 200, 210, ${alpha.toFixed(3)})`
       ctx.beginPath()
@@ -210,7 +236,7 @@ export class Renderer {
   }
 
   /** 绘制路边景物（远→近） */
-  private drawSprites(cameraZ: number): void {
+  private drawSprites(cameraZ: number, opts: ProjectionOptions): void {
     const seen = spritesInRange(
       this.sprites,
       this.track,
@@ -221,7 +247,7 @@ export class Renderer {
     for (const sprite of seen) {
       const centerX = curveOffsetAtZ(this.track, sprite.z)
       const cx = centerX - this.camera.x
-      const bottom = project(this.opts, this.camera, {
+      const bottom = project(opts, this.camera, {
         x: cx + sprite.offset,
         y: 0,
         z: sprite.z,
@@ -229,7 +255,7 @@ export class Renderer {
       if (!bottom) {
         continue
       }
-      const hpx = sprite.height * bottom.scale * this.opts.height * 0.5
+      const hpx = sprite.height * bottom.scale * opts.height * 0.5
       if (sprite.kind === 'tree') {
         this.drawTree(bottom.x, bottom.y, hpx)
       } else {
@@ -280,17 +306,17 @@ export class Renderer {
     ctx.fill()
   }
 
-  private projectQuad(z: number, centerX: number): Quad | null {
+  private projectQuad(z: number, centerX: number, opts: ProjectionOptions): Quad | null {
     const { camera } = this
     const cx = centerX - camera.x
-    const l1 = project(this.opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
-    const l2 = project(this.opts, camera, {
+    const l1 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
+    const l2 = project(opts, camera, {
       x: cx - ROAD_HALF_WIDTH - EDGE_WIDTH,
       y: 0,
       z,
     })
-    const r1 = project(this.opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z })
-    const r2 = project(this.opts, camera, {
+    const r1 = project(opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z })
+    const r2 = project(opts, camera, {
       x: cx + ROAD_HALF_WIDTH + EDGE_WIDTH,
       y: 0,
       z,

@@ -2,16 +2,39 @@ import { Renderer } from './engine/renderer'
 import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
 import { createRoadsideSprites } from './engine/sprites'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
-import { driftSpeedFactor, effectiveTurnRate, updateDrift, type DriftState } from './physics/drift'
+import {
+  driftSpeedFactor,
+  effectiveTurnRate,
+  updateDrift,
+  type DriftState,
+} from './physics/drift'
+import {
+  inputFromKeys,
+  PLAYER1_MAPPING,
+  PLAYER2_MAPPING,
+} from './physics/input'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 import { EngineSound } from './audio/engine'
-import { nextPhase, PHASE_MENU, PHASE_RACING, PHASE_FINISHED, type Phase } from './ui/gamestate'
+import {
+  nextPhase,
+  PHASE_MENU,
+  PHASE_RACING,
+  PHASE_FINISHED,
+  type Phase,
+} from './ui/gamestate'
+
+const SPLIT_MODE = new URLSearchParams(window.location.search).has('split')
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 const hudSpeed = document.getElementById('hud-speed') as HTMLDivElement
 const hudLap = document.getElementById('hud-lap') as HTMLDivElement
 const hudTime = document.getElementById('hud-time') as HTMLDivElement
+const hudSpeed2 = document.getElementById('hud-speed-2') as HTMLDivElement
+const hudLap2 = document.getElementById('hud-lap-2') as HTMLDivElement
+const hudTime2 = document.getElementById('hud-time-2') as HTMLDivElement
 const driftIndicator = document.getElementById('drift-indicator') as HTMLDivElement
+const hud2 = document.getElementById('hud2') as HTMLDivElement
+hud2.hidden = !SPLIT_MODE
 const startScreen = document.getElementById('start-screen') as HTMLDivElement
 const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
@@ -31,7 +54,9 @@ const renderer = new Renderer(
 
 const carConfig = createCarConfig()
 const carState: CarState = { position: 0, speed: 0 }
+const carState2: CarState = { position: 0, speed: 0 }
 let driftState: DriftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
+let driftState2: DriftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
 
 const pressed = new Set<string>()
 let phase: Phase = PHASE_MENU
@@ -39,7 +64,9 @@ let engineSound: EngineSound | null = null
 let finishShown = false
 
 let cameraZ = 0
+let cameraZ2 = 0
 let raceTime = 0
+let raceTime2 = 0
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -53,14 +80,22 @@ let last = performance.now()
   get driftActive(): boolean {
     return driftState.active
   },
+  get split(): boolean {
+    return SPLIT_MODE
+  },
 }
 
 function resetRace(): void {
   carState.position = 0
   carState.speed = 0
+  carState2.position = 0
+  carState2.speed = 0
   driftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
+  driftState2 = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
   cameraZ = 0
+  cameraZ2 = 0
   raceTime = 0
+  raceTime2 = 0
   last = performance.now()
   finishShown = false
 }
@@ -109,32 +144,51 @@ function frame(now: number): void {
   last = now
 
   if (phase === PHASE_RACING) {
-    const steer
-      = (pressed.has('ArrowRight') || pressed.has('KeyD') ? 1 : 0)
-      - (pressed.has('ArrowLeft') || pressed.has('KeyA') ? 1 : 0)
-    const input = {
-      throttle: pressed.has('ArrowUp') || pressed.has('KeyW') ? 1 : 0,
-      brake: pressed.has('ArrowDown') || pressed.has('KeyS'),
-      steer,
-    }
-    driftState = updateDrift(dt, input, carState, carConfig, driftState, cameraZ)
-    carState.speed *= driftSpeedFactor(driftState)
-    updateCar(dt, input, carState, carConfig, effectiveTurnRate(carConfig, driftState))
+    const input1 = inputFromKeys(pressed, PLAYER1_MAPPING)
+    const input2 = SPLIT_MODE
+      ? inputFromKeys(pressed, PLAYER2_MAPPING)
+      : { throttle: 0, brake: false, steer: 0 }
 
+    driftState = updateDrift(dt, input1, carState, carConfig, driftState, cameraZ)
+    carState.speed *= driftSpeedFactor(driftState)
+    updateCar(dt, input1, carState, carConfig, effectiveTurnRate(carConfig, driftState))
     cameraZ += carState.speed * dt
     raceTime += dt
-    if (lapFromZ(cameraZ, lapLength) > TOTAL_LAPS) {
+
+    driftState2 = updateDrift(dt, input2, carState2, carConfig, driftState2, cameraZ2)
+    carState2.speed *= driftSpeedFactor(driftState2)
+    updateCar(dt, input2, carState2, carConfig, effectiveTurnRate(carConfig, driftState2))
+    cameraZ2 += carState2.speed * dt
+    raceTime2 += dt
+
+    const finishedP1 = lapFromZ(cameraZ, lapLength) > TOTAL_LAPS
+    const finishedP2 = SPLIT_MODE && lapFromZ(cameraZ2, lapLength) > TOTAL_LAPS
+    if (finishedP1 || finishedP2) {
       applyPhase(PHASE_FINISHED)
     }
   }
 
   driftIndicator.hidden = !driftState.active
-  renderer.setCameraX(carState.position)
-  renderer.render(cameraZ, driftState.smoke)
+  if (SPLIT_MODE) {
+    const w = window.innerWidth
+    renderer.setCameraX(carState.position)
+    renderer.renderRegion(cameraZ, 0, w / 2, driftState.smoke)
+    renderer.setCameraX(carState2.position)
+    renderer.renderRegion(cameraZ2, w / 2, w / 2, driftState2.smoke)
+  }
+  else {
+    renderer.setCameraX(carState.position)
+    renderer.render(cameraZ, driftState.smoke)
+  }
 
   hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)
   hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), TOTAL_LAPS)
   hudTime.textContent = formatTime(raceTime)
+  if (SPLIT_MODE) {
+    hudSpeed2.textContent = formatSpeed(carState2.speed, carConfig.maxSpeed)
+    hudLap2.textContent = formatLap(lapFromZ(cameraZ2, lapLength), TOTAL_LAPS)
+    hudTime2.textContent = formatTime(raceTime2)
+  }
   engineSound?.setSpeedRatio(carState.speed / carConfig.maxSpeed)
   requestAnimationFrame(frame)
 }

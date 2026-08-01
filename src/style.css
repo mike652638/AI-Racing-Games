@@ -40,6 +40,36 @@ canvas {
   opacity: 0.9;
 }
 
+#hud2 {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #fff;
+  text-align: left;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#hud-speed-2 {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#hud-speed-unit-2 {
+  font-size: 14px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+#hud-lap-2,
+#hud-time-2 {
+  font-size: 20px;
+  opacity: 0.9;
+}
+
 #drift-indicator {
   margin-top: 12px;
   font-size: 32px;
