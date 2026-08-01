@@ -1,5 +1,6 @@
 import { Renderer } from './engine/renderer'
 import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
+import { createRoadsideSprites } from './engine/sprites'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 import { EngineSound } from './audio/engine'
@@ -17,7 +18,14 @@ const finishSpeed = document.getElementById('finish-speed') as HTMLParagraphElem
 const TOTAL_LAPS = 3
 const track = createDefaultTrack()
 const lapLength = track.length * SEGMENT_LENGTH
-const renderer = new Renderer(canvas, track, window.innerWidth, window.innerHeight)
+const renderer = new Renderer(
+  canvas,
+  track,
+  window.innerWidth,
+  window.innerHeight,
+  undefined,
+  createRoadsideSprites(track),
+)
 
 const carConfig = createCarConfig()
 const carState: CarState = { position: 0, speed: 0 }

@@ -1,6 +1,7 @@
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
+import { curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
 
 /** 路面半宽（世界单位） */
 export const ROAD_HALF_WIDTH = 1
@@ -77,6 +78,7 @@ export class Renderer {
     width: number,
     height: number,
     dpr = 1,
+    private readonly sprites: Sprite[] = [],
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
@@ -177,6 +179,78 @@ export class Renderer {
       }
       curveSum += segment.curve
     }
+    this.drawSprites(cameraZ)
+  }
+
+  /** 绘制路边景物（远→近） */
+  private drawSprites(cameraZ: number): void {
+    const seen = spritesInRange(
+      this.sprites,
+      this.track,
+      cameraZ,
+      DRAW_DISTANCE * SEGMENT_LENGTH,
+    )
+    seen.sort((a, b) => b.z - a.z)
+    for (const sprite of seen) {
+      const centerX = curveOffsetAtZ(this.track, sprite.z)
+      const cx = centerX - this.camera.x
+      const bottom = project(this.opts, this.camera, {
+        x: cx + sprite.offset,
+        y: 0,
+        z: sprite.z,
+      })
+      if (!bottom) {
+        continue
+      }
+      const hpx = sprite.height * bottom.scale * this.opts.height * 0.5
+      if (sprite.kind === 'tree') {
+        this.drawTree(bottom.x, bottom.y, hpx)
+      } else {
+        this.drawLamp(bottom.x, bottom.y, hpx)
+      }
+    }
+  }
+
+  /** 树：树干 + 两层三角树冠 */
+  private drawTree(x: number, y: number, hpx: number): void {
+    const { ctx } = this
+    const trunkW = Math.max(hpx * 0.12, 2)
+    const trunkH = hpx * 0.35
+    ctx.fillStyle = '#5a3a22'
+    ctx.fillRect(x - trunkW / 2, y - trunkH, trunkW, trunkH)
+    ctx.fillStyle = '#2d5a27'
+    const crownBase = y - trunkH
+    const crownW = hpx * 0.9
+    ctx.beginPath()
+    ctx.moveTo(x, crownBase - hpx * 0.85)
+    ctx.lineTo(x - crownW / 2, crownBase)
+    ctx.lineTo(x + crownW / 2, crownBase)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#3a7a35'
+    ctx.beginPath()
+    ctx.moveTo(x, crownBase - hpx * 0.55)
+    ctx.lineTo(x - crownW * 0.62, crownBase)
+    ctx.lineTo(x + crownW * 0.62, crownBase)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  /** 路灯：灯杆 + 发光灯头 */
+  private drawLamp(x: number, y: number, hpx: number): void {
+    const { ctx } = this
+    const poleW = Math.max(hpx * 0.06, 2)
+    ctx.fillStyle = '#8a8a8a'
+    ctx.fillRect(x - poleW / 2, y - hpx, poleW, hpx)
+    const r = Math.max(hpx * 0.14, 2)
+    ctx.fillStyle = '#ffe08a'
+    ctx.beginPath()
+    ctx.arc(x, y - hpx, r * 1.6, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ffd75e'
+    ctx.beginPath()
+    ctx.arc(x, y - hpx, r, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   private projectQuad(z: number, centerX: number): Quad | null {
