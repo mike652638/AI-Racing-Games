@@ -9,3 +9,33 @@ body {
 canvas {
   display: block;
 }
+
+#hud {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #fff;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#hud-speed {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#hud-speed-unit {
+  font-size: 14px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+#hud-lap,
+#hud-time {
+  font-size: 20px;
+  opacity: 0.9;
+}

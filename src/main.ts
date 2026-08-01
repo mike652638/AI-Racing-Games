@@ -1,10 +1,16 @@
 import { Renderer } from './engine/renderer'
-import { createDefaultTrack } from './engine/track'
+import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
+import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
+const hudSpeed = document.getElementById('hud-speed') as HTMLDivElement
+const hudLap = document.getElementById('hud-lap') as HTMLDivElement
+const hudTime = document.getElementById('hud-time') as HTMLDivElement
 
+const TOTAL_LAPS = 3
 const track = createDefaultTrack()
+const lapLength = track.length * SEGMENT_LENGTH
 const renderer = new Renderer(canvas, track, window.innerWidth, window.innerHeight)
 
 const carConfig = createCarConfig()
@@ -25,6 +31,7 @@ function resize(): void {
 }
 
 let cameraZ = 0
+let raceTime = 0
 let last = performance.now()
 
 function frame(now: number): void {
@@ -41,8 +48,13 @@ function frame(now: number): void {
   }, carState, carConfig)
 
   cameraZ += carState.speed * dt
+  raceTime += dt
   renderer.setCameraX(carState.position)
   renderer.render(cameraZ)
+
+  hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)
+  hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), TOTAL_LAPS)
+  hudTime.textContent = formatTime(raceTime)
   requestAnimationFrame(frame)
 }
 
