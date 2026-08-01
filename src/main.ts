@@ -308,13 +308,13 @@ function frame(now: number): void {
   if (SPLIT_MODE) {
     const w = window.innerWidth
     renderer.setCameraX(carState.position)
-    renderer.renderRegion(cameraZ, 0, w / 2, driftState.smoke)
+    renderer.renderRegion(cameraZ, 0, w / 2, driftState.smoke, raceTime)
     renderer.setCameraX(carState2.position)
-    renderer.renderRegion(cameraZ2, w / 2, w / 2, driftState2.smoke)
+    renderer.renderRegion(cameraZ2, w / 2, w / 2, driftState2.smoke, raceTime)
   }
   else {
     renderer.setCameraX(carState.position)
-    renderer.render(cameraZ, driftState.smoke)
+    renderer.render(cameraZ, driftState.smoke, raceTime)
   }
 
   hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)

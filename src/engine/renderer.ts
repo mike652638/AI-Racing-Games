@@ -4,6 +4,7 @@ import { generateMountainProfile, parallaxOffset } from './scenery'
 import { curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
+import { updateLighting } from './lighting'
 
 /** 路面半宽（世界单位） */
 export const ROAD_HALF_WIDTH = 1
@@ -151,8 +152,8 @@ export class Renderer {
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
-  render(cameraZ: number, smoke: SmokeParticle[] = []): void {
-    this.renderWithOpts(cameraZ, this.opts, smoke)
+  render(cameraZ: number, smoke: SmokeParticle[] = [], timeSec = 0): void {
+    this.renderWithOpts(cameraZ, this.opts, smoke, timeSec)
   }
 
   /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移 */
@@ -161,6 +162,7 @@ export class Renderer {
     viewX: number,
     viewW: number,
     smoke: SmokeParticle[] = [],
+    timeSec = 0,
   ): void {
     const { ctx } = this
     const opts = this.buildOpts(viewW, this.opts.height)
@@ -169,7 +171,7 @@ export class Renderer {
     ctx.beginPath()
     ctx.rect(0, 0, viewW, this.opts.height)
     ctx.clip()
-    this.renderWithOpts(cameraZ, opts, smoke)
+    this.renderWithOpts(cameraZ, opts, smoke, timeSec)
     ctx.restore()
   }
 
@@ -177,16 +179,18 @@ export class Renderer {
     cameraZ: number,
     opts: ProjectionOptions,
     smoke: SmokeParticle[],
+    timeSec: number,
   ): void {
     const { ctx } = this
     this.camera.z = cameraZ
+    const colors = updateLighting(timeSec)
 
-    ctx.fillStyle = '#0d1b2a'
+    ctx.fillStyle = colors.skyTop
     ctx.fillRect(0, 0, opts.width, opts.horizon)
     for (const layer of this.mountains) {
       drawMountainLayerCached(ctx, layer, cameraZ, opts)
     }
-    ctx.fillStyle = '#1e3d2f'
+    ctx.fillStyle = colors.grass
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
 
     const baseIndex = trackIndexForCameraZ(this.track, cameraZ)
