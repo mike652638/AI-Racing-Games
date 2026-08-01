@@ -4,10 +4,10 @@ import { createRoadsideSprites } from './engine/sprites'
 import { collideWithPlayer, createTraffic, updateTraffic } from './engine/traffic'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
 import {
+  createDriftState,
   driftSpeedFactor,
   effectiveTurnRate,
   updateDrift,
-  type DriftState,
 } from './physics/drift'
 import {
   inputFromKeys,
@@ -36,6 +36,8 @@ const hudSpeed2 = document.getElementById('hud-speed-2') as HTMLDivElement
 const hudLap2 = document.getElementById('hud-lap-2') as HTMLDivElement
 const hudTime2 = document.getElementById('hud-time-2') as HTMLDivElement
 const driftIndicator = document.getElementById('drift-indicator') as HTMLDivElement
+const driftScoreValue = document.getElementById('drift-score-value') as HTMLSpanElement
+const finishScore = document.getElementById('finish-score') as HTMLParagraphElement
 const hud2 = document.getElementById('hud2') as HTMLDivElement
 hud2.hidden = !SPLIT_MODE
 const startScreen = document.getElementById('start-screen') as HTMLDivElement
@@ -60,8 +62,8 @@ const renderer = new Renderer(
 const carConfig = createCarConfig()
 const carState: CarState = { position: 0, speed: 0 }
 const carState2: CarState = { position: 0, speed: 0 }
-let driftState: DriftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
-let driftState2: DriftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
+let driftState = createDriftState()
+let driftState2 = createDriftState()
 
 const pressed = new Set<string>()
 let phase: Phase = PHASE_MENU
@@ -75,6 +77,7 @@ let raceTime2 = 0
 let bestTime: number | null = loadBestTime()
 let traffic = createTraffic(lapLength)
 let collisionCount = 0
+let collisionCooldown = 0
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -107,8 +110,8 @@ function resetRace(): void {
   carState.speed = 0
   carState2.position = 0
   carState2.speed = 0
-  driftState = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
-  driftState2 = { charge: 0, active: false, lastSmoke: 0, smoke: [] }
+  driftState = createDriftState()
+  driftState2 = createDriftState()
   cameraZ = 0
   cameraZ2 = 0
   raceTime = 0
@@ -118,6 +121,7 @@ function resetRace(): void {
   bestTime = loadBestTime()
   traffic = createTraffic(lapLength)
   collisionCount = 0
+  collisionCooldown = 0
 }
 
 function applyPhase(newPhase: Phase): void {
@@ -146,6 +150,7 @@ function applyPhase(newPhase: Phase): void {
       else {
         finishBest.textContent = `最佳 ${formatTime(bestTime ?? raceTime)}`
       }
+      finishScore.textContent = `漂移得分 ${Math.round(driftState.score)}`
     }
   }
 }
@@ -185,10 +190,13 @@ function frame(now: number): void {
     cameraZ += carState.speed * dt
     raceTime += dt
 
-    const hit = collideWithPlayer(traffic, cameraZ, carState.position)
+    collisionCooldown = Math.max(collisionCooldown - dt, 0)
+    const hit =
+      collisionCooldown <= 0 ? collideWithPlayer(traffic, cameraZ, carState.position) : null
     if (hit) {
       carState.speed *= 0.5
       collisionCount++
+      collisionCooldown = 1
     }
 
     driftState2 = updateDrift(dt, input2, carState2, carConfig, driftState2, cameraZ2)
@@ -205,6 +213,9 @@ function frame(now: number): void {
   }
 
   driftIndicator.hidden = !driftState.active
+  if (driftState.active) {
+    driftScoreValue.textContent = String(Math.round(driftState.score))
+  }
   if (SPLIT_MODE) {
     const w = window.innerWidth
     renderer.setCameraX(carState.position)

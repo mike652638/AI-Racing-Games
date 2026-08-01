@@ -9,7 +9,7 @@ import { createCarConfig } from '../../src/physics/car'
 
 const DT = 1 / 60
 
-const idleDrift = (): DriftState => ({ charge: 0, active: false, lastSmoke: 0, smoke: [] })
+const idleDrift = (): DriftState => ({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })
 
 describe('漂移状态机', () => {
   test('高速强转向积累 charge 并激活漂移', () => {
@@ -92,14 +92,50 @@ describe('漂移状态机', () => {
 describe('漂移对物理的影响', () => {
   test('active 时转向率提升 1.5 倍', () => {
     const cfg = createCarConfig()
-    const active = effectiveTurnRate(cfg, { charge: 1, active: true, lastSmoke: 0, smoke: [] })
+    const active = effectiveTurnRate(cfg, { charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0 })
     expect(active).toBeCloseTo(cfg.turnRate * 1.5, 10)
-    const idle = effectiveTurnRate(cfg, { charge: 0, active: false, lastSmoke: 0, smoke: [] })
+    const idle = effectiveTurnRate(cfg, { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })
     expect(idle).toBe(cfg.turnRate)
   })
 
   test('active 时速度有损耗因子', () => {
-    expect(driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [] })).toBeCloseTo(0.985, 10)
-    expect(driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [] })).toBe(1)
+    expect(driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0 })).toBeCloseTo(0.985, 10)
+    expect(driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })).toBe(1)
+  })
+})
+
+describe('漂移得分', () => {
+  const cfg = createCarConfig({ maxSpeed: 6000 })
+  const state = { position: 0.5, speed: 6000 }
+  const steerInput = { throttle: 0, brake: false, steer: 1 }
+  const idleInput = { throttle: 0, brake: false, steer: 0 }
+  const scored = (): DriftState => ({ charge: 1, active: false, lastSmoke: 0, smoke: [], score: 0 })
+
+  test('漂移中按速度累计得分', () => {
+    const drift = scored()
+    updateDrift(1, steerInput, state, cfg, drift, 0)
+    expect(drift.active).toBe(true)
+    expect(drift.score).toBeGreaterThan(0)
+  })
+
+  test('得分与速度成正比（1.5 倍速度 1.5 倍得分）', () => {
+    const a = scored()
+    const b = scored()
+    updateDrift(1, steerInput, state, cfg, a, 0)
+    updateDrift(1, steerInput, { position: 0.5, speed: 4000 }, cfg, b, 0)
+    expect(a.score).toBeCloseTo(b.score * 1.5, 6)
+  })
+
+  test('不漂移不计分', () => {
+    const drift = scored()
+    updateDrift(1, idleInput, state, cfg, drift, 0)
+    expect(drift.score).toBe(0)
+  })
+
+  test('charge 不足（未激活）不计分', () => {
+    const drift = scored()
+    drift.charge = 0
+    updateDrift(DT, steerInput, state, cfg, drift, 0)
+    expect(drift.score).toBe(0)
   })
 })
