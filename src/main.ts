@@ -10,13 +10,7 @@ import {
   effectiveTurnRate,
   updateDrift,
 } from './physics/drift'
-import {
-  inputFromKeys,
-  PLAYER1_MAPPING,
-  PLAYER2_MAPPING,
-  touchToCarInput,
-  type TouchPoint,
-} from './physics/input'
+import { createInputManager } from './game/input'
 import { formatSpeed, formatTime, formatLap, formatLapTimes, lapFromZ } from './ui/format'
 import { loadBestTime, saveBestTime, loadBestDriftScore, saveBestDriftScore } from './ui/save'
 import { EngineSound } from './audio/engine'
@@ -81,7 +75,7 @@ const carState2: CarState = { position: 0, speed: 0 }
 let driftState = createDriftState()
 let driftState2 = createDriftState()
 
-const pressed = new Set<string>()
+const input = createInputManager(window, canvas)
 let phase: Phase = PHASE_MENU
 let engineSound: EngineSound | null = null
 let music: MusicPlayer | null = null
@@ -98,7 +92,6 @@ let collisionCount = 0
 let collisionCooldown = 0
 let lapTimes: number[] = []
 let lastLap = 1
-const touchPoints = new Map<number, TouchPoint>()
 let last = performance.now()
 
 /** 调试钩子：供自动化验证读取运行时状态 */
@@ -131,7 +124,7 @@ let last = performance.now()
     return trackDef.id
   },
   get touchPoints(): number {
-    return touchPoints.size
+    return input.touchPoints.size
   },
 }
 
@@ -227,7 +220,6 @@ function applyPhase(newPhase: Phase): void {
 }
 
 window.addEventListener('keydown', (e) => {
-  pressed.add(e.code)
   if (e.code === 'Escape') {
     applyPhase(togglePause(phase))
     return
@@ -248,29 +240,6 @@ window.addEventListener('keydown', (e) => {
   }
   applyPhase(nextPhase(phase, lapFromZ(cameraZ, lapLength), totalLaps))
 })
-window.addEventListener('keyup', (e) => {
-  pressed.delete(e.code)
-})
-
-// 移动端触控：仅收集真实触摸点（pointerType=touch），鼠标/笔不影响键盘操作。
-// 全部挂 canvas：pointer capture 后原生事件目标即为 canvas，与合成测试一致
-canvas.addEventListener('pointerdown', (e) => {
-  if (e.pointerType !== 'touch') return
-  canvas.setPointerCapture(e.pointerId)
-  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
-})
-canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'touch' || !touchPoints.has(e.pointerId)) return
-  touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY })
-})
-canvas.addEventListener('pointerup', (e) => {
-  if (e.pointerType !== 'touch') return
-  touchPoints.delete(e.pointerId)
-})
-canvas.addEventListener('pointercancel', (e) => {
-  if (e.pointerType !== 'touch') return
-  touchPoints.delete(e.pointerId)
-})
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1
@@ -284,11 +253,9 @@ function frame(now: number): void {
   if (phase === PHASE_RACING) {
     updateTraffic(traffic, dt, lapLength)
 
-    const input1 = touchPoints.size > 0
-      ? touchToCarInput([...touchPoints.values()], window.innerWidth, window.innerHeight)
-      : inputFromKeys(pressed, PLAYER1_MAPPING)
+    const input1 = input.getP1Input()
     const input2 = SPLIT_MODE
-      ? inputFromKeys(pressed, PLAYER2_MAPPING)
+      ? input.getP2Input()
       : { throttle: 0, brake: false, steer: 0 }
 
     driftState = updateDrift(dt, input1, carState, carConfig, driftState, cameraZ)
