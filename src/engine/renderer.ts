@@ -20,28 +20,39 @@ interface MountainLayer {
   profile: number[]
   factor: number
   color: string
-  /** 山峰高度相对 horizon 的比例 */
   peak: number
+  /** 离屏预渲染的山形位图 */
+  offscreen: HTMLCanvasElement
 }
 
-function drawMountainLayer(
+function renderMountainOffscreen(layer: MountainLayer, width: number): HTMLCanvasElement {
+  const height = Math.floor(width * layer.peak)
+  const canvas = document.createElement('canvas')
+  canvas.width = layer.profile.length
+  canvas.height = height
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = layer.color
+  ctx.beginPath()
+  ctx.moveTo(0, height)
+  for (let x = 0; x < layer.profile.length; x++) {
+    ctx.lineTo(x, height - layer.profile[x] * height)
+  }
+  ctx.lineTo(layer.profile.length, height)
+  ctx.closePath()
+  ctx.fill()
+  return canvas
+}
+
+function drawMountainLayerCached(
   ctx: CanvasRenderingContext2D,
   layer: MountainLayer,
   cameraZ: number,
   opts: ProjectionOptions,
 ): void {
-  const offset = parallaxOffset(cameraZ, layer.factor, layer.profile.length)
-  const peakHeight = opts.horizon * layer.peak
-  ctx.fillStyle = layer.color
-  ctx.beginPath()
-  ctx.moveTo(0, opts.horizon)
-  for (let x = 0; x <= opts.width; x += 2) {
-    const h = layer.profile[(x + offset) % layer.profile.length]
-    ctx.lineTo(x, opts.horizon - h * peakHeight)
-  }
-  ctx.lineTo(opts.width, opts.horizon)
-  ctx.closePath()
-  ctx.fill()
+  const offset = parallaxOffset(cameraZ, layer.factor, layer.offscreen.width)
+  const y = opts.horizon - layer.offscreen.height
+  ctx.drawImage(layer.offscreen, -offset, y)
+  ctx.drawImage(layer.offscreen, layer.offscreen.width - offset, y)
 }
 
 interface Quad {
@@ -98,20 +109,14 @@ export class Renderer {
   }
 
   private buildMountains(width: number): MountainLayer[] {
-    return [
-      {
-        profile: generateMountainProfile(width, 2024),
-        factor: 0.02,
-        color: '#27425e',
-        peak: 0.5,
-      },
-      {
-        profile: generateMountainProfile(width, 77),
-        factor: 0.05,
-        color: '#1f3046',
-        peak: 0.35,
-      },
+    const layers: MountainLayer[] = [
+      { profile: generateMountainProfile(width, 2024), factor: 0.02, color: '#27425e', peak: 0.5, offscreen: null! },
+      { profile: generateMountainProfile(width, 77), factor: 0.05, color: '#1f3046', peak: 0.35, offscreen: null! },
     ]
+    for (const layer of layers) {
+      layer.offscreen = renderMountainOffscreen(layer, width)
+    }
+    return layers
   }
 
   private applyCanvasSize(
@@ -179,7 +184,7 @@ export class Renderer {
     ctx.fillStyle = '#0d1b2a'
     ctx.fillRect(0, 0, opts.width, opts.horizon)
     for (const layer of this.mountains) {
-      drawMountainLayer(ctx, layer, cameraZ, opts)
+      drawMountainLayerCached(ctx, layer, cameraZ, opts)
     }
     ctx.fillStyle = '#1e3d2f'
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
@@ -286,8 +291,8 @@ export class Renderer {
       cameraZ,
       DRAW_DISTANCE * SEGMENT_LENGTH,
     )
-    seen.sort((a, b) => b.z - a.z)
-    for (const sprite of seen) {
+    for (let i = seen.length - 1; i >= 0; i--) {
+      const sprite = seen[i]
       const centerX = curveOffsetAtZ(this.track, sprite.z)
       const cx = centerX - this.camera.x
       const bottom = project(opts, this.camera, {
