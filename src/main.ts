@@ -18,6 +18,7 @@ import {
 import { formatSpeed, formatTime, formatLap, lapFromZ } from './ui/format'
 import { loadBestTime, saveBestTime } from './ui/save'
 import { EngineSound } from './audio/engine'
+import { MusicPlayer } from './audio/music'
 import {
   nextPhase,
   PHASE_MENU,
@@ -77,6 +78,7 @@ let driftState2 = createDriftState()
 const pressed = new Set<string>()
 let phase: Phase = PHASE_MENU
 let engineSound: EngineSound | null = null
+let music: MusicPlayer | null = null
 let finishShown = false
 
 let cameraZ = 0
@@ -93,6 +95,9 @@ let last = performance.now()
 ;(window as unknown as Record<string, unknown>).__gameDebug = {
   get audioState(): AudioContextState | null {
     return engineSound?.state ?? null
+  },
+  get musicState(): string {
+    return music?.state ?? 'stopped'
   },
   get phase(): Phase {
     return phase
@@ -198,8 +203,11 @@ window.addEventListener('keydown', (e) => {
     }
   }
   if (!engineSound) {
-    engineSound = new EngineSound(new AudioContext())
+    const ctx = new AudioContext()
+    engineSound = new EngineSound(ctx)
     engineSound.start()
+    music = new MusicPlayer(ctx)
+    music.start()
   }
   applyPhase(nextPhase(phase, lapFromZ(cameraZ, lapLength), totalLaps))
 })
