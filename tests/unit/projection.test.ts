@@ -38,4 +38,12 @@ describe('project 伪3D透视投影', () => {
     expect(p.y).toBeCloseTo(opts.horizon, 0)
     expect(p.scale).toBeCloseTo(0, 3)
   })
+
+  test('相机沿 z 移动后按相对距离投影（远行画面不坍缩）', () => {
+    const moving = { x: 0, y: 1, z: 84000 }
+    const p = project(opts, moving, { x: 0, y: 0, z: 84200 })
+    expect(p).not.toBeNull()
+    expect(p!.scale).toBeCloseTo(opts.depth / 200, 5)
+    expect(p!.y).toBeGreaterThan(opts.horizon)
+  })
 })

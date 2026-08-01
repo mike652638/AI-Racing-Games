@@ -1,5 +1,6 @@
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
+import { generateMountainProfile, parallaxOffset } from './scenery'
 
 /** 路面半宽（世界单位） */
 export const ROAD_HALF_WIDTH = 1
@@ -10,6 +11,34 @@ export const DRAW_DISTANCE = 120
 
 const ROAD_COLORS = ['#4a4a4a', '#3c3c3c']
 const SIDE_COLORS = ['#d03030', '#e8e8e8']
+
+interface MountainLayer {
+  profile: number[]
+  factor: number
+  color: string
+  /** 山峰高度相对 horizon 的比例 */
+  peak: number
+}
+
+function drawMountainLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: MountainLayer,
+  cameraZ: number,
+  opts: ProjectionOptions,
+): void {
+  const offset = parallaxOffset(cameraZ, layer.factor, layer.profile.length)
+  const peakHeight = opts.horizon * layer.peak
+  ctx.fillStyle = layer.color
+  ctx.beginPath()
+  ctx.moveTo(0, opts.horizon)
+  for (let x = 0; x <= opts.width; x += 2) {
+    const h = layer.profile[(x + offset) % layer.profile.length]
+    ctx.lineTo(x, opts.horizon - h * peakHeight)
+  }
+  ctx.lineTo(opts.width, opts.horizon)
+  ctx.closePath()
+  ctx.fill()
+}
 
 interface Quad {
   l1: Projected
@@ -40,6 +69,7 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D
   private opts: ProjectionOptions
   private camera = { x: 0, y: 1, z: 0 }
+  private mountains: MountainLayer[]
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -50,13 +80,32 @@ export class Renderer {
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
+    this.mountains = this.buildMountains(width)
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
   /** 更新视口尺寸（CSS 像素），并按 devicePixelRatio 缩放画布 */
   setViewport(canvas: HTMLCanvasElement, width: number, height: number, dpr = 1): void {
     this.opts = this.buildOpts(width, height)
+    this.mountains = this.buildMountains(width)
     this.applyCanvasSize(canvas, width, height, dpr)
+  }
+
+  private buildMountains(width: number): MountainLayer[] {
+    return [
+      {
+        profile: generateMountainProfile(width, 2024),
+        factor: 0.02,
+        color: '#27425e',
+        peak: 0.5,
+      },
+      {
+        profile: generateMountainProfile(width, 77),
+        factor: 0.05,
+        color: '#1f3046',
+        peak: 0.35,
+      },
+    ]
   }
 
   private applyCanvasSize(
@@ -79,25 +128,31 @@ export class Renderer {
     this.camera.x = x
   }
 
-  /** 渲染一帧直道滚动画面 */
+  /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 */
   render(cameraZ: number): void {
     const { ctx, opts } = this
+    this.camera.z = cameraZ
 
     ctx.fillStyle = '#0d1b2a'
     ctx.fillRect(0, 0, opts.width, opts.horizon)
+    for (const layer of this.mountains) {
+      drawMountainLayer(ctx, layer, cameraZ, opts)
+    }
     ctx.fillStyle = '#1e3d2f'
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
 
     const baseIndex = trackIndexForCameraZ(this.track, cameraZ)
     const baseZ = Math.floor(cameraZ / SEGMENT_LENGTH) * SEGMENT_LENGTH
 
+    let curveSum = 0
     for (let k = 0; k < DRAW_DISTANCE; k++) {
       const z = baseZ + k * SEGMENT_LENGTH
       if (z <= cameraZ) {
         continue
       }
-      const cur = this.projectQuad(z)
-      const next = this.projectQuad(z + SEGMENT_LENGTH)
+      const segment = this.track[(baseIndex + k) % this.track.length]
+      const cur = this.projectQuad(z, curveSum)
+      const next = this.projectQuad(z + SEGMENT_LENGTH, curveSum + segment.curve)
       if (!cur || !next) {
         continue
       }
@@ -109,7 +164,7 @@ export class Renderer {
 
       if (k % 2 === 0) {
         const cw = (cur.r1.x - cur.l1.x) * 0.06
-        const centerProj = project(this.opts, this.camera, { x: 0, y: 0, z })
+        const centerProj = project(this.opts, this.camera, { x: curveSum, y: 0, z })
         const centerX = centerProj ? centerProj.x : opts.width / 2
         drawQuad(
           ctx,
@@ -120,20 +175,22 @@ export class Renderer {
           '#e8e8e8',
         )
       }
+      curveSum += segment.curve
     }
   }
 
-  private projectQuad(z: number): Quad | null {
+  private projectQuad(z: number, centerX: number): Quad | null {
     const { camera } = this
-    const l1 = project(this.opts, camera, { x: -ROAD_HALF_WIDTH, y: 0, z })
+    const cx = centerX - camera.x
+    const l1 = project(this.opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
     const l2 = project(this.opts, camera, {
-      x: -ROAD_HALF_WIDTH - EDGE_WIDTH,
+      x: cx - ROAD_HALF_WIDTH - EDGE_WIDTH,
       y: 0,
       z,
     })
-    const r1 = project(this.opts, camera, { x: ROAD_HALF_WIDTH, y: 0, z })
+    const r1 = project(this.opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z })
     const r2 = project(this.opts, camera, {
-      x: ROAD_HALF_WIDTH + EDGE_WIDTH,
+      x: cx + ROAD_HALF_WIDTH + EDGE_WIDTH,
       y: 0,
       z,
     })
