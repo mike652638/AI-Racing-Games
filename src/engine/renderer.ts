@@ -74,6 +74,11 @@ export class Renderer {
     return { width, height, horizon: height * 0.35, depth: width * 0.84 }
   }
 
+  /** 设置相机横向偏移（跟随车辆位置） */
+  setCameraX(x: number): void {
+    this.camera.x = x
+  }
+
   /** 渲染一帧直道滚动画面 */
   render(cameraZ: number): void {
     const { ctx, opts } = this
@@ -104,7 +109,8 @@ export class Renderer {
 
       if (k % 2 === 0) {
         const cw = (cur.r1.x - cur.l1.x) * 0.06
-        const centerX = opts.width / 2
+        const centerProj = project(this.opts, this.camera, { x: 0, y: 0, z })
+        const centerX = centerProj ? centerProj.x : opts.width / 2
         drawQuad(
           ctx,
           { x: centerX - cw, y: cur.l1.y, scale: 1 },

@@ -1,13 +1,23 @@
 import { Renderer } from './engine/renderer'
-import { SEGMENT_LENGTH, createStraightTrack } from './engine/track'
+import { createStraightTrack } from './engine/track'
+import { createCarConfig, updateCar, type CarState } from './physics/car'
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 
 const track = createStraightTrack(600)
 const renderer = new Renderer(canvas, track, window.innerWidth, window.innerHeight)
 
-/** M1 临时恒定速度（M2 起由车辆物理接管）：30 段/秒 */
-const SPEED = SEGMENT_LENGTH * 30
+const carConfig = createCarConfig()
+const carState: CarState = { position: 0, speed: 0 }
+
+const pressed = new Set<string>()
+
+window.addEventListener('keydown', (e) => {
+  pressed.add(e.code)
+})
+window.addEventListener('keyup', (e) => {
+  pressed.delete(e.code)
+})
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1
@@ -20,7 +30,18 @@ let last = performance.now()
 function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.05)
   last = now
-  cameraZ += SPEED * dt
+
+  const steer
+    = (pressed.has('ArrowRight') || pressed.has('KeyD') ? 1 : 0)
+    - (pressed.has('ArrowLeft') || pressed.has('KeyA') ? 1 : 0)
+  updateCar(dt, {
+    throttle: pressed.has('ArrowUp') || pressed.has('KeyW') ? 1 : 0,
+    brake: pressed.has('ArrowDown') || pressed.has('KeyS'),
+    steer,
+  }, carState, carConfig)
+
+  cameraZ += carState.speed * dt
+  renderer.setCameraX(carState.position)
   renderer.render(cameraZ)
   requestAnimationFrame(frame)
 }
