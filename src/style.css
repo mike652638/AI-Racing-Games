@@ -80,7 +80,8 @@ canvas {
 }
 
 #start-screen,
-#finish-screen {
+#finish-screen,
+#pause-screen {
   position: fixed;
   inset: 0;
   display: flex;
@@ -95,7 +96,8 @@ canvas {
 }
 
 #start-screen h1,
-#finish-screen h1 {
+#finish-screen h1,
+#pause-screen h1 {
   font-size: 64px;
   margin: 0 0 16px;
   letter-spacing: 6px;
@@ -107,14 +109,16 @@ canvas {
 }
 
 #start-screen p,
-#finish-screen p {
+#finish-screen p,
+#pause-screen p {
   font-size: 18px;
   margin: 6px 0;
   opacity: 0.85;
 }
 
 #start-screen .hint,
-#finish-screen .hint {
+#finish-screen .hint,
+#pause-screen .hint {
   margin-top: 32px;
   font-size: 14px;
   opacity: 0.6;

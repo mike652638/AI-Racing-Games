@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest'
-import { nextPhase, PHASE_MENU, PHASE_RACING, PHASE_FINISHED } from '../../src/ui/gamestate'
+import {
+  nextPhase, togglePause,
+  PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED,
+} from '../../src/ui/gamestate'
 
 describe('nextPhase', () => {
   test('菜单按任意键进入比赛', () => {
@@ -13,5 +16,14 @@ describe('nextPhase', () => {
   })
   test('结算按 R 重开回菜单', () => {
     expect(nextPhase(PHASE_FINISHED, 4, 3)).toBe(PHASE_MENU)
+  })
+})
+
+describe('togglePause', () => {
+  test('比赛中暂停', () => {
+    expect(togglePause(PHASE_RACING)).toBe(PHASE_PAUSED)
+  })
+  test('暂停恢复比赛', () => {
+    expect(togglePause(PHASE_PAUSED)).toBe(PHASE_RACING)
   })
 })

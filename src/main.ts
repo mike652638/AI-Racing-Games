@@ -23,9 +23,11 @@ import { EngineSound } from './audio/engine'
 import { MusicPlayer } from './audio/music'
 import {
   nextPhase,
+  togglePause,
   PHASE_MENU,
   PHASE_RACING,
   PHASE_FINISHED,
+  PHASE_PAUSED,
   type Phase,
 } from './ui/gamestate'
 
@@ -49,6 +51,7 @@ const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
 const finishSpeed = document.getElementById('finish-speed') as HTMLParagraphElement
 const finishBest = document.getElementById('finish-best') as HTMLParagraphElement
+const pauseScreen = document.getElementById('pause-screen') as HTMLDivElement
 const trackName = document.getElementById('track-name') as HTMLSpanElement
 const trackOptions = [
   document.getElementById('track-option-0') as HTMLDivElement,
@@ -173,11 +176,16 @@ function applyPhase(newPhase: Phase): void {
   if (phase === PHASE_MENU) {
     startScreen.hidden = false
     finishScreen.hidden = true
+    pauseScreen.hidden = true
     resetRace()
   }
   else if (phase === PHASE_RACING) {
     startScreen.hidden = true
     finishScreen.hidden = true
+    pauseScreen.hidden = true
+  }
+  else if (phase === PHASE_PAUSED) {
+    pauseScreen.hidden = false
   }
   else if (phase === PHASE_FINISHED) {
     finishScreen.hidden = false
@@ -201,6 +209,10 @@ function applyPhase(newPhase: Phase): void {
 
 window.addEventListener('keydown', (e) => {
   pressed.add(e.code)
+  if (e.code === 'Escape') {
+    applyPhase(togglePause(phase))
+    return
+  }
   if (phase === PHASE_MENU && e.code.startsWith('Digit')) {
     const index = Number(e.code.slice(5)) - 1
     if (index >= 0 && index < TRACK_DEFS.length) {
