@@ -1,6 +1,7 @@
 import { Renderer } from './engine/renderer'
-import { createDefaultTrack, SEGMENT_LENGTH } from './engine/track'
+import { SEGMENT_LENGTH } from './engine/track'
 import { createRoadsideSprites } from './engine/sprites'
+import { createTrackFromDef, TRACK_DEFS, type TrackDef } from './engine/tracks'
 import { collideWithPlayer, createTraffic, updateTraffic } from './engine/traffic'
 import { createCarConfig, updateCar, type CarState } from './physics/car'
 import {
@@ -45,10 +46,18 @@ const finishScreen = document.getElementById('finish-screen') as HTMLDivElement
 const finishTime = document.getElementById('finish-time') as HTMLParagraphElement
 const finishSpeed = document.getElementById('finish-speed') as HTMLParagraphElement
 const finishBest = document.getElementById('finish-best') as HTMLParagraphElement
+const trackName = document.getElementById('track-name') as HTMLSpanElement
+const trackOptions = [
+  document.getElementById('track-option-0') as HTMLDivElement,
+  document.getElementById('track-option-1') as HTMLDivElement,
+  document.getElementById('track-option-2') as HTMLDivElement,
+]
 
-const TOTAL_LAPS = 3
-const track = createDefaultTrack()
-const lapLength = track.length * SEGMENT_LENGTH
+let selectedIndex = 0
+let trackDef: TrackDef = TRACK_DEFS[0]
+let track = createTrackFromDef(trackDef)
+let lapLength = track.length * SEGMENT_LENGTH
+let totalLaps = trackDef.laps
 const renderer = new Renderer(
   canvas,
   track,
@@ -103,6 +112,30 @@ let last = performance.now()
   get collisions(): number {
     return collisionCount
   },
+  get selectedTrack(): string {
+    return trackDef.id
+  },
+}
+
+/** 切换赛道定义：重建 track/lapLength/totalLaps/景物/车流并重置对局 */
+function applyTrack(index: number): void {
+  selectedIndex = index
+  trackDef = TRACK_DEFS[index]
+  track = createTrackFromDef(trackDef)
+  lapLength = track.length * SEGMENT_LENGTH
+  totalLaps = trackDef.laps
+  renderer.setTrack(track, createRoadsideSprites(track))
+  traffic = createTraffic(lapLength)
+  resetRace()
+  updateTrackSelect()
+}
+
+/** 更新选单高亮与赛道名 */
+function updateTrackSelect(): void {
+  trackName.textContent = trackDef.name
+  trackOptions.forEach((option, i) => {
+    option.classList.toggle('selected', i === selectedIndex)
+  })
 }
 
 function resetRace(): void {
@@ -157,11 +190,18 @@ function applyPhase(newPhase: Phase): void {
 
 window.addEventListener('keydown', (e) => {
   pressed.add(e.code)
+  if (phase === PHASE_MENU && e.code.startsWith('Digit')) {
+    const index = Number(e.code.slice(5)) - 1
+    if (index >= 0 && index < TRACK_DEFS.length) {
+      applyTrack(index)
+      return
+    }
+  }
   if (!engineSound) {
     engineSound = new EngineSound(new AudioContext())
     engineSound.start()
   }
-  applyPhase(nextPhase(phase, lapFromZ(cameraZ, lapLength), TOTAL_LAPS))
+  applyPhase(nextPhase(phase, lapFromZ(cameraZ, lapLength), totalLaps))
 })
 window.addEventListener('keyup', (e) => {
   pressed.delete(e.code)
@@ -205,8 +245,8 @@ function frame(now: number): void {
     cameraZ2 += carState2.speed * dt
     raceTime2 += dt
 
-    const finishedP1 = lapFromZ(cameraZ, lapLength) > TOTAL_LAPS
-    const finishedP2 = SPLIT_MODE && lapFromZ(cameraZ2, lapLength) > TOTAL_LAPS
+    const finishedP1 = lapFromZ(cameraZ, lapLength) > totalLaps
+    const finishedP2 = SPLIT_MODE && lapFromZ(cameraZ2, lapLength) > totalLaps
     if (finishedP1 || finishedP2) {
       applyPhase(PHASE_FINISHED)
     }
@@ -229,7 +269,7 @@ function frame(now: number): void {
   }
 
   hudSpeed.textContent = formatSpeed(carState.speed, carConfig.maxSpeed)
-  hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), TOTAL_LAPS)
+  hudLap.textContent = formatLap(lapFromZ(cameraZ, lapLength), totalLaps)
   hudTime.textContent = formatTime(raceTime)
   hudBest.hidden = bestTime === null
   if (bestTime !== null) {
@@ -237,7 +277,7 @@ function frame(now: number): void {
   }
   if (SPLIT_MODE) {
     hudSpeed2.textContent = formatSpeed(carState2.speed, carConfig.maxSpeed)
-    hudLap2.textContent = formatLap(lapFromZ(cameraZ2, lapLength), TOTAL_LAPS)
+    hudLap2.textContent = formatLap(lapFromZ(cameraZ2, lapLength), totalLaps)
     hudTime2.textContent = formatTime(raceTime2)
   }
   engineSound?.setSpeedRatio(carState.speed / carConfig.maxSpeed)
@@ -245,5 +285,6 @@ function frame(now: number): void {
 }
 
 window.addEventListener('resize', resize)
+updateTrackSelect()
 resize()
 requestAnimationFrame(frame)

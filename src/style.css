@@ -121,6 +121,34 @@ canvas {
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+#track-select {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 12px 0 8px;
+}
+
+.track-option {
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.55;
+  font-size: 14px;
+}
+
+.track-option.selected {
+  opacity: 1;
+  border-color: #ffd75e;
+  color: #ffd75e;
+}
+
+#track-name {
+  color: #ffd75e;
+  font-weight: 700;
+}
+
 @keyframes pulse {
   0%,
   100% {

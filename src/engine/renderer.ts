@@ -77,11 +77,11 @@ export class Renderer {
 
   constructor(
     canvas: HTMLCanvasElement,
-    private readonly track: Segment[],
+    private track: Segment[],
     width: number,
     height: number,
     dpr = 1,
-    private readonly sprites: Sprite[] = [],
+    private sprites: Sprite[] = [],
     private traffic: TrafficCar[] = [],
   ) {
     this.ctx = canvas.getContext('2d')!
@@ -137,6 +137,12 @@ export class Renderer {
   /** 更新车流引用（赛道切换/重置时调用） */
   setTraffic(traffic: TrafficCar[]): void {
     this.traffic = traffic
+  }
+
+  /** 切换赛道数据与路边景物（关卡选单用） */
+  setTrack(track: Segment[], sprites: Sprite[]): void {
+    this.track = track
+    this.sprites = sprites
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */

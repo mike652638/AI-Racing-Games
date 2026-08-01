@@ -30,28 +30,31 @@ export function createStraightTrack(count: number): Segment[] {
   return createTrack([{ curve: 0, count }])
 }
 
+/** 默认环形赛道控制点：直道+左右弯交替（弯道带渐变坡道），总曲率回环为 0 */
+export const DEFAULT_CONTROL_POINTS: CurveControlPoint[] = [
+  { z: 0, curve: 0 },
+  { z: 10000, curve: 0 },
+  { z: 12000, curve: 0.02 },
+  { z: 22200, curve: 0.02 },
+  { z: 24200, curve: 0 },
+  { z: 30000, curve: 0 },
+  { z: 32000, curve: -0.02 },
+  { z: 42200, curve: -0.02 },
+  { z: 44200, curve: 0 },
+  { z: 50000, curve: 0 },
+  { z: 52000, curve: 0.01 },
+  { z: 62000, curve: 0.01 },
+  { z: 64000, curve: 0 },
+  { z: 70000, curve: 0 },
+  { z: 72000, curve: -0.01 },
+  { z: 82000, curve: -0.01 },
+  { z: 84000, curve: 0 },
+  { z: 91800, curve: 0 },
+]
+
 /** 默认环形赛道：直道+左右弯交替（弯道带渐变坡道），总曲率回环为 0（460 段，约 15 秒/圈） */
 export function createDefaultTrack(): Segment[] {
-  return createSmoothTrack([
-    { z: 0, curve: 0 },
-    { z: 10000, curve: 0 },
-    { z: 12000, curve: 0.02 },
-    { z: 22200, curve: 0.02 },
-    { z: 24200, curve: 0 },
-    { z: 30000, curve: 0 },
-    { z: 32000, curve: -0.02 },
-    { z: 42200, curve: -0.02 },
-    { z: 44200, curve: 0 },
-    { z: 50000, curve: 0 },
-    { z: 52000, curve: 0.01 },
-    { z: 62000, curve: 0.01 },
-    { z: 64000, curve: 0 },
-    { z: 70000, curve: 0 },
-    { z: 72000, curve: -0.01 },
-    { z: 82000, curve: -0.01 },
-    { z: 84000, curve: 0 },
-    { z: 91800, curve: 0 },
-  ])
+  return createSmoothTrack(DEFAULT_CONTROL_POINTS)
 }
 
 export interface CurveControlPoint {
