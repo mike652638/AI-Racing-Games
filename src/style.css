@@ -62,6 +62,20 @@ canvas {
   opacity: 0.9;
 }
 
+/* 分屏模式：P1 位于左半区域，HUD 从右上移到左上（左右对称） */
+#hud.split {
+  right: auto;
+  left: calc(var(--hud-pad) + env(safe-area-inset-left));
+}
+
+/* 分屏模式：P2 位于右半区域，HUD 从左下移到右上（左右对称） */
+#hud2.split {
+  bottom: auto;
+  top: calc(var(--hud-pad) + env(safe-area-inset-top));
+  left: auto;
+  right: calc(var(--hud-pad) + env(safe-area-inset-right));
+}
+
 #hud2 {
   position: fixed;
   bottom: calc(var(--hud-pad) + env(safe-area-inset-bottom));

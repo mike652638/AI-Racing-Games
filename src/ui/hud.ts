@@ -5,6 +5,10 @@ import { PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
 
 /** HUD 全部 DOM 引用：P1/P2 速度、圈数、计时、最佳时间与漂移指示 */
 export interface HudElements {
+  /** P1 HUD 容器（分屏时切换 split 布局类） */
+  hudContainer?: HTMLDivElement
+  /** P2 HUD 容器（分屏时切换 split 布局类） */
+  hud2Container?: HTMLDivElement
   hudBest: HTMLDivElement
   hudSpeed: HTMLDivElement
   hudLap: HTMLDivElement
@@ -27,6 +31,14 @@ export function updateHud(
   totalLaps: number,
   phase: Phase,
 ): void {
+  // 分屏时切换布局类：P1 HUD 定位左侧区域上方、P2 HUD 定位右侧区域上方
+  if (elements.hudContainer) {
+    elements.hudContainer.classList.toggle('split', splitMode)
+  }
+  if (elements.hud2Container) {
+    elements.hud2Container.classList.toggle('split', splitMode)
+  }
+
   // 仅在比赛/暂停阶段显示 HUD；菜单/结算阶段隐藏全部元素，避免右上角残留
   const showHud = phase === PHASE_RACING || phase === PHASE_PAUSED
   if (!showHud) {
@@ -44,9 +56,9 @@ export function updateHud(
   elements.hudSpeed.hidden = false
   elements.hudLap.hidden = false
   elements.hudTime.hidden = false
-  elements.hudSpeed.textContent = formatSpeed(race.carState.speed, carConfig.maxSpeed)
-  elements.hudLap.textContent = formatLap(lapFromZ(race.cameraZ, lapLength), totalLaps)
-  elements.hudTime.textContent = formatTime(race.raceTime)
+  elements.hudSpeed.textContent = formatSpeed(race.player1.carState.speed, carConfig.maxSpeed)
+  elements.hudLap.textContent = formatLap(lapFromZ(race.player1.cameraZ, lapLength), totalLaps)
+  elements.hudTime.textContent = formatTime(race.player1.raceTime)
 
   elements.hudBest.hidden = bestTime === null
   if (bestTime !== null) {
@@ -58,13 +70,13 @@ export function updateHud(
   elements.hudLap2.hidden = !splitMode
   elements.hudTime2.hidden = !splitMode
   if (splitMode) {
-    elements.hudSpeed2.textContent = formatSpeed(race.carState2.speed, carConfig.maxSpeed)
-    elements.hudLap2.textContent = formatLap(lapFromZ(race.cameraZ2, lapLength), totalLaps)
-    elements.hudTime2.textContent = formatTime(race.raceTime2)
+    elements.hudSpeed2.textContent = formatSpeed(race.player2.carState.speed, carConfig.maxSpeed)
+    elements.hudLap2.textContent = formatLap(lapFromZ(race.player2.cameraZ, lapLength), totalLaps)
+    elements.hudTime2.textContent = formatTime(race.player2.raceTime)
   }
 
-  elements.driftIndicator.hidden = !race.driftState.active
-  if (race.driftState.active) {
-    elements.driftScoreValue.textContent = String(Math.round(race.driftState.score))
+  elements.driftIndicator.hidden = !race.player1.driftState.active
+  if (race.player1.driftState.active) {
+    elements.driftScoreValue.textContent = String(Math.round(race.player1.driftState.score))
   }
 }

@@ -41,7 +41,11 @@ const SPLIT_MODE = new URLSearchParams(window.location.search).has('split')
 // ---- DOM 引用 ----
 const $ = (id: string): HTMLElement => document.getElementById(id)!
 const canvas = $('game') as HTMLCanvasElement
+const hudContainer = $('hud') as HTMLDivElement
+const hud2Container = $('hud2') as HTMLDivElement
 const hudElements: HudElements = {
+  hudContainer,
+  hud2Container,
   hudBest: $('hud-best') as HTMLDivElement,
   hudSpeed: $('hud-speed') as HTMLDivElement,
   hudLap: $('hud-lap') as HTMLDivElement,
@@ -62,7 +66,7 @@ const screenElements: ScreenElements = {
   finishScore: $('finish-score') as HTMLParagraphElement,
   finishLaps: $('finish-laps') as HTMLDivElement,
 }
-$('hud2').hidden = !SPLIT_MODE
+hud2Container.hidden = !SPLIT_MODE
 const trackName = $('track-name') as HTMLSpanElement
 const trackOptions = [
   $('track-option-0') as HTMLDivElement,
@@ -96,7 +100,7 @@ window.__gameDebug = {
   get audioState() { return engineSound?.state ?? null },
   get musicState() { return music?.state ?? 'stopped' },
   get phase() { return phase },
-  get driftActive() { return race.driftState.active },
+  get driftActive() { return race.player1.driftState.active },
   get split() { return SPLIT_MODE },
   get bestTime() { return bestTime },
   get trafficCount() { return race.traffic.length },
@@ -160,7 +164,7 @@ window.addEventListener('keydown', (e) => {
     music = new MusicPlayer(ctx)
     music.start()
   }
-  applyPhase(nextPhase(phase, lapFromZ(race.cameraZ, lapLength), totalLaps))
+  applyPhase(nextPhase(phase, lapFromZ(race.player1.cameraZ, lapLength), totalLaps))
 })
 
 function resize(): void {
@@ -177,45 +181,60 @@ function frame(now: number): void {
     const input1 = joystick.isActive() ? joystick.getInput() : input.getP1Input()
     const input2 = SPLIT_MODE ? input.getP2Input() : { throttle: 0, brake: false, steer: 0 }
 
-    race.driftState = updateDrift(dt, input1, race.carState, carConfig, race.driftState, race.cameraZ)
-    race.carState.speed *= driftSpeedFactor(race.driftState)
-    updateCar(dt, input1, race.carState, carConfig, effectiveTurnRate(carConfig, race.driftState))
-    race.cameraZ += race.carState.speed * dt
-    race.raceTime += dt
+    // P1 独立更新（车辆/漂移/相机/计时/圈速）
+    const p1 = race.player1
+    p1.driftState = updateDrift(dt, input1, p1.carState, carConfig, p1.driftState, p1.cameraZ)
+    p1.carState.speed *= driftSpeedFactor(p1.driftState)
+    updateCar(dt, input1, p1.carState, carConfig, effectiveTurnRate(carConfig, p1.driftState))
+    p1.cameraZ += p1.carState.speed * dt
+    p1.raceTime += dt
 
-    const currentLap = lapFromZ(race.cameraZ, lapLength)
+    const currentLap = lapFromZ(p1.cameraZ, lapLength)
     if (currentLap > race.lastLap) {
-      race.lapTimes.push(race.raceTime)
+      race.lapTimes.push(p1.raceTime)
       race.lastLap = currentLap
     }
 
-    race.driftState2 = updateDrift(dt, input2, race.carState2, carConfig, race.driftState2, race.cameraZ2)
-    race.carState2.speed *= driftSpeedFactor(race.driftState2)
-    updateCar(dt, input2, race.carState2, carConfig, effectiveTurnRate(carConfig, race.driftState2))
-    race.cameraZ2 += race.carState2.speed * dt
-    race.raceTime2 += dt
+    // P2 独立更新（分屏时输入有效，否则零输入）
+    const p2 = race.player2
+    p2.driftState = updateDrift(dt, input2, p2.carState, carConfig, p2.driftState, p2.cameraZ)
+    p2.carState.speed *= driftSpeedFactor(p2.driftState)
+    updateCar(dt, input2, p2.carState, carConfig, effectiveTurnRate(carConfig, p2.driftState))
+    p2.cameraZ += p2.carState.speed * dt
+    p2.raceTime += dt
 
     updateCollisions(race, dt, SPLIT_MODE)
 
-    const finishedP1 = lapFromZ(race.cameraZ, lapLength) > totalLaps
-    const finishedP2 = SPLIT_MODE && lapFromZ(race.cameraZ2, lapLength) > totalLaps
+    const finishedP1 = lapFromZ(p1.cameraZ, lapLength) > totalLaps
+    const finishedP2 = SPLIT_MODE && lapFromZ(p2.cameraZ, lapLength) > totalLaps
     if (finishedP1 || finishedP2) applyPhase(PHASE_FINISHED)
   }
 
-  if (SPLIT_MODE) {
-    const w = window.innerWidth
-    renderer.setCameraX(race.carState.position)
-    renderer.renderRegion(race.cameraZ, 0, w / 2, race.driftState.smoke, race.raceTime)
-    renderer.setCameraX(race.carState2.position)
-    renderer.renderRegion(race.cameraZ2, w / 2, w / 2, race.driftState2.smoke, race.raceTime)
+  // 渲染：菜单阶段也渲染赛道预览（分屏左右两区域都渲染，修复 P2 黑屏）
+  const w = window.innerWidth
+  if (phase === PHASE_MENU) {
+    if (SPLIT_MODE) {
+      renderer.setCameraX(0)
+      renderer.renderRegion(0, 0, w / 2, [], 0)
+      renderer.renderRegion(0, w / 2, w / 2, [], 0)
+    } else {
+      renderer.setCameraX(0)
+      renderer.render(0, [], 0)
+    }
+  }
+  else if (SPLIT_MODE) {
+    renderer.setCameraX(race.player1.carState.position)
+    renderer.renderRegion(race.player1.cameraZ, 0, w / 2, race.player1.driftState.smoke, race.player1.raceTime)
+    renderer.setCameraX(race.player2.carState.position)
+    renderer.renderRegion(race.player2.cameraZ, w / 2, w / 2, race.player2.driftState.smoke, race.player2.raceTime)
   }
   else {
-    renderer.setCameraX(race.carState.position)
-    renderer.render(race.cameraZ, race.driftState.smoke, race.raceTime)
+    renderer.setCameraX(race.player1.carState.position)
+    renderer.render(race.player1.cameraZ, race.player1.driftState.smoke, race.player1.raceTime)
   }
 
   updateHud(hudElements, race, carConfig, bestTime, SPLIT_MODE, lapLength, totalLaps, phase)
-  engineSound?.setSpeedRatio(race.carState.speed / carConfig.maxSpeed)
+  engineSound?.setSpeedRatio(race.player1.carState.speed / carConfig.maxSpeed)
   requestAnimationFrame(frame)
 }
 

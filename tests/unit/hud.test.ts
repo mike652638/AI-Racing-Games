@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { updateHud, type HudElements } from '../../src/ui/hud'
 import { createRaceState } from '../../src/game/state'
 import { createCarConfig } from '../../src/physics/car'
 
-/** 用对象字面量模拟 HUD DOM 元素：仅暴露 updateHud 使用的 hidden/textContent */
+/** 用对象字面量模拟 HUD DOM 元素：仅暴露 updateHud 使用的 hidden/textContent/classList */
 function createMockHudElements(): HudElements {
   const element = () => ({ hidden: false, textContent: '' })
+  const container = () => ({ classList: { toggle: vi.fn() } })
   return {
+    hudContainer: container() as unknown as HTMLDivElement,
+    hud2Container: container() as unknown as HTMLDivElement,
     hudBest: element(),
     hudSpeed: element(),
     hudLap: element(),
@@ -44,5 +47,25 @@ describe('hud visibility', () => {
     expect(elements.hudLap.hidden).toBe(false)
     expect(elements.hudTime.hidden).toBe(false)
     expect(elements.driftIndicator.hidden).toBe(true)
+  })
+})
+
+describe('hud split layout', () => {
+  it('分屏模式时给两个 HUD 容器切换 split 布局类', () => {
+    const elements = createMockHudElements()
+    const race = createRaceState([])
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, true, 1000, 3, 'racing')
+    expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', true)
+    expect(elements.hud2Container!.classList.toggle).toHaveBeenCalledWith('split', true)
+  })
+
+  it('非分屏模式时移除 split 布局类', () => {
+    const elements = createMockHudElements()
+    const race = createRaceState([])
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, 1000, 3, 'racing')
+    expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', false)
+    expect(elements.hud2Container!.classList.toggle).toHaveBeenCalledWith('split', false)
   })
 })

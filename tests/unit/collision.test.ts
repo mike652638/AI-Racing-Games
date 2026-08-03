@@ -18,15 +18,15 @@ describe('createRaceState / resetRaceState', () => {
   it('工厂创建默认状态', () => {
     const traffic = [trafficCar(0)]
     const race = createRaceState(traffic)
-    expect(race.carState).toEqual({ position: 0, speed: 0 })
-    expect(race.carState2).toEqual({ position: 0, speed: 0 })
-    expect(race.cameraZ).toBe(0)
-    expect(race.cameraZ2).toBe(0)
-    expect(race.raceTime).toBe(0)
-    expect(race.raceTime2).toBe(0)
+    expect(race.player1.carState).toEqual({ position: 0, speed: 0 })
+    expect(race.player2.carState).toEqual({ position: 0, speed: 0 })
+    expect(race.player1.cameraZ).toBe(0)
+    expect(race.player2.cameraZ).toBe(0)
+    expect(race.player1.raceTime).toBe(0)
+    expect(race.player2.raceTime).toBe(0)
     expect(race.collisionCount).toBe(0)
-    expect(race.collisionCooldown).toBe(0)
-    expect(race.collisionCooldown2).toBe(0)
+    expect(race.player1.collisionCooldown).toBe(0)
+    expect(race.player2.collisionCooldown).toBe(0)
     expect(race.lapTimes).toEqual([])
     expect(race.lastLap).toBe(1)
     expect(race.phase).toBe('menu')
@@ -36,15 +36,15 @@ describe('createRaceState / resetRaceState', () => {
 
   it('重置恢复默认值并替换车流', () => {
     const race = createRaceState([trafficCar(0)])
-    race.carState.speed = 500
-    race.carState2.position = 0.8
-    race.cameraZ = 30000
-    race.cameraZ2 = 12000
-    race.raceTime = 42
-    race.raceTime2 = 30
+    race.player1.carState.speed = 500
+    race.player2.carState.position = 0.8
+    race.player1.cameraZ = 30000
+    race.player2.cameraZ = 12000
+    race.player1.raceTime = 42
+    race.player2.raceTime = 30
     race.collisionCount = 5
-    race.collisionCooldown = 0.5
-    race.collisionCooldown2 = 0.3
+    race.player1.collisionCooldown = 0.5
+    race.player2.collisionCooldown = 0.3
     race.lapTimes = [20, 41]
     race.lastLap = 3
     race.finishShown = true
@@ -52,15 +52,15 @@ describe('createRaceState / resetRaceState', () => {
     const newTraffic = [trafficCar(5000)]
     resetRaceState(race, newTraffic)
 
-    expect(race.carState).toEqual({ position: 0, speed: 0 })
-    expect(race.carState2).toEqual({ position: 0, speed: 0 })
-    expect(race.cameraZ).toBe(0)
-    expect(race.cameraZ2).toBe(0)
-    expect(race.raceTime).toBe(0)
-    expect(race.raceTime2).toBe(0)
+    expect(race.player1.carState).toEqual({ position: 0, speed: 0 })
+    expect(race.player2.carState).toEqual({ position: 0, speed: 0 })
+    expect(race.player1.cameraZ).toBe(0)
+    expect(race.player2.cameraZ).toBe(0)
+    expect(race.player1.raceTime).toBe(0)
+    expect(race.player2.raceTime).toBe(0)
     expect(race.collisionCount).toBe(0)
-    expect(race.collisionCooldown).toBe(0)
-    expect(race.collisionCooldown2).toBe(0)
+    expect(race.player1.collisionCooldown).toBe(0)
+    expect(race.player2.collisionCooldown).toBe(0)
     expect(race.lapTimes).toEqual([])
     expect(race.lastLap).toBe(1)
     expect(race.finishShown).toBe(false)
@@ -133,20 +133,20 @@ describe('applyTrafficCollision', () => {
 describe('updateCollisions（P1 车流碰撞）', () => {
   it('P1 车流碰撞：减速并计数', () => {
     const race = createRaceState([trafficCar(1040)])
-    race.carState = car(0.5, 100)
-    race.cameraZ = 1000
+    race.player1.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
     updateCollisions(race, 0.016, false)
-    expect(race.carState.speed).toBe(50)
+    expect(race.player1.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(1)
   })
 
   it('P1 冷却期内不重复计数', () => {
     const race = createRaceState([trafficCar(1040)])
-    race.carState = car(0.5, 100)
-    race.cameraZ = 1000
+    race.player1.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
     updateCollisions(race, 0.016, false)
     updateCollisions(race, 0.016, false)
-    expect(race.carState.speed).toBe(50)
+    expect(race.player1.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(1)
   })
 })
@@ -154,32 +154,32 @@ describe('updateCollisions（P1 车流碰撞）', () => {
 describe('updateCollisions（P2 车流碰撞修复）', () => {
   it('分屏模式下 P2 与车流碰撞：减速并计数（修复原缺失功能）', () => {
     const race = createRaceState([trafficCar(1040)])
-    race.carState2 = car(0.5, 100)
-    race.cameraZ2 = 1000
+    race.player2.carState = car(0.5, 100)
+    race.player2.cameraZ = 1000
     updateCollisions(race, 0.016, true)
-    expect(race.carState2.speed).toBe(50)
+    expect(race.player2.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(1)
   })
 
   it('非分屏模式下 P2 不与车流碰撞', () => {
     const race = createRaceState([trafficCar(1040)])
-    race.carState2 = car(0.5, 100)
-    race.cameraZ2 = 1000
+    race.player2.carState = car(0.5, 100)
+    race.player2.cameraZ = 1000
     updateCollisions(race, 0.016, false)
-    expect(race.carState2.speed).toBe(100)
+    expect(race.player2.carState.speed).toBe(100)
     expect(race.collisionCount).toBe(0)
   })
 
   it('P2 使用独立冷却：P1 碰撞后 P2 仍可立即碰撞', () => {
     // P1(-0.5) 撞左道车流，P2(0.5) 撞右道车流；横向差 1.0 > 0.9 不互碰
     const race = createRaceState([trafficCar(1040, -0.5), trafficCar(1050, 0.5)])
-    race.carState = car(-0.5, 100)
-    race.carState2 = car(0.5, 100)
-    race.cameraZ = 1000
-    race.cameraZ2 = 1000
+    race.player1.carState = car(-0.5, 100)
+    race.player2.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
+    race.player2.cameraZ = 1000
     updateCollisions(race, 0.016, true)
-    expect(race.carState.speed).toBe(50)
-    expect(race.carState2.speed).toBe(50)
+    expect(race.player1.carState.speed).toBe(50)
+    expect(race.player2.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(2)
     // 第二帧双方均在冷却中，计数不增
     updateCollisions(race, 0.016, true)
@@ -191,80 +191,79 @@ describe('updateCollisions（P1-P2 互碰）', () => {
   /** 构造两车完全重叠的分屏对局状态 */
   function makeRaceWithOverlap() {
     const race = createRaceState([])
-    race.cameraZ = 100
-    race.cameraZ2 = 100
-    race.carState.position = 0
-    race.carState2.position = 0
-    race.carState.speed = 100
-    race.carState2.speed = 100
+    race.player1.cameraZ = 100
+    race.player2.cameraZ = 100
+    race.player1.carState.position = 0
+    race.player2.carState.position = 0
+    race.player1.carState.speed = 100
+    race.player2.carState.speed = 100
     return race
   }
 
-  it('playerCollisionCooldown 创建与重置时均为 0', () => {
+  it('双方碰撞冷却创建与重置时均为 0', () => {
     const race = createRaceState([])
-    expect(race.playerCollisionCooldown).toBe(0)
-    race.playerCollisionCooldown = 1
+    expect(race.player1.collisionCooldown).toBe(0)
+    expect(race.player2.collisionCooldown).toBe(0)
+    race.player1.collisionCooldown = 1
+    race.player2.collisionCooldown = 1
     resetRaceState(race, [])
-    expect(race.playerCollisionCooldown).toBe(0)
+    expect(race.player1.collisionCooldown).toBe(0)
+    expect(race.player2.collisionCooldown).toBe(0)
   })
 
   it('冷却期内连续重叠只罚速一次（修复 P0-1 每帧罚速）', () => {
     const race = makeRaceWithOverlap()
     updateCollisions(race, 0.016, true)
-    const afterFirst = race.carState.speed
+    const afterFirst = race.player1.carState.speed
     expect(afterFirst).toBeLessThan(100)
     // 第二帧仍重叠，但处于冷却期内，不应再次罚速
     updateCollisions(race, 0.016, true)
-    expect(race.carState.speed).toBe(afterFirst)
+    expect(race.player1.carState.speed).toBe(afterFirst)
   })
 
   it('冷却结束后再次重叠可再次罚速', () => {
     const race = makeRaceWithOverlap()
     updateCollisions(race, 0.016, true)
-    const afterFirst = race.carState.speed
-    // 1.1 秒后冷却结束（本帧仅衰减，不检测）
+    const afterFirst = race.player1.carState.speed
+    // 1.1 秒后冷却归零：本帧恢复检测，仍重叠则再次罚速
     updateCollisions(race, 1.1, true)
-    expect(race.carState.speed).toBe(afterFirst)
-    // 冷却已归零，再次重叠仍罚速
-    race.carState.speed = 100
-    race.carState2.speed = 100
-    updateCollisions(race, 0.016, true)
-    expect(race.carState.speed).toBeLessThan(100)
+    expect(race.player1.carState.speed).toBeLessThan(afterFirst)
+    expect(race.player2.carState.speed).toBeLessThan(afterFirst)
   })
 
   it('两车同处时互相减速并计数', () => {
     const race = createRaceState([])
-    race.carState = car(0, 100)
-    race.carState2 = car(0.5, 100)
-    race.cameraZ = 1000
-    race.cameraZ2 = 1000
+    race.player1.carState = car(0, 100)
+    race.player2.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
+    race.player2.cameraZ = 1000
     updateCollisions(race, 0.016, true)
-    expect(race.carState.speed).toBe(50)
-    expect(race.carState2.speed).toBe(50)
+    expect(race.player1.carState.speed).toBe(50)
+    expect(race.player2.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(1)
   })
 
   it('纵向距离超出容差不互碰', () => {
     const race = createRaceState([])
-    race.carState = car(0, 100)
-    race.carState2 = car(0.5, 100)
-    race.cameraZ = 1000
-    race.cameraZ2 = 1200
+    race.player1.carState = car(0, 100)
+    race.player2.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
+    race.player2.cameraZ = 1200
     updateCollisions(race, 0.016, true)
-    expect(race.carState.speed).toBe(100)
-    expect(race.carState2.speed).toBe(100)
+    expect(race.player1.carState.speed).toBe(100)
+    expect(race.player2.carState.speed).toBe(100)
     expect(race.collisionCount).toBe(0)
   })
 
   it('非分屏模式不进行 P1-P2 互碰', () => {
     const race = createRaceState([])
-    race.carState = car(0, 100)
-    race.carState2 = car(0.5, 100)
-    race.cameraZ = 1000
-    race.cameraZ2 = 1000
+    race.player1.carState = car(0, 100)
+    race.player2.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
+    race.player2.cameraZ = 1000
     updateCollisions(race, 0.016, false)
-    expect(race.carState.speed).toBe(100)
-    expect(race.carState2.speed).toBe(100)
+    expect(race.player1.carState.speed).toBe(100)
+    expect(race.player2.carState.speed).toBe(100)
     expect(race.collisionCount).toBe(0)
   })
 })

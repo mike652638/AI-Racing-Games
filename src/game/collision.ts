@@ -34,42 +34,45 @@ export function applyTrafficCollision(
 
 /**
  * 完整碰撞调度（每帧调用一次，结果写回 RaceState）：
- * - P1 与车流碰撞（使用 collisionCooldown）
- * - P2 与车流碰撞（分屏时，使用独立 collisionCooldown2——修复原缺失功能）
- * - P1-P2 互碰（分屏时，两车同罚；使用 playerCollisionCooldown 冷却 1 秒）
+ * - P1 与车流碰撞（使用 player1.collisionCooldown）
+ * - P2 与车流碰撞（分屏时，使用独立 player2.collisionCooldown）
+ * - P1-P2 互碰（分屏时，两车同罚；命中后双方进入 1 秒冷却，冷却期内不重复触发）
+ * 冷却迁移说明：原 playerCollisionCooldown（互碰冷却）与 collisionCooldown / collisionCooldown2
+ * （车流冷却）合并为每个 PlayerState.collisionCooldown 单一字段。互碰命中时同时设置
+ * 双方冷却，因此互碰后 1 秒内车流碰撞与互碰均不重复罚速。
  */
 export function updateCollisions(race: RaceState, dt: number, splitMode: boolean): void {
-  const cooldown1 = { value: race.collisionCooldown }
-  if (applyTrafficCollision(race.carState, race.cameraZ, race.traffic, cooldown1, dt)) {
+  const cooldown1 = { value: race.player1.collisionCooldown }
+  if (applyTrafficCollision(race.player1.carState, race.player1.cameraZ, race.traffic, cooldown1, dt)) {
     race.collisionCount++
   }
-  race.collisionCooldown = cooldown1.value
+  race.player1.collisionCooldown = cooldown1.value
 
   if (splitMode) {
-    const cooldown2 = { value: race.collisionCooldown2 }
-    if (applyTrafficCollision(race.carState2, race.cameraZ2, race.traffic, cooldown2, dt)) {
+    const cooldown2 = { value: race.player2.collisionCooldown }
+    if (applyTrafficCollision(race.player2.carState, race.player2.cameraZ, race.traffic, cooldown2, dt)) {
       race.collisionCount++
     }
-    race.collisionCooldown2 = cooldown2.value
+    race.player2.collisionCooldown = cooldown2.value
 
-    // P1-P2 互碰：命中后进入 1 秒冷却（playerCollisionCooldown）。
-    // 冷却期内仅衰减、不检测；冷却归零当帧跳过，下一帧恢复检测，
-    // 保证冷却完整持续 1 秒（修复 P0-1：原实现每帧重叠每帧罚速，速度指数衰减）
-    if (race.playerCollisionCooldown > 0) {
-      race.playerCollisionCooldown = Math.max(race.playerCollisionCooldown - dt, 0)
+    // P1-P2 互碰：任一方处于冷却期（含车流碰撞冷却）则不检测、不罚速，
+    // 避免重叠期间每帧重复罚速（速度指数衰减）。冷却在车流检测中已随 dt 衰减。
+    if (race.player1.collisionCooldown > 0 || race.player2.collisionCooldown > 0) {
+      return
     }
-    else if (
+    if (
       collidePlayers(
-        race.cameraZ,
-        race.carState.position,
-        race.cameraZ2,
-        race.carState2.position,
+        race.player1.cameraZ,
+        race.player1.carState.position,
+        race.player2.cameraZ,
+        race.player2.carState.position,
       )
     ) {
-      race.carState.speed *= COLLISION_SPEED_FACTOR
-      race.carState2.speed *= COLLISION_SPEED_FACTOR
+      race.player1.carState.speed *= COLLISION_SPEED_FACTOR
+      race.player2.carState.speed *= COLLISION_SPEED_FACTOR
       race.collisionCount++
-      race.playerCollisionCooldown = COLLISION_COOLDOWN
+      race.player1.collisionCooldown = COLLISION_COOLDOWN
+      race.player2.collisionCooldown = COLLISION_COOLDOWN
     }
   }
 }

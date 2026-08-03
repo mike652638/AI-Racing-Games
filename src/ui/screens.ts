@@ -64,19 +64,19 @@ function fillFinishPanel(
   }
   race.finishShown = true
 
-  const avgSpeed = race.cameraZ / Math.max(race.raceTime, 0.001)
-  elements.finishTime.textContent = `总用时 ${formatTime(race.raceTime)}`
+  const avgSpeed = race.player1.cameraZ / Math.max(race.player1.raceTime, 0.001)
+  elements.finishTime.textContent = `总用时 ${formatTime(race.player1.raceTime)}`
   elements.finishSpeed.textContent = `平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
 
-  const isRecord = saveBestTime(race.raceTime, trackId)
+  const isRecord = saveBestTime(race.player1.raceTime, trackId)
   const bestTime = loadBestTime(trackId)
   elements.finishBest.textContent = isRecord
     ? 'NEW RECORD!'
-    : `最佳 ${formatTime(bestTime ?? race.raceTime)}`
+    : `最佳 ${formatTime(bestTime ?? race.player1.raceTime)}`
 
-  elements.finishScore.textContent = `漂移得分 ${Math.round(race.driftState.score)}`
-  if (race.driftState.score > 0) {
-    const isDriftRecord = saveBestDriftScore(Math.round(race.driftState.score), trackId)
+  elements.finishScore.textContent = `漂移得分 ${Math.round(race.player1.driftState.score)}`
+  if (race.player1.driftState.score > 0) {
+    const isDriftRecord = saveBestDriftScore(Math.round(race.player1.driftState.score), trackId)
     const bestDriftScore = loadBestDriftScore(trackId)
     if (isDriftRecord) {
       elements.finishScore.textContent += ' NEW DRIFT RECORD!'

@@ -520,7 +520,7 @@ git commit -m "fix(ui): hide HUD during menu and finished phases"
 **设计：**
 将 P1/P2 各自的状态封装为 `PlayerState`，主循环分别更新两个实例。分屏时按左右分割（默认），每个玩家独立 cameraZ、速度和计时。
 
-- [ ] **Step 1: 设计 PlayerState 类型与辅助函数**
+- [x] **Step 1: 设计 PlayerState 类型与辅助函数**
 
 创建 `src/game/player-state.ts`：
 
@@ -557,7 +557,7 @@ export function resetPlayerState(state: PlayerState): void {
 }
 ```
 
-- [ ] **Step 2: 写失败回归测试**
+- [x] **Step 2: 写失败回归测试**
 
 ```typescript
 // tests/unit/player-state.test.ts
@@ -583,7 +583,7 @@ describe('player state', () => {
 })
 ```
 
-- [ ] **Step 3: 重构 RaceState 使用 PlayerState**
+- [x] **Step 3: 重构 RaceState 使用 PlayerState**
 
 修改 `src/game/state.ts`：
 
@@ -604,7 +604,7 @@ export interface RaceState {
 
 **注意：** 此重构影响面大，需同步更新 `main.ts`, `ui/hud.ts`, `game/collision.ts`, `ui/screens.ts` 等所有消费方。
 
-- [ ] **Step 4: 修改 main.ts 主循环支持独立 P1/P2 与左右分屏**
+- [x] **Step 4: 修改 main.ts 主循环支持独立 P1/P2 与左右分屏**
 
 ```typescript
 // 渲染部分改为左右分割
@@ -618,7 +618,7 @@ if (SPLIT_MODE) {
 }
 ```
 
-- [ ] **Step 5: 修复分屏菜单黑屏**
+- [x] **Step 5: 修复分屏菜单黑屏**
 
 在 `src/main.ts` 渲染分支中，菜单阶段也渲染赛道预览：
 
@@ -639,24 +639,24 @@ else if (phase === PHASE_RACING || phase === PHASE_PAUSED) {
 }
 ```
 
-- [ ] **Step 6: 更新 HUD 布局支持左右分屏**
+- [x] **Step 6: 更新 HUD 布局支持左右分屏**
 
 调整 `src/ui/hud.ts` 与 `index.html`/`style.css`，使 P1 HUD 在左侧画面上方，P2 HUD 在右侧画面上方。可新增参数 `viewport: 'left' | 'right' | 'full'`。
 
-- [ ] **Step 7: 运行测试**
+- [x] **Step 7: 运行测试**
 
 ```bash
 npx vitest run tests/unit/player-state.test.ts tests/unit/hud.test.ts tests/unit/collision.test.ts
 ```
 
-- [ ] **Step 8: 浏览器验证分屏**
+- [x] **Step 8: 浏览器验证分屏**
 
 打开 `http://localhost:5175/?split=1`，确认：
 - 菜单阶段左右两个区域都有预览
 - 开始比赛后 P1/P2 速度、时间不同步
 - 左右分屏显示正常
 
-- [ ] **Step 9: 全量验证与提交**
+- [x] **Step 9: 全量验证与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -666,6 +666,14 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/game/player-state.ts src/game/state.ts src/main.ts src/ui/hud.ts src/ui/screens.ts src/engine/renderer.ts tests/unit/player-state.test.ts
 git commit -m "refactor(game): split player state and implement true independent split-screen"
 ```
+
+#### 实施偏差（Task 4 实际落地与设计的差异）
+
+1. **碰撞冷却合并为 PlayerState.collisionCooldown 单字段**：按文档 PlayerState 仅含一个 `collisionCooldown`，将原 `collisionCooldown` / `collisionCooldown2` / `playerCollisionCooldown` 三字段合并。互碰命中时同时设置双方 `collisionCooldown`，因此互碰后 1 秒内车流碰撞与互碰均不重复罚速；边界语义变化：原 Task 1 实现为"冷却归零当帧跳过检测"，新实现为"冷却归零当帧恢复检测"（1 秒冷却保护完整，归零当帧若仍重叠则立即罚速）。`collision.test.ts` 对应断言已同步更新（"冷却结束后再次重叠可再次罚速"改为验证 1.1s 后立即罚速）。核心行为保持：互碰命中后 1 秒冷却期内不重复罚速。
+2. **HUD 布局未新增 viewport 参数**：复用现有 `splitMode` 参数 + `HudElements` 可选容器字段（`hudContainer`/`hud2Container`），`updateHud` 内 toggle `split` CSS 类实现左右分屏布局（P1 左上、P2 右上，左右对称）；`index.html` 无需改动（`#hud`/`#hud2` 容器已存在），仅 `style.css` 新增 `#hud.split` / `#hud2.split` 规则。
+3. **renderer.ts 未修改**：现有 `renderRegion` 已是左右分割（translate + clip），直接复用；分屏渲染为 `renderRegion(cameraZ, 0, w/2, ...)` + `renderRegion(cameraZ, w/2, w/2, ...)`。
+4. **菜单阶段渲染**：分屏菜单渲染左右两个预览区域（`renderRegion(0, 0, w/2, [], 0)` 与 `renderRegion(0, w/2, w/2, [], 0)`），单屏菜单保持 `renderer.render(0, [], 0)` 预览；结算/暂停沿用原渲染分支。
+5. **测试文件范围**：除新增 `player-state.test.ts` 外，还全量更新了 `collision.test.ts`（字段路径迁移 + 互碰冷却断言调整）与 `hud.test.ts`（新增 split 布局类切换测试）。
 
 ---
 
