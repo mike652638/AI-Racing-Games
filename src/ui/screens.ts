@@ -112,18 +112,25 @@ function fillFinishPanel(
     elements.finishLaps.textContent = formatLapTimes(race.lapTimes).join('  ')
   }
   else {
-    // P1 未完赛：清空其余行，仅显示"未完赛"
-    elements.finishTime.textContent = '未完赛'
+    // P1 未完赛：清空其余行，仅显示"未完赛"（分屏加 P1 前缀与 P2 行对称）
+    elements.finishTime.textContent = opts.splitMode ? 'P1 未完赛' : '未完赛'
     elements.finishSpeed.textContent = ''
     elements.finishBest.textContent = ''
     elements.finishScore.textContent = ''
     elements.finishLaps.textContent = ''
   }
 
-  // P2 行：仅分屏且元素存在时填充（单屏不触碰，保持 hidden）
+  // P2 行：仅分屏且元素存在时填充并控制显隐（index.html 初始 hidden，仅写 textContent 会不可见）
   if (opts.splitMode && elements.finishTime2) {
     const trackId1 = race.tracks[1].def.id
     if (opts.finishedP2) {
+      // 全部 P2 结算行可见（视觉缺陷修复：显式 hidden=false）
+      elements.finishTime2.hidden = false
+      if (elements.finishSpeed2) elements.finishSpeed2.hidden = false
+      if (elements.finishBest2) elements.finishBest2.hidden = false
+      if (elements.finishScore2) elements.finishScore2.hidden = false
+      if (elements.finishLaps2) elements.finishLaps2.hidden = false
+
       elements.finishTime2.textContent = `P2 总用时 ${formatTime(race.player2.raceTime)}`
       const avgSpeed2 = race.player2.cameraZ / Math.max(race.player2.raceTime, 0.001)
       if (elements.finishSpeed2) {
@@ -157,8 +164,13 @@ function fillFinishPanel(
       }
     }
     else {
-      // P2 未完赛：清空其余行，仅显示"未完赛"
+      // P2 未完赛：仅显示"P2 未完赛"一行，其余行隐藏
+      elements.finishTime2.hidden = false
       elements.finishTime2.textContent = 'P2 未完赛'
+      if (elements.finishSpeed2) elements.finishSpeed2.hidden = true
+      if (elements.finishBest2) elements.finishBest2.hidden = true
+      if (elements.finishScore2) elements.finishScore2.hidden = true
+      if (elements.finishLaps2) elements.finishLaps2.hidden = true
       if (elements.finishSpeed2) elements.finishSpeed2.textContent = ''
       if (elements.finishBest2) elements.finishBest2.textContent = ''
       if (elements.finishScore2) elements.finishScore2.textContent = ''

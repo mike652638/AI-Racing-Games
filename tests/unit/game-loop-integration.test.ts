@@ -116,7 +116,14 @@ function stubEnvironment(split = false): Environment {
         gameCanvas ??= createMockCanvas(800, 600)
         return gameCanvas
       }
-      if (!elements.has(id)) elements.set(id, createElementStub())
+      if (!elements.has(id)) {
+        const stub = createElementStub()
+        // 结算面板 P2 行（#finish-*-2）与 index.html 一致：初始 hidden。
+        // 视觉缺陷回归：fillFinishPanel 必须显式控制这些元素的显隐，
+        // 仅写 textContent 会导致截图不可见（stub 默认 hidden=false 掩盖此缺陷）。
+        if (id.startsWith('finish-') && id.endsWith('-2')) stub.hidden = true
+        elements.set(id, stub)
+      }
       return elements.get(id)
     },
     createElement: (tag: string): unknown => (tag === 'canvas' ? createMockCanvas() : createElementStub()),
@@ -225,6 +232,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 途中可能与车流碰撞减速，帧数留足余量
     env.driveFrames(2500)
     expect(env.phase()).toBe(PHASE_FINISHED)
+    // 单屏不触碰 P2 结算行：保持初始 hidden（视觉缺陷回归）
+    expect(env.getElement('finish-time-2').hidden).toBe(true)
   })
 
   it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 2px 全高分隔线）', () => {
@@ -309,9 +318,10 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('KeyW')
     splitEnv.driveFrames(2500)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // C3 双人结算：P1 完赛填 P1 行，P2 静止显示"未完赛"
+    // C3 双人结算：P1 完赛填 P1 行，P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
     expect(splitEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
     expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
+    expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
   })
 
   it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
@@ -325,7 +335,11 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     const time2 = splitEnv.getElement('finish-time-2')
     expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
-    expect(splitEnv.getElement('finish-time').textContent).toBe('未完赛')
+    // 视觉缺陷回归：P2 结算行必须显式可见（index.html 初始 hidden，仅写 textContent 不够）
+    expect(time2.hidden).toBe(false)
+    expect(splitEnv.getElement('finish-speed-2').hidden).toBe(false)
+    expect(splitEnv.getElement('finish-laps-2').hidden).toBe(false)
+    expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
     // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
   })
