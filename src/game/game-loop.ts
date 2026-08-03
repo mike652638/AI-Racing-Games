@@ -131,6 +131,9 @@ export class GameLoop {
 
     const hud2Container = $('hud2') as HTMLDivElement
     hud2Container.hidden = !this.splitMode
+    // 分屏菜单 P2 赛道名：仅分屏时可见（index.html 初始 hidden，缺陷②修复）
+    const p2TrackName = $('p2-track-name') as HTMLSpanElement
+    p2TrackName.hidden = !this.splitMode
     this.hudElements = {
       hudContainer: $('hud') as HTMLDivElement,
       hud2Container,
@@ -167,7 +170,7 @@ export class GameLoop {
     this.trackManager = new TrackManager({
       resetRace: () => this.resetRace(),
       trackName,
-      p2TrackName: $('p2-track-name') as HTMLSpanElement,
+      p2TrackName,
       trackOptions,
     })
     this.carConfig = createCarConfig()
@@ -245,6 +248,8 @@ export class GameLoop {
         this.selectTrackFor(1, digit - 7)
         return
       }
+      // 缺陷①修复：菜单阶段所有数字键一律吞掉，无效数字键静默忽略，不触发"任意键开始"
+      return
     }
     if (!this.engineSound) {
       const ctx = new AudioContext()

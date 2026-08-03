@@ -272,13 +272,33 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.phase()).toBe(PHASE_MENU)
   })
 
-  it('单人模式：Digit7/8/9 不改变赛道选择（仍 classic），仅触发开始游戏', () => {
+  it('单人模式：菜单数字键不开始比赛（Digit7 忽略、Digit3 切 s-curve），非数字键仍可开始', () => {
     new GameLoop()
     env.fireKey('Digit7')
     expect(env.debugValue('selectedTrack')).toBe('classic')
     expect(env.debugValue('selectedTrack2')).toBe('classic')
-    // 7/8/9 在非分屏不选赛道：走"任意键开始"路径进入比赛
+    // 修复后：无效数字键静默忽略，不触发"任意键开始"逻辑（缺陷①回归）
+    expect(env.phase()).toBe(PHASE_MENU)
+    env.fireKey('Digit3')
+    expect(env.debugValue('selectedTrack')).toBe('s-curve')
+    expect(env.phase()).toBe(PHASE_MENU)
+    // 非数字键仍可开始比赛
+    env.fireKey('KeyW')
     expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('分屏模式：p2-track-name 菜单可见，Digit9 后文本更新为 S 弯挑战', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    // 缺陷②回归：分屏构造后 P2 赛道名元素应可见
+    expect(splitEnv.getElement('p2-track-name').hidden).toBe(false)
+    splitEnv.fireKey('Digit9')
+    expect(splitEnv.getElement('p2-track-name').textContent).toBe('S 弯挑战')
+  })
+
+  it('单人模式：p2-track-name 保持隐藏', () => {
+    new GameLoop()
+    expect(env.getElement('p2-track-name').hidden).toBe(true)
   })
 
   it('分屏模式：P1 全油门跑完 3 圈（classic）进入结算，P2 静止不污染判定', () => {
