@@ -19,6 +19,8 @@ export interface PlayerState {
   raceTime: number
   /** 碰撞冷却（秒），冷却期内不重复触发碰撞惩罚 */
   collisionCooldown: number
+  /** BOOST 蓄力值（0-1，漂移激活期间累积，按键消耗，G4） */
+  boostCharge: number
 }
 
 /** 创建初始玩家状态 */
@@ -29,6 +31,7 @@ export function createPlayerState(): PlayerState {
     cameraZ: 0,
     raceTime: 0,
     collisionCooldown: 0,
+    boostCharge: 0,
   }
 }
 
@@ -40,4 +43,5 @@ export function resetPlayerState(state: PlayerState): void {
   state.cameraZ = 0
   state.raceTime = 0
   state.collisionCooldown = 0
+  state.boostCharge = 0
 }

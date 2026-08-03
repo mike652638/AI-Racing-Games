@@ -45,6 +45,7 @@ describe('touchToCarInput 四分区触控映射', () => {
 
   it('无触点全为 0', () => {
     const input = touchToCarInput([], W, H)
-    expect(input).toEqual({ throttle: 0, brake: false, steer: 0 })
+    // G4：触屏无 boost 键，恒产出 boost:false（与键盘条件产出不同，恒有字段）
+    expect(input).toEqual({ throttle: 0, brake: false, steer: 0, boost: false })
   })
 })

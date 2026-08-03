@@ -28,4 +28,15 @@ describe('双人按键映射', () => {
     const pressed = new Set(['KeyW', 'KeyA'])
     expect(inputFromKeys(pressed, PLAYER2_MAPPING)).toEqual({ throttle: 0, brake: false, steer: 0 })
   })
+
+  test('G4（G4）：P1 按 Space 时 boost 激活（mapping.boost=Space 产出 boost:true）', () => {
+    const pressed = new Set(['KeyW', 'Space'])
+    const input = inputFromKeys(pressed, PLAYER1_MAPPING)
+    expect(input.boost).toBe(true)
+  })
+
+  test('G4（G4）：未按 boost 键时 boost 为 undefined（条件产出，既有三字段 toEqual 零改动）', () => {
+    const input = inputFromKeys(new Set(['KeyW']), PLAYER1_MAPPING)
+    expect(input.boost).toBeUndefined()
+  })
 })

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BOOST_ACCEL_MULT,
+  BOOST_CHARGE_RATE,
+  BOOST_DRAIN_RATE,
+  BOOST_MAX_SPEED_MULT,
   CHALLENGE_SECONDS,
   COLLISION_COOLDOWN,
   COLLISION_SPEED_FACTOR,
@@ -26,6 +30,13 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
 
   it('挑战模式常量值与约定一致（G1：限时 60 秒刷分）', () => {
     expect(CHALLENGE_SECONDS).toBe(60)
+  })
+
+  it('BOOST 氮气常量值与约定一致（G4）', () => {
+    expect(BOOST_ACCEL_MULT).toBe(0.6)
+    expect(BOOST_MAX_SPEED_MULT).toBe(1.15)
+    expect(BOOST_CHARGE_RATE).toBe(0.3)
+    expect(BOOST_DRAIN_RATE).toBe(0.5)
   })
 
   it('碰撞常量值与约定一致', () => {

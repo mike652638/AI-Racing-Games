@@ -22,6 +22,7 @@ declare global {
       readonly volume: number
       readonly rainPlaying: boolean
       readonly challengeTimeLeft: number | null
+      readonly boostCharge: number
     }
   }
 }
@@ -46,6 +47,7 @@ export interface DebugHookSources {
   volume: () => number
   rainPlaying: () => boolean
   challengeTimeLeft: () => number | null
+  boostCharge: () => number
 }
 
 /** 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取） */
@@ -104,6 +106,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get challengeTimeLeft() {
       return sources.challengeTimeLeft()
+    },
+    get boostCharge() {
+      return sources.boostCharge()
     },
   }
 }

@@ -35,6 +35,8 @@ export interface HudElements {
   pauseBtn?: HTMLButtonElement
   /** 挑战倒计时（#challenge-timer，G1：显隐/文本由 game-loop 帧块处理，本模块不干预） */
   challengeTimer?: HTMLDivElement
+  /** BOOST 条（#boost-bar，G4：宽度/显隐由 game-loop 帧块处理，本模块仅类型） */
+  boostBar?: HTMLDivElement
 }
 
 /** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。

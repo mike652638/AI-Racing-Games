@@ -21,12 +21,33 @@ import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
-import { CHALLENGE_SECONDS } from './constants'
+import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE, CHALLENGE_SECONDS } from './constants'
 import type { PlayerState } from './player-state'
 
 /** 圈数记录包装：updatePlayerFrame 内推进，调用方与 RaceState.lastLap 桥接 */
 export interface LastLapRef {
   value: number
+}
+
+/**
+ * BOOST 蓄力/消耗（G4，纯函数）：漂移激活期间按 BOOST_CHARGE_RATE 蓄力（封顶 1）；
+ * inputBoost 按下且 charge > 0 时激活 boost 并按 BOOST_DRAIN_RATE 消耗（不越 0）。
+ * 帧块调用后把返回的 boost 并入传给 updatePlayerFrame 的 input（{ ...input, boost }）。
+ */
+export function updateBoostCharge(
+  charge: number,
+  dt: number,
+  inputBoost: boolean,
+  driftActive: boolean,
+): { charge: number; boost: boolean } {
+  if (driftActive) {
+    charge = Math.min(1, charge + dt * BOOST_CHARGE_RATE)
+  }
+  const boost = inputBoost && charge > 0
+  if (boost) {
+    charge = Math.max(0, charge - dt * BOOST_DRAIN_RATE)
+  }
+  return { charge, boost }
 }
 
 /**
@@ -116,6 +137,8 @@ export class GameLoop {
   private readonly challengeMode: boolean
   /** 挑战倒计时 HUD 元素（#challenge-timer，防御式缓存；显隐/文本由帧块处理） */
   private challengeTimer: HTMLDivElement | null = null
+  /** BOOST 条 HUD 元素（#boost-bar，防御式缓存；宽度/显隐由帧块处理，G4） */
+  private boostBar: HTMLDivElement | null = null
   /** 热座当前回合玩家（1 = P1 先跑，交棒后为 2） */
   private hotseatPlayer: 1 | 2 = 1
   /** 热座 P1 回合完赛用时（交棒时快照，供 round 2 结算胜负比较） */
@@ -335,6 +358,7 @@ export class GameLoop {
       rainPlaying: () => this.rainSound?.isPlaying() ?? false,
       challengeTimeLeft: () =>
         this.challengeMode ? Math.max(0, CHALLENGE_SECONDS - this.race.player1.raceTime) : null,
+      boostCharge: () => this.race.player1.boostCharge,
     })
 
     window.addEventListener('keydown', this.onKeyDown)
@@ -776,6 +800,32 @@ export class GameLoop {
         ? this.input.getP2Input()
         : { throttle: 0, brake: false, steer: 0 }
 
+      // G4（G4）：BOOST 蓄力/消耗——漂移激活蓄力、按键（Space/Enter）且 charge>0 时消耗并激活；
+      // 并入 boost 字段后传给 updatePlayerFrame（触屏 input.boost 恒 false 不受影响）
+      const boost1 = updateBoostCharge(
+        this.race.player1.boostCharge,
+        dt,
+        input1.boost === true,
+        this.race.player1.driftState.active,
+      )
+      this.race.player1.boostCharge = boost1.charge
+      const effInput1: CarInput = { ...input1, boost: boost1.boost }
+      const boost2 = updateBoostCharge(
+        this.race.player2.boostCharge,
+        dt,
+        input2.boost === true,
+        this.race.player2.driftState.active,
+      )
+      this.race.player2.boostCharge = boost2.charge
+      const effInput2: CarInput = { ...input2, boost: boost2.boost }
+
+      // G4（G4）：BOOST 条——帧块直接操作（宽度 = P1 charge 百分比），仅比赛阶段可见
+      this.boostBar ??= document.getElementById('boost-bar') as HTMLDivElement | null
+      if (this.boostBar) {
+        this.boostBar.hidden = this.phase !== PHASE_RACING
+        this.boostBar.style.width = `${Math.round(this.race.player1.boostCharge * 100)}%`
+      }
+
       if (this.hotseatMode) {
         // 热座：输入只路由到当前回合玩家（共用同一键盘映射 input1）。
         // P1 回合圈速记录传 lapTimes/lastLap，P2 回合传 lapTimes2/lastLap2（与分屏 P2 同语义）；
@@ -784,7 +834,7 @@ export class GameLoop {
           this.lapRef.value = this.race.lastLap
           updatePlayerFrame(
             dt,
-            input1,
+            effInput1,
             this.race.player1,
             this.carConfig,
             this.trackManager.getLapLength(0),
@@ -797,7 +847,7 @@ export class GameLoop {
           this.lapRef2.value = this.race.lastLap2
           updatePlayerFrame(
             dt,
-            input1,
+            effInput1,
             this.race.player2,
             this.carConfig,
             this.trackManager.getLapLength(1),
@@ -812,7 +862,7 @@ export class GameLoop {
         this.lapRef.value = this.race.lastLap
         updatePlayerFrame(
           dt,
-          input1,
+          effInput1,
           this.race.player1,
           this.carConfig,
           this.trackManager.getLapLength(0),
@@ -826,7 +876,7 @@ export class GameLoop {
         this.lapRef2.value = this.race.lastLap2
         updatePlayerFrame(
           dt,
-          input2,
+          effInput2,
           this.race.player2,
           this.carConfig,
           this.trackManager.getLapLength(1),

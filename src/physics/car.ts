@@ -1,3 +1,6 @@
+/** BOOST 氮气加速倍率（加速度 ×0.6）与速度上限倍率（1.15×maxSpeed），自 game/constants 导入 */
+import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT } from '../game/constants'
+
 export interface CarConfig {
   maxSpeed: number
   acceleration: number
@@ -12,6 +15,8 @@ export interface CarInput {
   throttle: number
   brake: boolean
   steer: number
+  /** BOOST 激活（G4：Space/Enter 按键；可选，旧字面量零破坏） */
+  boost?: boolean
 }
 
 export interface CarState {
@@ -50,6 +55,15 @@ export function updateCar(
   }
   else {
     state.speed = Math.max(0, state.speed - config.deceleration * dt)
+  }
+
+  // G4（G4）：BOOST 氮气——与油门叠加但突破 maxSpeed（上限 1.15×maxSpeed）；
+  // boost 分支独立 clamp，throttle 分支先执行（maxSpeed 内），boost 在其后突破上限
+  if (input.boost === true) {
+    state.speed = Math.min(
+      state.speed + config.acceleration * BOOST_ACCEL_MULT * dt,
+      config.maxSpeed * BOOST_MAX_SPEED_MULT,
+    )
   }
 
   // G3（G3）：雨天抓地力降 15%（有效转向率 ×0.85，转向不足）；wet=false 路径与旧版逐字节一致

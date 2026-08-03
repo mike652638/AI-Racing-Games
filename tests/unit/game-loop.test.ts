@@ -3,6 +3,7 @@ import {
   advancePreviewCameraZ,
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
+  updateBoostCharge,
   updatePlayerFrame,
 } from '../../src/game/game-loop'
 import { createPlayerState } from '../../src/game/player-state'
@@ -198,5 +199,36 @@ describe('菜单预览相机', () => {
       expect(starts[i]).toBeGreaterThanOrEqual(0)
       expect(starts[i]).toBeLessThan(lapLengths[i])
     }
+  })
+})
+
+describe('updateBoostCharge（G4）', () => {
+  const DT = 0.05
+
+  test('漂移激活时蓄力：charge 按 BOOST_CHARGE_RATE 累积', () => {
+    // 漂移 1 秒（20 帧 × 0.05）：charge = min(1, 0 + 1 * 0.3) = 0.3
+    const r = updateBoostCharge(0, DT, false, true)
+    expect(r.charge).toBeCloseTo(DT * 0.3, 6)
+    expect(r.boost).toBe(false)
+  })
+
+  test('按下 boost 且 charge > 0 时消耗并激活：charge 按 BOOST_DRAIN_RATE 递减', () => {
+    const r = updateBoostCharge(0.5, DT, true, false)
+    expect(r.charge).toBeCloseTo(0.5 - DT * 0.5, 6)
+    expect(r.boost).toBe(true)
+  })
+
+  test('边界 clamp：漂移蓄力封顶 1、charge 归零后不再激活 boost', () => {
+    // 满 charge 再漂移 → 封顶 1
+    const full = updateBoostCharge(0.9, 1, false, true)
+    expect(full.charge).toBe(1)
+    // charge 0 且按 boost → 不激活
+    const empty = updateBoostCharge(0, DT, true, false)
+    expect(empty.charge).toBe(0)
+    expect(empty.boost).toBe(false)
+    // 消耗不越 0
+    const drain = updateBoostCharge(0.01, DT, true, false)
+    expect(drain.charge).toBe(0)
+    expect(drain.boost).toBe(true)
   })
 })

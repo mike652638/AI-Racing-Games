@@ -7,6 +7,8 @@ export interface JoystickInput {
   steer: number
   throttle: number
   brake: boolean
+  /** BOOST（G4：触屏摇杆恒不产出，undefined 与 CarInput.boost 兼容） */
+  boost?: boolean
 }
 
 const DEADZONE = 0.15

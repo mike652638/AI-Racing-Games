@@ -16,6 +16,15 @@ export const DRIFT_SCORE_MAX = 99999
 /** 漂移挑战模式限时时长（秒，?challenge=1 时按此倒计时收束对局） */
 export const CHALLENGE_SECONDS = 60
 
+/** BOOST 氮气加速的加速度倍率（相对 config.acceleration，G4） */
+export const BOOST_ACCEL_MULT = 0.6
+/** BOOST 速度上限倍率（突破 maxSpeed 但不超过 1.15×，G4） */
+export const BOOST_MAX_SPEED_MULT = 1.15
+/** BOOST 蓄力速率（漂移激活期间 charge/秒，G4） */
+export const BOOST_CHARGE_RATE = 0.3
+/** BOOST 消耗速率（激活期间 charge/秒，G4） */
+export const BOOST_DRAIN_RATE = 0.5
+
 /** 碰撞速度惩罚因子（速度 ×0.5） */
 export const COLLISION_SPEED_FACTOR = 0.5
 /** 碰撞冷却时长（秒），冷却期内不重复触发 */

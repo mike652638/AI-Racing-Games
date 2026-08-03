@@ -152,3 +152,24 @@ describe('wet 雨天物理（G3）', () => {
     expect(s.speed).toBeCloseTo(3000 - cfg.braking * 0.7, 6)
   })
 })
+
+describe('BOOST 氮气加速（G4）', () => {
+  // 用模块级 config（maxSpeed 100、acceleration 50、deceleration 20）：boost 上限 = 100 * 1.15 = 115
+  it('input.boost=true 时加速突破 maxSpeed（boost 分支独立上限 1.15×）', () => {
+    const s = state(0, 95)
+    // 全油门 + boost：throttle 分支 clamp 到 100 → boost 分支 100 + 50*0.6*1 = 130 → clamp 115
+    updateCar(1, { throttle: 1, brake: false, steer: 0, boost: true }, s, config)
+    expect(s.speed).toBeGreaterThan(config.maxSpeed)
+    expect(s.speed).toBeCloseTo(115, 6)
+  })
+
+  it('boost 加速不越 1.15×maxSpeed 上限', () => {
+    const s = state(0, 100)
+    updateCar(1, { throttle: 1, brake: false, steer: 0, boost: true }, s, config)
+    expect(s.speed).toBeCloseTo(115, 6)
+    // 满 boost 上限再 boost 仍钳制
+    const s2 = state(0, 115)
+    updateCar(1, { throttle: 1, brake: false, steer: 0, boost: true }, s2, config)
+    expect(s2.speed).toBeCloseTo(115, 6)
+  })
+})
