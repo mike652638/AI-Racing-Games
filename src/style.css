@@ -292,7 +292,8 @@ canvas {
   cursor: pointer;
 }
 
-#pause-restart {
+#pause-restart,
+#pause-resume {
   padding: 8px 20px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 8px;
@@ -305,9 +306,36 @@ canvas {
 }
 
 #pause-restart:hover,
-#pause-restart:active {
+#pause-restart:active,
+#pause-resume:hover,
+#pause-resume:active {
   opacity: 0.85;
   border-color: rgba(255, 255, 255, 0.65);
+}
+
+/* F3（F3）：触屏暂停悬浮按钮（#pause-btn：HUD 内右下角圆形按钮，RACING 阶段由 applyPhase 显示；
+   半透明背景 + z-index 高于 canvas，触屏设备暂停入口） */
+#pause-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 30;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#pause-btn:hover,
+#pause-btn:active {
+  background: rgba(0, 0, 0, 0.65);
 }
 
 #track-select {

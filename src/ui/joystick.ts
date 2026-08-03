@@ -91,4 +91,11 @@ export class JoystickUI {
   isActive(): boolean {
     return this.activeId !== null
   }
+
+  /** 清空指针跟踪与输入缓存（F3：进入暂停时调用，防止恢复首帧残留输入） */
+  reset(): void {
+    this.activeId = null
+    this.input = { steer: 0, throttle: 0, brake: false }
+    this.base.style.display = 'none'
+  }
 }

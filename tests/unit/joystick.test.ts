@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { offsetToInput } from '../../src/ui/joystick'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { JoystickUI, offsetToInput } from '../../src/ui/joystick'
 
 describe('offsetToInput', () => {
   const R = 60
@@ -43,5 +43,44 @@ describe('offsetToInput', () => {
     const r = offsetToInput(R * 0.7, -R * 0.7, R)
     expect(r.steer).toBeGreaterThan(0.3)
     expect(r.throttle).toBeGreaterThan(0.3)
+  })
+})
+
+describe('JoystickUI', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('F3（F3）：reset 清空指针跟踪与输入缓存（isActive false、getInput 零输入）', () => {
+    // stub 文档：createElement/body 返回带 style/appendChild/clientWidth 的最小元素替身
+    const elementStub = () => ({ style: {}, className: '', appendChild: vi.fn(), clientWidth: 0 })
+    vi.stubGlobal('document', {
+      createElement: (): unknown => elementStub(),
+      body: elementStub(),
+    } as unknown as Document)
+    // 记录 canvas 事件监听器：模拟触屏按下/拖动激活摇杆
+    const listeners = new Map<string, Array<(e: unknown) => void>>()
+    const canvas = {
+      addEventListener: (type: string, cb: (e: unknown) => void): void => {
+        const arr = listeners.get(type) ?? []
+        arr.push(cb)
+        listeners.set(type, arr)
+      },
+      setPointerCapture: vi.fn(),
+    }
+    const fire = (type: string, e: unknown): void => {
+      for (const cb of listeners.get(type) ?? []) cb(e)
+    }
+    const joystick = new JoystickUI()
+    joystick.attach(canvas as unknown as HTMLCanvasElement)
+    // 触屏按下 + 拖动 → 激活且有转向输入
+    fire('pointerdown', { pointerType: 'touch', pointerId: 7, clientX: 100, clientY: 100 })
+    expect(joystick.isActive()).toBe(true)
+    fire('pointermove', { pointerType: 'touch', pointerId: 7, clientX: 160, clientY: 100 })
+    expect(joystick.getInput().steer).toBeGreaterThan(0)
+    // reset → 指针跟踪清空 + 输入归零（供暂停进入时清理残留输入）
+    joystick.reset()
+    expect(joystick.isActive()).toBe(false)
+    expect(joystick.getInput()).toEqual({ steer: 0, throttle: 0, brake: false })
   })
 })

@@ -174,6 +174,7 @@ export class GameLoop {
       driftIndicator: $('drift-indicator') as HTMLDivElement,
       driftScoreValue: $('drift-score-value') as HTMLSpanElement,
       driftCombo: $('drift-combo') as HTMLDivElement,
+      pauseBtn: $('pause-btn') as HTMLButtonElement,
     }
     this.screenElements = {
       startScreen: $('start-screen') as HTMLDivElement,
@@ -194,6 +195,7 @@ export class GameLoop {
       finishWins: $('finish-wins') as HTMLDivElement,
       pauseVolume: $('pause-volume') as HTMLInputElement,
       pauseRestart: $('pause-restart') as HTMLButtonElement,
+      pauseResume: $('pause-resume') as HTMLButtonElement,
     }
     // P6（P6）：暂停菜单控件事件——音量 slider input → setVolume；重开按钮 click → 回菜单。
     // 元素恒存在（hidden 仅面板控制），input/click 监听在构造器绑定一次即可。
@@ -207,6 +209,19 @@ export class GameLoop {
     if (pauseRestart) {
       pauseRestart.addEventListener('click', () => {
         this.applyPhase(PHASE_MENU)
+      })
+    }
+    // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
+    const pauseBtn = this.hudElements.pauseBtn
+    const pauseResume = this.screenElements.pauseResume
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        this.applyPhase(togglePause(this.phase))
+      })
+    }
+    if (pauseResume) {
+      pauseResume.addEventListener('click', () => {
+        this.applyPhase(togglePause(this.phase))
       })
     }
     const trackName = $('track-name') as HTMLSpanElement
@@ -383,6 +398,14 @@ export class GameLoop {
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
+    // F3（F3）：进入暂停时清理摇杆残留输入（防恢复首帧误输入）；触屏暂停按钮仅比赛阶段可见
+    if (newPhase === PHASE_PAUSED) {
+      this.joystick.reset()
+    }
+    const pauseBtn = this.hudElements.pauseBtn
+    if (pauseBtn) {
+      pauseBtn.hidden = newPhase !== PHASE_RACING
+    }
     // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
     // 热座与分屏共用 finishedP2：P2 回合玩家2 跑完触发，P1 回合玩家2 静止不会误触
     const finishedP1 =

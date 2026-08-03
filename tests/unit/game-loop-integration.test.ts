@@ -689,6 +689,25 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.phase()).toBe(PHASE_MENU)
   })
 
+  it('F3（F3）：比赛阶段点击 #pause-btn 进入暂停', () => {
+    new GameLoop()
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_RACING)
+    // 触屏暂停按钮 click（构造器绑定，stub 记录式事件经 fireElementEvent 触发）→ 暂停
+    env.fireElementEvent('pause-btn', 'click')
+    expect(env.phase()).toBe(PHASE_PAUSED)
+  })
+
+  it('F3（F3）：暂停菜单点击 #pause-resume 恢复比赛', () => {
+    new GameLoop()
+    env.fireKey('Enter')
+    env.fireKey('Escape')
+    expect(env.phase()).toBe(PHASE_PAUSED)
+    // 暂停菜单「继续」按钮 click → 恢复比赛
+    env.fireElementEvent('pause-resume', 'click')
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
   it('P6（P6）：音量 slider input 事件更新主音量（debug hook volume getter）', () => {
     const env2 = stubEnvironment('')
     new GameLoop()

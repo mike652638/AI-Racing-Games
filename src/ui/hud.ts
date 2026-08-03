@@ -30,6 +30,8 @@ export interface HudElements {
   driftScoreValue: HTMLSpanElement
   /** 漂移连击倍率显示（active 且 combo≥1 时显示，如 COMBO x1.25） */
   driftCombo?: HTMLDivElement
+  /** 触屏暂停按钮（#pause-btn，RACING 阶段显示；click 由 GameLoop 构造器绑定） */
+  pauseBtn?: HTMLButtonElement
 }
 
 /** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。

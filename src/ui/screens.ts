@@ -45,6 +45,8 @@ export interface ScreenElements {
   pauseVolume?: HTMLInputElement
   /** 暂停菜单重开按钮（#pause-restart，click 回菜单） */
   pauseRestart?: HTMLButtonElement
+  /** 暂停菜单继续按钮（#pause-resume，click 恢复比赛；GameLoop 构造器绑定） */
+  pauseResume?: HTMLButtonElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
