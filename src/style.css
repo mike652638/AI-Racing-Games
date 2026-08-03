@@ -140,6 +140,25 @@ canvas {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
+/* 分屏漂移竞速排名横幅（#finish-drift-winner：GameLoop 计算 driftWinner，
+   fillFinishPanel 控制显隐与 p1/p2 类；配色与 #hud-player-tag 同风格） */
+#finish-drift-winner {
+  margin-top: 12px;
+  font-size: var(--subtitle-fs);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#finish-drift-winner.p1 {
+  color: #fde047;
+}
+
+#finish-drift-winner.p2 {
+  color: #4ade80;
+}
+
 #start-screen,
 #finish-screen,
 #pause-screen {

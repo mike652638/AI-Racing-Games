@@ -36,10 +36,13 @@ export interface ScreenElements {
   finishLaps2?: HTMLDivElement
   /** 热座交棒/胜负提示（#finish-hint，仅热座模式填充） */
   finishHint?: HTMLDivElement
+  /** 分屏漂移竞速排名横幅（#finish-drift-winner，仅分屏双完赛填充） */
+  finishDriftWinner?: HTMLDivElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
- *  热座字段：hotseatMode 开热座、hotseatRound 当前回合（1 | 2）、prevP1Time 为 P1 回合快照用时 */
+ *  热座字段：hotseatMode 开热座、hotseatRound 当前回合（1 | 2）、prevP1Time 为 P1 回合快照用时；
+ *  漂移竞速字段：driftWinner 为分屏双完赛时的漂移得分胜者（非分屏/未双完赛恒 null） */
 export interface FinishPanelOptions {
   splitMode: boolean
   finishedP1: boolean
@@ -47,6 +50,7 @@ export interface FinishPanelOptions {
   hotseatMode: boolean
   hotseatRound: 1 | 2
   prevP1Time: number | null
+  driftWinner: 'P1' | 'P2' | null
 }
 
 /**
@@ -204,6 +208,19 @@ function fillFinishPanel(
       elements.finishHint.textContent = t1 < t2 ? 'P1 更快！' : t1 > t2 ? 'P2 更快！' : '平手！'
     } else {
       elements.finishHint.hidden = true
+    }
+  }
+
+  // 分屏漂移竞速排名横幅：仅分屏双完赛（driftWinner 非 null）时显示胜者并置 p1/p2 类；
+  // 与热座 finish-hint 并存互不干扰（热座非分屏，driftWinner 恒 null，此处走 else 保持隐藏）
+  if (elements.finishDriftWinner) {
+    if (opts.driftWinner) {
+      elements.finishDriftWinner.hidden = false
+      elements.finishDriftWinner.textContent = `DRIFT 竞速 · ${opts.driftWinner} 获胜！`
+      elements.finishDriftWinner.classList.toggle('p1', opts.driftWinner === 'P1')
+      elements.finishDriftWinner.classList.toggle('p2', opts.driftWinner === 'P2')
+    } else {
+      elements.finishDriftWinner.hidden = true
     }
   }
 }

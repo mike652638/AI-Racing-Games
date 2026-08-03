@@ -120,10 +120,10 @@ function stubEnvironment(search: string | boolean = ''): Environment {
       }
       if (!elements.has(id)) {
         const stub = createElementStub()
-        // 结算面板 P2 行（#finish-*-2）与 index.html 一致：初始 hidden。
+        // 结算面板 P2 行（#finish-*-2）与漂移竞速横幅（#finish-drift-winner）与 index.html 一致：初始 hidden。
         // 视觉缺陷回归：fillFinishPanel 必须显式控制这些元素的显隐，
         // 仅写 textContent 会导致截图不可见（stub 默认 hidden=false 掩盖此缺陷）。
-        if (id.startsWith('finish-') && id.endsWith('-2')) stub.hidden = true
+        if (id.startsWith('finish-') && (id.endsWith('-2') || id === 'finish-drift-winner')) stub.hidden = true
         elements.set(id, stub)
       }
       return elements.get(id)
@@ -324,6 +324,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
     expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
     expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
+    // D3 漂移竞速横幅：未双完赛（P2 未完赛）时保持隐藏
+    expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
   })
 
   it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
@@ -344,6 +346,25 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
     // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
+  })
+
+  it('分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    // KeyW 驱动 P1（P1 键盘映射）、ArrowUp 驱动 P2（P2 键盘映射）同时全油门零转向。
+    // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
+    // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
+    // 4000 帧 = 200s，远超经典赛道 3 圈约 47s 所需，途中与车流碰撞减速也留足余量。
+    splitEnv.fireKey('KeyW')
+    splitEnv.fireKey('ArrowUp')
+    splitEnv.driveFrames(4000)
+    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+    // 双方均零漂移（无转向输入）：Math.round(0) >= Math.round(0) → P1 获胜；
+    // 横幅须可见、文本含 'P1 获胜' 且精确匹配（含 DRIFT 竞速 前缀）
+    const banner = splitEnv.getElement('finish-drift-winner')
+    expect(banner.hidden).toBe(false)
+    expect(banner.textContent).toContain('P1 获胜')
+    expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
   })
 
   it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {

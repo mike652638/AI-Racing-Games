@@ -179,6 +179,7 @@ export class GameLoop {
       finishScore2: $('finish-score-2') as HTMLParagraphElement,
       finishLaps2: $('finish-laps-2') as HTMLDivElement,
       finishHint: $('finish-hint') as HTMLDivElement,
+      finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
     }
     const trackName = $('track-name') as HTMLSpanElement
     const trackOptions = [
@@ -255,6 +256,13 @@ export class GameLoop {
     const finishedP2 =
       (this.splitMode || this.hotseatMode) &&
       lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
+    // 分屏漂移竞速胜者：仅分屏且双完赛时按漂移得分比较（平局归 P1）；否则 null（热座/单屏恒 null）
+    const driftWinner =
+      this.splitMode && finishedP1 && finishedP2
+        ? Math.round(this.race.player1.driftState.score) >= Math.round(this.race.player2.driftState.score)
+          ? 'P1'
+          : 'P2'
+        : null
     applyPhaseToScreens(
       this.screenElements,
       newPhase,
@@ -267,6 +275,7 @@ export class GameLoop {
         hotseatMode: this.hotseatMode,
         hotseatRound: this.hotseatPlayer,
         prevP1Time: this.prevP1Time,
+        driftWinner,
       },
     )
     if (newPhase === PHASE_FINISHED) {
