@@ -185,24 +185,24 @@ describe('漂移连击与得分上限', () => {
     return drift
   }
 
-  test('持续漂移 2.1s 后 combo 0→1，4.2s 后 →2', () => {
+  test('持续漂移 0.6s 后 combo 0→1，1.1s 后 →2', () => {
     // 30 帧激活（charge≈0.5>0.25），随后 active 期间累计 comboTimer
     const activated = driftFor(30)
     expect(activated.active).toBe(true)
-    // 2.1s = 126 帧：comboTimer 满 2s → combo=1
-    const at21 = driftFor(126, activated)
-    expect(at21.combo).toBe(1)
-    // 再 2.1s（累计 4.2s）：第二个 2s 窗口 → combo=2
-    const at42 = driftFor(126, at21)
-    expect(at42.combo).toBe(2)
+    // 0.6s = 36 帧：comboTimer 满 0.5s 窗口 → combo=1
+    const at06 = driftFor(36, activated)
+    expect(at06.combo).toBe(1)
+    // 再 0.5s（累计 1.1s）：第二个 0.5s 窗口 → combo=2
+    const at11 = driftFor(30, at06)
+    expect(at11.combo).toBe(2)
   })
 
   test('漂移中断（松转向 active 变 false）后 combo 归 0', () => {
     const activated = driftFor(30)
-    const at21 = driftFor(126, activated)
-    expect(at21.combo).toBe(1)
+    const at06 = driftFor(36, activated)
+    expect(at06.combo).toBe(1)
     // 松转向 1s：charge 衰减 → active=false → 中断重置 combo/comboTimer
-    let drift = at21
+    let drift = at06
     for (let i = 0; i < 60; i++) {
       drift = updateDrift(DT, idleInput, state, cfg, drift, 0)
     }

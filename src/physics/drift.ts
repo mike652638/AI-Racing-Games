@@ -42,8 +42,13 @@ const SMOKE_LIFETIME = 0.6
 /** 漂移得分速率（得分/秒/单位速度） */
 const DRIFT_SCORE_RATE = 0.01
 
-/** 连击窗口（秒）：连续漂移每满该时长 combo+1 */
-const COMBO_WINDOW_SECONDS = 2
+/**
+ * 连击窗口（秒）：连续漂移每满该时长 combo+1。
+ * P7 冒烟修复：原 2s 在真实物理下不可达——active 期间速度按 DRIFT_SPEED_FACTOR=0.985 每帧衰减，
+ * 从满速跌到 0.5*maxSpeed 阈值仅约 0.8s（0.985^n=0.5 → n≈46 帧），连续 active 窗口最多 ~0.8s，
+ * 永远达不到 2s（浏览器实测 COMBO 永不显示）。0.5s 内 active 仍高于速度阈值，可叠 1 级 combo。
+ */
+const COMBO_WINDOW_SECONDS = 0.5
 /** 连击上限：倍率封顶 1 + 10 * 0.25 = 3.5x */
 const COMBO_MAX = 10
 /** 每级连击的倍率步进 */
