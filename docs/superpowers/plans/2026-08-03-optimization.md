@@ -1128,7 +1128,7 @@ git commit -m "test(integration): add renderer state and game loop smoke tests"
 **Interfaces:**
 - Produces: `SpriteIndex`（按段分组索引）, `spritesInRange` O(1) 查询
 
-- [ ] **Step 1: 实现空间索引**
+- [x] **Step 1: 实现空间索引**
 
 ```typescript
 // src/engine/sprites.ts
@@ -1150,9 +1150,9 @@ export function spritesInRangeIndexed(
 ): Sprite[] { ... }
 ```
 
-- [ ] **Step 2: Renderer 使用索引**
+- [x] **Step 2: Renderer 使用索引**
 
-- [ ] **Step 3: 运行测试与提交**
+- [x] **Step 3: 运行测试与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -1162,6 +1162,16 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/engine/sprites.ts src/engine/renderer.ts tests/unit/sprites.test.ts
 git commit -m "perf(engine): index roadside sprites by segment for O(1) range queries"
 ```
+
+#### 实施偏差（Task 10）
+
+1. **候选段数上界**：`spritesInRangeIndexed` 遍历的候选段数为 `min(track.length, floor(viewDistance / SEGMENT_LENGTH) + 2)`——窗口跨段数（`floor((f+viewDistance)/L) + 1`，f 为相机段内偏移）的安全上界，保证不遗漏；视距 ≥ 环长时退化为全环（与线性版全量返回一致）。
+2. **返回顺序语义**：索引版按候选段序（自相机所在段起环形递增）收集、段内按输入顺序；线性版 `spritesInRange` 按输入数组顺序。对 `createRoadsideSprites`（z 递增输入），非跨环窗口下两版**逐元素一致**；跨环（cameraZ 距环尾不足 viewDistance）时集合与绝对 z 完全一致，仅顺序不同（段序 vs 输入序），渲染为远→近倒序绘制，视觉无回归。
+3. **过滤逻辑单一事实来源**：抽出 `windowedSprite(sprite, totalLength, cameraZ, viewDistance)` 内部辅助，线性版与索引版共用同一环形回绕（`relZ = (zNorm - cameraZ) mod totalLength`）与 `relZ <= viewDistance` 过滤、`z = cameraZ + relZ` 绝对 z 化，保证行为一致。
+4. **保留 `spritesInRange` 导出**：renderer 迁移到索引后仅测试作为线性基准对照使用，未删除。
+5. **renderer 不再持有 sprites 字段**：构造函数 `sprites` 参数保留（位置参数调用方无感知）仅用于初始构建索引；`setTrack(track, sprites)` 签名不变，内部改为构建 `spriteIndex`（键 = `floor(z / SEGMENT_LENGTH)`）。
+6. **索引适用范围**：`buildSpriteIndex` 假定 `sprite.z ∈ [0, 赛道总长)`（`createRoadsideSprites` 与测试构造均满足）；越界 z 会落到 `[0, track.length)` 外的键而被索引查询漏掉（线性版对任意 z 归一化），当前无消费方传入越界 z。
+7. **验证**：`npm run typecheck`、`npm run lint`、`npm test`（256 通过）、`npm run bot`（3 圈、0 违规、均速 3631.7）全绿。
 
 ---
 

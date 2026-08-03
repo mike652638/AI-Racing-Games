@@ -2,7 +2,13 @@ import { RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../game/constants'
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
-import { buildCurvePrefixSum, curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
+import {
+  buildCurvePrefixSum,
+  buildSpriteIndex,
+  curveOffsetAtZ,
+  spritesInRangeIndexed,
+  type Sprite,
+} from './sprites'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
 import { updateLighting } from './lighting'
@@ -81,6 +87,8 @@ export class Renderer {
   private mountains: MountainLayer[]
   /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
   private curvePrefixSum: Float64Array
+  /** 路边景物段索引（键 = floor(z / SEGMENT_LENGTH)），drawSprites 用 O(候选段数) 查询替代线性扫描 */
+  private spriteIndex = new Map<number, Sprite[]>()
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -88,13 +96,14 @@ export class Renderer {
     width: number,
     height: number,
     dpr = 1,
-    private sprites: Sprite[] = [],
+    sprites: Sprite[] = [],
     private traffic: TrafficCar[] = [],
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
     this.mountains = this.buildMountains(width)
     this.curvePrefixSum = buildCurvePrefixSum(track)
+    this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
@@ -141,11 +150,11 @@ export class Renderer {
     this.traffic = traffic
   }
 
-  /** 切换赛道数据与路边景物（关卡选单用），同时重建曲率前缀和 */
+  /** 切换赛道数据与路边景物（关卡选单用），同时重建曲率前缀和与景物段索引 */
   setTrack(track: Segment[], sprites: Sprite[]): void {
     this.track = track
-    this.sprites = sprites
     this.curvePrefixSum = buildCurvePrefixSum(track)
+    this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
@@ -265,8 +274,8 @@ export class Renderer {
 
   /** 绘制路边景物（远→近） */
   private drawSprites(cameraZ: number, opts: ProjectionOptions): void {
-    const seen = spritesInRange(
-      this.sprites,
+    const seen = spritesInRangeIndexed(
+      this.spriteIndex,
       this.track,
       cameraZ,
       DRAW_DISTANCE * SEGMENT_LENGTH,

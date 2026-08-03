@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import {
   buildCurvePrefixSum,
+  buildSpriteIndex,
   createRoadsideSprites,
   curveOffsetAtZ,
   spritesInRange,
+  spritesInRangeIndexed,
   type Sprite,
 } from '../../src/engine/sprites'
 import { project, type Camera3D, type ProjectionOptions } from '../../src/engine/projection'
@@ -99,6 +101,83 @@ describe('环形可见窗口', () => {
     const seen = spritesInRange(sprites, track, 1500, 1700)
     expect(seen).toHaveLength(1)
     expect(seen[0].z).toBe(3200)
+  })
+})
+
+describe('精灵段索引（Task 10 性能优化）', () => {
+  test('buildSpriteIndex 按段分组（含跨段边界与空输入）', () => {
+    const sprites: Sprite[] = [
+      { kind: 'tree', z: 0, offset: -1.4, height: 3 }, // 段 0
+      { kind: 'lamp', z: 199, offset: 1.4, height: 2 }, // 段 0（段尾）
+      { kind: 'tree', z: 200, offset: -1.4, height: 3 }, // 段 1（跨段边界）
+      { kind: 'lamp', z: 400, offset: 1.4, height: 2 }, // 段 2
+      { kind: 'tree', z: 1999, offset: -1.4, height: 3 }, // 段 9（环尾）
+    ]
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    expect([...index.keys()]).toEqual([0, 1, 2, 9])
+    expect(index.get(0)!.map((s) => s.z)).toEqual([0, 199])
+    expect(index.get(1)!.map((s) => s.z)).toEqual([200])
+    expect(index.get(9)!.map((s) => s.z)).toEqual([1999])
+    expect(buildSpriteIndex([], SEGMENT_LENGTH).size).toBe(0)
+  })
+
+  test('索引查询与线性查询逐元素一致（不跨环窗口）', () => {
+    const track = createStraightTrack(50) // 总长 10000
+    const sprites = createRoadsideSprites(track, 1234)
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const cases: Array<[number, number]> = [
+      [1500, 2000],
+      [0, 5000],
+      [8000, 1000],
+      [9900, 50],
+    ]
+    for (const [cameraZ, viewDistance] of cases) {
+      expect(spritesInRangeIndexed(index, track, cameraZ, viewDistance)).toEqual(
+        spritesInRange(sprites, track, cameraZ, viewDistance),
+      )
+    }
+  })
+
+  test('环形回绕：cameraZ 接近环尾时集合与线性一致且绝对 z 正确', () => {
+    const track = createStraightTrack(10) // 总长 2000
+    const sprites: Sprite[] = [
+      { kind: 'tree', z: 400, offset: -1.4, height: 3 },
+      { kind: 'lamp', z: 1200, offset: 1.4, height: 2 },
+      { kind: 'tree', z: 1600, offset: -1.4, height: 3 },
+    ]
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const indexed = spritesInRangeIndexed(index, track, 1500, 900)
+    const linear = spritesInRange(sprites, track, 1500, 900)
+    // 跨环时索引版按段序返回、线性版按输入顺序，集合与绝对 z 必须一致
+    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(
+      linear.map((s) => s.z).sort((a, b) => a - b),
+    )
+    // z=400 → relZ=(400-1500+2000)%2000=900 边界可见 → z=2400；z=1600 → relZ=100 → z=1600
+    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual([1600, 2400])
+  })
+
+  test('索引查询过滤视距外精灵（含同段相机后方精灵）', () => {
+    const track = createStraightTrack(10) // 总长 2000
+    const sprites: Sprite[] = [
+      { kind: 'tree', z: 1400, offset: -1.4, height: 3 }, // 段 7，相机后方（relZ=1900）
+      { kind: 'lamp', z: 1600, offset: 1.4, height: 2 }, // 段 8，相机前方 100
+    ]
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const seen = spritesInRangeIndexed(index, track, 1500, 200)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toEqual({ kind: 'lamp', z: 1600, offset: 1.4, height: 2 })
+  })
+
+  test('视距超过环长时返回全部精灵（与线性一致）', () => {
+    const track = createStraightTrack(10) // 总长 2000
+    const sprites = createRoadsideSprites(track, 1234, 500)
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const indexed = spritesInRangeIndexed(index, track, 500, 3000)
+    const linear = spritesInRange(sprites, track, 500, 3000)
+    expect(indexed).toHaveLength(linear.length)
+    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(
+      linear.map((s) => s.z).sort((a, b) => a - b),
+    )
   })
 })
 

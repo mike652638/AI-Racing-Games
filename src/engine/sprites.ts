@@ -37,7 +37,22 @@ export function createRoadsideSprites(
   return sprites
 }
 
-/** 环形可见窗口：[cameraZ, cameraZ+viewDistance)，返回绝对 z 化的可见景物 */
+/** 环形窗口过滤的单一事实来源：返回绝对 z 化副本或 null（视距外） */
+function windowedSprite(
+  sprite: Sprite,
+  totalLength: number,
+  cameraZ: number,
+  viewDistance: number,
+): Sprite | null {
+  const zNorm = ((sprite.z % totalLength) + totalLength) % totalLength
+  const relZ = ((zNorm - cameraZ) % totalLength + totalLength) % totalLength
+  if (relZ > viewDistance) {
+    return null
+  }
+  return { ...sprite, z: cameraZ + relZ }
+}
+
+/** 环形可见窗口：[cameraZ, cameraZ+viewDistance)，返回绝对 z 化的可见景物（按输入顺序） */
 export function spritesInRange(
   sprites: Sprite[],
   track: Segment[],
@@ -47,10 +62,62 @@ export function spritesInRange(
   const totalLength = track.length * SEGMENT_LENGTH
   const seen: Sprite[] = []
   for (const sprite of sprites) {
-    const zNorm = ((sprite.z % totalLength) + totalLength) % totalLength
-    const relZ = ((zNorm - cameraZ) % totalLength + totalLength) % totalLength
-    if (relZ <= viewDistance) {
-      seen.push({ ...sprite, z: cameraZ + relZ })
+    const windowed = windowedSprite(sprite, totalLength, cameraZ, viewDistance)
+    if (windowed) {
+      seen.push(windowed)
+    }
+  }
+  return seen
+}
+
+/** 按段分组构建精灵空间索引：键 = floor(z / segmentLength)（z 应在 [0, track 总长) 内） */
+export function buildSpriteIndex(
+  sprites: Sprite[],
+  segmentLength: number,
+): Map<number, Sprite[]> {
+  const index = new Map<number, Sprite[]>()
+  for (const sprite of sprites) {
+    const seg = Math.floor(sprite.z / segmentLength)
+    const bucket = index.get(seg)
+    if (bucket) {
+      bucket.push(sprite)
+    } else {
+      index.set(seg, [sprite])
+    }
+  }
+  return index
+}
+
+/**
+ * 环形可见窗口的索引查询版：仅遍历相机前方 viewDistance 内的候选段（O(候选段数)），
+ * 逐精灵过滤与 spritesInRange 完全一致（环形回绕 + 绝对 z 化 + relZ <= viewDistance）。
+ * 候选段数为 floor(viewDistance / SEGMENT_LENGTH) + 2 的安全上界（窗口跨段数 + 1），
+ * 且不超过总段数（视距 >= 环长时退化为全环）。
+ */
+export function spritesInRangeIndexed(
+  index: Map<number, Sprite[]>,
+  track: Segment[],
+  cameraZ: number,
+  viewDistance: number,
+): Sprite[] {
+  const totalLength = track.length * SEGMENT_LENGTH
+  const camWrapped = ((cameraZ % totalLength) + totalLength) % totalLength
+  const startSeg = Math.floor(camWrapped / SEGMENT_LENGTH)
+  const numSegs = Math.min(
+    track.length,
+    Math.floor(viewDistance / SEGMENT_LENGTH) + 2,
+  )
+  const seen: Sprite[] = []
+  for (let k = 0; k < numSegs; k++) {
+    const bucket = index.get((startSeg + k) % track.length)
+    if (!bucket) {
+      continue
+    }
+    for (const sprite of bucket) {
+      const windowed = windowedSprite(sprite, totalLength, cameraZ, viewDistance)
+      if (windowed) {
+        seen.push(windowed)
+      }
     }
   }
   return seen
