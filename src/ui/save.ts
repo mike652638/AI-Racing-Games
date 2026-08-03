@@ -3,6 +3,19 @@
 const BEST_TIME_PREFIX = 'outrun-pseudo3d-best-'
 const BEST_DRIFT_PREFIX = 'outrun-pseudo3d-best-drift-'
 
+/** 胜场统计存档 key 前缀（按模式分 key：热座/分屏各自独立累计） */
+export const WIN_STATS_PREFIX = 'outrun-pseudo3d-wins-'
+
+/** 双人模式的胜场统计：各玩家胜场数与当前连胜（连胜玩家 + 连胜场次） */
+export interface WinStats {
+  p1: number
+  p2: number
+  /** 当前连胜场次（换胜者归 1；无连胜记录时 0） */
+  streak: number
+  /** 当前连胜的玩家（无连胜记录时 null） */
+  streakPlayer: 'P1' | 'P2' | null
+}
+
 /** 玩家后缀：P2 追加 '-p2' 独立存档，P1 无后缀（与旧 key 完全一致，保证兼容） */
 function playerSuffix(playerIndex: 0 | 1): string {
   return playerIndex === 1 ? '-p2' : ''
@@ -128,4 +141,61 @@ export function loadBestDriftScore(trackId: string, storage: Storage | null = ge
 /** 写入漂移最高分；仅当更高时写入，返回是否刷新纪录（旧 API，委托 P1） */
 export function saveBestDriftScore(score: number, trackId: string, storage: Storage | null = getStorage()): boolean {
   return saveBestDriftScoreFor(0, score, trackId, storage)
+}
+
+/** 生成指定模式的胜场统计存档 key（hotseat 与 split 独立） */
+export function winsKeyFor(mode: 'hotseat' | 'split'): string {
+  return WIN_STATS_PREFIX + mode
+}
+
+/** 读取指定模式的胜场统计；无存档/JSON 损坏/storage 不可用时回退默认（{p1:0,p2:0,streak:0,streakPlayer:null}） */
+export function loadWins(mode: 'hotseat' | 'split', storage: Storage | null = getStorage()): WinStats {
+  const fallback: WinStats = { p1: 0, p2: 0, streak: 0, streakPlayer: null }
+  if (!storage) {
+    return fallback
+  }
+  const raw = storage.getItem(winsKeyFor(mode))
+  if (raw === null) {
+    return fallback
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<WinStats>
+    if (
+      typeof parsed.p1 === 'number' &&
+      typeof parsed.p2 === 'number' &&
+      typeof parsed.streak === 'number' &&
+      (parsed.streakPlayer === 'P1' || parsed.streakPlayer === 'P2' || parsed.streakPlayer === null)
+    ) {
+      return {
+        p1: parsed.p1,
+        p2: parsed.p2,
+        streak: parsed.streak,
+        streakPlayer: parsed.streakPlayer,
+      }
+    }
+  }
+  catch {
+    // JSON 损坏回退默认
+  }
+  return fallback
+}
+
+/** 记录一局胜场：读旧 → 对应玩家胜场 +1 → 连胜（同玩家 +1，换玩家归 1）→ 写回 → 返回新统计。
+ *  storage 不可用时仅返回内存结果（不持久化），保证调用方渲染不崩溃。 */
+export function recordWin(
+  mode: 'hotseat' | 'split',
+  winner: 'P1' | 'P2',
+  storage: Storage | null = getStorage(),
+): WinStats {
+  const old = loadWins(mode, storage)
+  const next: WinStats = {
+    p1: old.p1 + (winner === 'P1' ? 1 : 0),
+    p2: old.p2 + (winner === 'P2' ? 1 : 0),
+    streak: winner === old.streakPlayer ? old.streak + 1 : 1,
+    streakPlayer: winner,
+  }
+  if (storage) {
+    storage.setItem(winsKeyFor(mode), JSON.stringify(next))
+  }
+  return next
 }

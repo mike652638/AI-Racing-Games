@@ -9,7 +9,7 @@ import { MusicPlayer } from '../audio/music'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
-import { loadBestTime, loadBestTimeFor } from '../ui/save'
+import { loadBestTime, loadBestTimeFor, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic, type TrackContext } from './track-context'
@@ -179,6 +179,7 @@ export class GameLoop {
       finishLaps2: $('finish-laps-2') as HTMLDivElement,
       finishHint: $('finish-hint') as HTMLDivElement,
       finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
+      finishWins: $('finish-wins') as HTMLDivElement,
     }
     const trackName = $('track-name') as HTMLSpanElement
     // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
@@ -263,6 +264,22 @@ export class GameLoop {
           ? 'P1'
           : 'P2'
         : null
+    // 胜场统计：仅首次进入完赛时记录（finishShown 守卫防 ESC 重入重复计数）——
+    // 热座 round 2 按 P1/P2 用时比较（平手不记）、分屏双完赛复用 driftWinner、单人恒 null
+    let winStats: WinStats | null = null
+    if (newPhase === PHASE_FINISHED && !this.race.finishShown) {
+      let winner: 'P1' | 'P2' | null = null
+      if (this.hotseatMode && this.hotseatPlayer === 2 && this.prevP1Time !== null) {
+        const t1 = this.prevP1Time
+        const t2 = this.race.player2.raceTime
+        winner = t1 < t2 ? 'P1' : t1 > t2 ? 'P2' : null
+      } else if (this.splitMode && finishedP1 && finishedP2) {
+        winner = driftWinner
+      }
+      if (winner) {
+        winStats = recordWin(this.hotseatMode ? 'hotseat' : 'split', winner)
+      }
+    }
     applyPhaseToScreens(
       this.screenElements,
       newPhase,
@@ -276,6 +293,7 @@ export class GameLoop {
         hotseatRound: this.hotseatPlayer,
         prevP1Time: this.prevP1Time,
         driftWinner,
+        winStats,
       },
     )
     if (newPhase === PHASE_FINISHED) {

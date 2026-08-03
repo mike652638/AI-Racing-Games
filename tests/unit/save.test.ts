@@ -10,6 +10,9 @@ import {
   loadBestDriftScoreFor,
   saveBestDriftScore,
   saveBestDriftScoreFor,
+  loadWins,
+  recordWin,
+  winsKeyFor,
 } from '../../src/ui/save'
 
 function fakeStorage(): Storage {
@@ -142,5 +145,66 @@ describe('save 玩家维度（P1 旧 key / P2 -p2 后缀）', () => {
     expect(loadBestTimeFor(1, 'classic', null)).toBeNull()
     expect(saveBestTimeFor(1, 10, 'classic', null)).toBe(false)
     expect(loadBestDriftScoreFor(1, 'classic', null)).toBeNull()
+  })
+})
+
+describe('胜场统计（WinStats API）', () => {
+  it('首次 recordWin 记 1 胜且 streak=1', () => {
+    const s = fakeStorage()
+    const r = recordWin('hotseat', 'P1', s)
+    expect(r.p1).toBe(1)
+    expect(r.p2).toBe(0)
+    expect(r.streak).toBe(1)
+    expect(r.streakPlayer).toBe('P1')
+    // 持久化可读回
+    expect(loadWins('hotseat', s)).toEqual({ p1: 1, p2: 0, streak: 1, streakPlayer: 'P1' })
+  })
+
+  it('同玩家连赢 streak 递增', () => {
+    const s = fakeStorage()
+    recordWin('hotseat', 'P1', s)
+    const r2 = recordWin('hotseat', 'P1', s)
+    expect(r2.p1).toBe(2)
+    expect(r2.streak).toBe(2)
+    expect(r2.streakPlayer).toBe('P1')
+  })
+
+  it('换玩家连胜归 1（p2 胜场独立累计）', () => {
+    const s = fakeStorage()
+    recordWin('hotseat', 'P1', s)
+    recordWin('hotseat', 'P1', s)
+    const r = recordWin('hotseat', 'P2', s)
+    expect(r.p2).toBe(1)
+    expect(r.p1).toBe(2)
+    expect(r.streak).toBe(1)
+    expect(r.streakPlayer).toBe('P2')
+  })
+
+  it('hotseat 与 split 模式 key 独立', () => {
+    const s = fakeStorage()
+    recordWin('hotseat', 'P1', s)
+    const r = recordWin('split', 'P2', s)
+    expect(r.p1).toBe(0)
+    expect(r.p2).toBe(1)
+    // split 记录不影响 hotseat 记录
+    expect(loadWins('hotseat', s).p1).toBe(1)
+    expect(winsKeyFor('hotseat')).toBe('outrun-pseudo3d-wins-hotseat')
+    expect(winsKeyFor('split')).toBe('outrun-pseudo3d-wins-split')
+  })
+
+  it('JSON 损坏 loadWins 回退默认', () => {
+    const s = fakeStorage()
+    s.setItem(winsKeyFor('hotseat'), '{broken json')
+    expect(loadWins('hotseat', s)).toEqual({ p1: 0, p2: 0, streak: 0, streakPlayer: null })
+    // 损坏存档不影响后续 recordWin（读默认值起步）
+    expect(recordWin('hotseat', 'P2', s).p2).toBe(1)
+  })
+
+  it('storage 不可用安全降级（返回内存结果、不持久化）', () => {
+    expect(loadWins('hotseat', null)).toEqual({ p1: 0, p2: 0, streak: 0, streakPlayer: null })
+    const r = recordWin('hotseat', 'P1', null)
+    expect(r.p1).toBe(1)
+    expect(r.streak).toBe(1)
+    expect(r.streakPlayer).toBe('P1')
   })
 })

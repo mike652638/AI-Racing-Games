@@ -10,6 +10,7 @@ import {
   saveBestDriftScoreFor,
   saveBestTime,
   saveBestTimeFor,
+  type WinStats,
 } from './save'
 import {
   PHASE_FINISHED,
@@ -38,11 +39,14 @@ export interface ScreenElements {
   finishHint?: HTMLDivElement
   /** 分屏漂移竞速排名横幅（#finish-drift-winner，仅分屏双完赛填充） */
   finishDriftWinner?: HTMLDivElement
+  /** 胜场统计行（#finish-wins，热座/分屏分胜负时填充） */
+  finishWins?: HTMLDivElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
  *  热座字段：hotseatMode 开热座、hotseatRound 当前回合（1 | 2）、prevP1Time 为 P1 回合快照用时；
- *  漂移竞速字段：driftWinner 为分屏双完赛时的漂移得分胜者（非分屏/未双完赛恒 null） */
+ *  漂移竞速字段：driftWinner 为分屏双完赛时的漂移得分胜者（非分屏/未双完赛恒 null）；
+ *  胜场统计字段：winStats 为 recordWin 后的最新统计（平手/单人不记时 null） */
 export interface FinishPanelOptions {
   splitMode: boolean
   finishedP1: boolean
@@ -51,6 +55,7 @@ export interface FinishPanelOptions {
   hotseatRound: 1 | 2
   prevP1Time: number | null
   driftWinner: 'P1' | 'P2' | null
+  winStats: WinStats | null
 }
 
 /**
@@ -222,6 +227,20 @@ function fillFinishPanel(
       elements.finishDriftWinner.classList.toggle('p2', opts.driftWinner === 'P2')
     } else {
       elements.finishDriftWinner.hidden = true
+    }
+  }
+
+  // 胜场统计行：热座/分屏分胜负（winStats 非 null）时显示统计与连胜；平手/单人（null）保持隐藏。
+  // GameLoop 在 FINISHED 块内已调用 recordWin 并随 opts 传入（视觉缺陷回归：显式控制 hidden）
+  if (elements.finishWins) {
+    if (opts.winStats) {
+      elements.finishWins.hidden = false
+      const { p1, p2, streak, streakPlayer } = opts.winStats
+      elements.finishWins.textContent =
+        `胜场统计 · P1 ${p1} : ${p2} P2` +
+        (streakPlayer ? ` · ${streakPlayer} 连胜 ${streak}` : '')
+    } else {
+      elements.finishWins.hidden = true
     }
   }
 }

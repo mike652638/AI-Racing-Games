@@ -120,10 +120,16 @@ function stubEnvironment(search: string | boolean = ''): Environment {
       }
       if (!elements.has(id)) {
         const stub = createElementStub()
-        // 结算面板 P2 行（#finish-*-2）与漂移竞速横幅（#finish-drift-winner）与 index.html 一致：初始 hidden。
+        // 结算面板 P2 行（#finish-*-2）与漂移竞速横幅（#finish-drift-winner）
+        // 及胜场统计行（#finish-wins）与 index.html 一致：初始 hidden。
         // 视觉缺陷回归：fillFinishPanel 必须显式控制这些元素的显隐，
         // 仅写 textContent 会导致截图不可见（stub 默认 hidden=false 掩盖此缺陷）。
-        if (id.startsWith('finish-') && (id.endsWith('-2') || id === 'finish-drift-winner')) stub.hidden = true
+        if (
+          id.startsWith('finish-') &&
+          (id.endsWith('-2') || id === 'finish-drift-winner' || id === 'finish-wins')
+        ) {
+          stub.hidden = true
+        }
         elements.set(id, stub)
       }
       return elements.get(id)
@@ -508,5 +514,31 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 10 帧推进量 = speed*dt 累计 960-1440 单位，远小于圈长无回绕），z 必然变化
     hotEnv.driveFrames(10)
     expect(hotEnv.debugValue('p2TrafficZ')).not.toBe(v0)
+  })
+
+  it('热座双人完赛后结算显示胜场统计（P2 回合多预热 10 帧 → P1 更快 → P1 胜场 1 连胜 1）', () => {
+    const hotEnv = stubEnvironment('?hotseat=1')
+    new GameLoop()
+    // 沿用既有热座流程：Digit2 选赛道（双人同一赛道）→ Enter 开始 → KeyW 驱动 P1 跑完 3 圈
+    hotEnv.fireKey('Digit2')
+    hotEnv.fireKey('Enter')
+    hotEnv.fireKey('KeyW')
+    hotEnv.driveFrames(2500)
+    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+    // 交棒：P2 回合多跑 10 帧预热（raceTime 多 0.5s），P2 必然比 P1 快照更慢 → 胜者 P1
+    hotEnv.fireKey('Enter')
+    hotEnv.driveFrames(10)
+    hotEnv.driveFrames(2500)
+    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+    // round 2 结算：finish-wins 显示胜场统计（P1 1:0，首次连胜 1）；平手（极端对称）时不记、保持隐藏
+    const winsEl = hotEnv.getElement('finish-wins')
+    if (hotEnv.getElement('finish-hint').textContent === '平手！') {
+      expect(winsEl.hidden).toBe(true)
+    } else {
+      expect(winsEl.hidden).toBe(false)
+      expect(winsEl.textContent).toContain('胜场统计')
+      expect(winsEl.textContent).toMatch(/P1 \d : \d P2/)
+      expect(winsEl.textContent).toMatch(/连胜 1/)
+    }
   })
 })
