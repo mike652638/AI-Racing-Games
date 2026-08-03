@@ -1,3 +1,4 @@
+import { buildRoadStrips, type RoadStrip } from '../engine/road-strip'
 import { SEGMENT_LENGTH, type Segment } from '../engine/track'
 import {
   buildCurvePrefixSum,
@@ -30,6 +31,8 @@ export interface TrackContext {
   spriteIndex: Map<number, Sprite[]>
   /** 路边景物列表（道路两侧树木/路灯） */
   sprites: Sprite[]
+  /** 道路段缓存（按曲率分段的条带，渲染层离屏绘制后逐段复用） */
+  roadStrips: RoadStrip[]
   /** 本世界车流（in-place 推进） */
   traffic: TrafficCar[]
 }
@@ -38,6 +41,8 @@ export interface TrackContext {
 export function createTrackContext(def: TrackDef): TrackContext {
   const segments = createTrackFromDef(def)
   const sprites = createRoadsideSprites(segments)
+  // 道路段预计算（按曲率分段，创建时完成，运行时零重建）
+  const roadStrips = buildRoadStrips(segments)
   const lapLength = segments.length * SEGMENT_LENGTH
   return {
     def,
@@ -47,6 +52,7 @@ export function createTrackContext(def: TrackDef): TrackContext {
     curvePrefixSum: buildCurvePrefixSum(segments),
     spriteIndex: buildSpriteIndex(sprites, SEGMENT_LENGTH),
     sprites,
+    roadStrips,
     traffic: createTraffic(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT),
   }
 }
