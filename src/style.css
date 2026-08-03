@@ -203,6 +203,20 @@ canvas {
   white-space: pre-line;
 }
 
+/* 分屏漂移对局 TOP10（#match-top：菜单静态元素，GameLoop refreshMatchTop 刷新最近 10 局；
+   风格与 #drift-top/#best-summary 一致；限高滚动防止挤压底部操作提示） */
+#match-top {
+  margin: 12px auto 0;
+  max-width: 320px;
+  max-height: 132px;
+  overflow-y: auto;
+  font-size: var(--hint-fs);
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  text-align: center;
+  white-space: pre-line;
+}
+
 #start-screen,
 #finish-screen,
 #pause-screen {

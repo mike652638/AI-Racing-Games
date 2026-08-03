@@ -497,6 +497,23 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
   }, 15000)
 
+  it('F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
+    expect(splitEnv.getElement('match-top').textContent).toBe('暂无对局记录')
+    // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛（与既有双完赛用例同轨迹）
+    splitEnv.fireKey('KeyW')
+    splitEnv.fireKey('ArrowUp')
+    splitEnv.driveFrames(4000)
+    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+    // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 经典赛道`（零漂移得分平局归 P1）
+    const top = splitEnv.getElement('match-top').textContent
+    expect(top.startsWith('1. ')).toBe(true)
+    expect(top).toContain('胜 ·')
+    expect(top).toContain('经典赛道')
+  }, 15000)
+
   it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
     new GameLoop()

@@ -11,6 +11,19 @@ export const DRIFT_TOP_KEY = 'outrun-pseudo3d-drift-top'
 /** 排行榜最大条目数 */
 export const DRIFT_TOP_MAX = 10
 
+/** 分屏漂移对局记录 TOP10 存档 key（最近 10 局，新局在头部） */
+export const MATCH_TOP_KEY = 'outrun-pseudo3d-match-top'
+/** 对局记录最大条目数 */
+export const MATCH_TOP_MAX = 10
+
+/** 分屏漂移对局记录条目：胜者、双方漂移得分与赛道 */
+export interface MatchEntry {
+  winner: 'P1' | 'P2'
+  p1Score: number
+  p2Score: number
+  trackId: string
+}
+
 /** 漂移得分排行榜条目：玩家、赛道、得分与完赛用时 */
 export interface DriftEntry {
   player: 'P1' | 'P2'
@@ -256,6 +269,53 @@ export function addDriftScore(
   const truncated = top.slice(0, DRIFT_TOP_MAX)
   if (storage) {
     storage.setItem(DRIFT_TOP_KEY, JSON.stringify(truncated))
+  }
+  return { top: truncated, entered: truncated.includes(entry) }
+}
+
+/** 读取分屏漂移对局记录：JSON 损坏/storage 不可用/非数组回退 []；逐条校验（winner ∈ {P1,P2}、score 有限数、trackId 字符串），保持存储顺序 */
+export function loadMatchTop(storage: Storage | null = getStorage()): MatchEntry[] {
+  if (!storage) {
+    return []
+  }
+  const raw = storage.getItem(MATCH_TOP_KEY)
+  if (raw === null) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter(
+      (e): e is MatchEntry =>
+        e !== null &&
+        typeof e === 'object' &&
+        (e.winner === 'P1' || e.winner === 'P2') &&
+        typeof e.p1Score === 'number' &&
+        Number.isFinite(e.p1Score) &&
+        typeof e.p2Score === 'number' &&
+        Number.isFinite(e.p2Score) &&
+        typeof e.trackId === 'string',
+    )
+  }
+  catch {
+    // JSON 损坏回退空数组
+    return []
+  }
+}
+
+/** 插入一局对局记录（最近 10 局语义）：新局插入数组头部（unshift）→ 截断 MATCH_TOP_MAX → 写回。
+ *  entered = 新条目是否留在榜内（被挤出时为 false）；storage 不可用时仅返回内存榜单。 */
+export function addMatchResult(
+  entry: MatchEntry,
+  storage: Storage | null = getStorage(),
+): { top: MatchEntry[]; entered: boolean } {
+  const top = loadMatchTop(storage)
+  top.unshift(entry)
+  const truncated = top.slice(0, MATCH_TOP_MAX)
+  if (storage) {
+    storage.setItem(MATCH_TOP_KEY, JSON.stringify(truncated))
   }
   return { top: truncated, entered: truncated.includes(entry) }
 }

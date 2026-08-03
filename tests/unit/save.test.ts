@@ -16,6 +16,10 @@ import {
   addDriftScore,
   loadDriftTop,
   DRIFT_TOP_KEY,
+  addMatchResult,
+  loadMatchTop,
+  MATCH_TOP_KEY,
+  type MatchEntry,
 } from '../../src/ui/save'
 
 function fakeStorage(): Storage {
@@ -258,6 +262,63 @@ describe('漂移 TOP10（DriftEntry API）', () => {
   it('storage 不可用安全降级（返回内存榜单、不持久化）', () => {
     expect(loadDriftTop(null)).toEqual([])
     const r = addDriftScore({ player: 'P1', trackId: 'classic', score: 10, time: 1 }, null)
+    expect(r.top).toHaveLength(1)
+    expect(r.entered).toBe(true)
+  })
+})
+
+describe('对局记录（MatchEntry API）', () => {
+  const entry = (winner: 'P1' | 'P2', p1Score: number, p2Score: number, trackId = 'classic'): MatchEntry =>
+    ({ winner, p1Score, p2Score, trackId })
+
+  it('无存档时 loadMatchTop 返回空数组', () => {
+    expect(loadMatchTop(fakeStorage())).toEqual([])
+  })
+
+  it('addMatchResult 首局写回且 loadMatchTop 可重新读取', () => {
+    const s = fakeStorage()
+    const r = addMatchResult(entry('P1', 120, 80), s)
+    expect(r.top).toHaveLength(1)
+    expect(r.entered).toBe(true)
+    const top = loadMatchTop(s)
+    expect(top).toEqual([{ winner: 'P1', p1Score: 120, p2Score: 80, trackId: 'classic' }])
+  })
+
+  it('多局保持最近优先（新局在头部）且截断 MATCH_TOP_MAX', () => {
+    const s = fakeStorage()
+    for (let i = 0; i < 10; i++) {
+      addMatchResult(entry('P1', i, 0), s)
+    }
+    // 第 11 局：新局在头部，最旧（第 1 局，p1Score=0）被挤出
+    const r = addMatchResult(entry('P2', 999, 1), s)
+    expect(r.top).toHaveLength(10)
+    expect(r.top[0]).toEqual({ winner: 'P2', p1Score: 999, p2Score: 1, trackId: 'classic' })
+    expect(r.top[9].p1Score).toBe(1)
+    expect(r.top.map((e) => e.p1Score).includes(0)).toBe(false)
+  })
+
+  it('loadMatchTop JSON 损坏或非法条目回退/过滤', () => {
+    const s = fakeStorage()
+    s.setItem(MATCH_TOP_KEY, '{broken json')
+    expect(loadMatchTop(s)).toEqual([])
+    // 非法条目（winner 非 P1/P2、score 非有限数、trackId 非字符串）被过滤
+    s.setItem(
+      MATCH_TOP_KEY,
+      JSON.stringify([
+        { winner: 'P3', p1Score: 1, p2Score: 2, trackId: 'classic' },
+        { winner: 'P1', p1Score: 'x', p2Score: 2, trackId: 'classic' },
+        { winner: 'P1', p1Score: 1, p2Score: 2, trackId: 3 },
+        { winner: 'P1', p1Score: 1, p2Score: 2, trackId: 'highway' },
+      ]),
+    )
+    const top = loadMatchTop(s)
+    expect(top).toHaveLength(1)
+    expect(top[0]).toEqual({ winner: 'P1', p1Score: 1, p2Score: 2, trackId: 'highway' })
+  })
+
+  it('storage 不可用安全降级（返回内存结果、不持久化）', () => {
+    expect(loadMatchTop(null)).toEqual([])
+    const r = addMatchResult(entry('P1', 10, 5), null)
     expect(r.top).toHaveLength(1)
     expect(r.entered).toBe(true)
   })

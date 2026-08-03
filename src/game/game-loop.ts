@@ -10,7 +10,7 @@ import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { formatTime } from '../ui/format'
-import { addDriftScore, loadBestTime, loadBestTimeFor, loadDriftTop, recordWin, type WinStats } from '../ui/save'
+import { addDriftScore, addMatchResult, loadBestTime, loadBestTimeFor, loadDriftTop, loadMatchTop, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic, type TrackContext } from './track-context'
@@ -270,6 +270,7 @@ export class GameLoop {
     this.resize()
     this.refreshDriftTop()
     this.refreshBestSummary()
+    this.refreshMatchTop()
     requestAnimationFrame(this.frame)
   }
 
@@ -347,6 +348,28 @@ export class GameLoop {
     el.textContent = hasAny ? lines.join('\n') : '暂无最佳成绩'
   }
 
+  /**
+   * 刷新菜单分屏漂移对局 TOP10（#match-top，菜单静态元素）：取前 MATCH_TOP_MAX 条渲染
+   * （`${i+1}. ${winner} 胜 · ${p1Score}:${p2Score} · ${getTrackDef(trackId)?.name ?? trackId}`），
+   * 无记录显示占位文本（仿 refreshDriftTop 模式）。
+   */
+  private refreshMatchTop(): void {
+    const el = document.getElementById('match-top')
+    if (!el) {
+      return
+    }
+    const top = loadMatchTop()
+    el.textContent =
+      top.length === 0
+        ? '暂无对局记录'
+        : top
+            .map(
+              (e, i) =>
+                `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
+            )
+            .join('\n')
+  }
+
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
   private resetRace(): void {
     resetRaceState(this.race)
@@ -406,7 +429,17 @@ export class GameLoop {
           time: this.race.player2.raceTime,
         })
       }
+      // M11 F2：分屏双完赛记录漂移对局（最近 10 局，driftWinner 在双完赛时恒非 null，平局归 P1）
+      if (this.splitMode && finishedP1 && finishedP2) {
+        addMatchResult({
+          winner: driftWinner ?? 'P1',
+          p1Score: Math.round(this.race.player1.driftState.score),
+          p2Score: Math.round(this.race.player2.driftState.score),
+          trackId: this.trackManager.getTrackId(0),
+        })
+      }
       this.refreshDriftTop()
+      this.refreshMatchTop()
     }
     applyPhaseToScreens(
       this.screenElements,
@@ -432,6 +465,7 @@ export class GameLoop {
       this.resetRace()
       this.refreshDriftTop()
       this.refreshBestSummary()
+      this.refreshMatchTop()
     }
   }
 
