@@ -2,7 +2,8 @@ import { describe, expect, test } from 'vitest'
 import { simulateLaps } from '../../src/ai/simulate'
 import { createBotConfig } from '../../src/ai/bot'
 import { createCarConfig, updateCar, DEFAULT_CAR_CONFIG } from '../../src/physics/car'
-import { createStraightTrack, createTrack } from '../../src/engine/track'
+import { createTrack } from '../../src/engine/track'
+import { createStraightTrack } from '../helpers/track'
 
 describe('updateCar 出界标记', () => {
   test('不出界时返回 false', () => {
@@ -62,7 +63,84 @@ describe('simulateLaps', () => {
   })
 
   test('达到 maxSteps 仍未完成时 finished=false', () => {
-    const result = simulateLaps(createStraightTrack(200), createCarConfig(), createBotConfig(), { laps: 3, maxSteps: 10 })
+    const result = simulateLaps(createStraightTrack(200), createCarConfig(), createBotConfig(), {
+      laps: 3,
+      maxSteps: 10,
+    })
     expect(result.finished).toBe(false)
+  })
+})
+
+describe('simulateLaps 车流模式', () => {
+  // 与上方"环形弯道赛道"用例相同的赛道形状
+  const ringTrack = createTrack([
+    { curve: 0, count: 60 },
+    { curve: 0.02, count: 50 },
+    { curve: 0, count: 40 },
+    { curve: -0.02, count: 50 },
+    { curve: 0, count: 60 },
+    { curve: 0.01, count: 50 },
+    { curve: 0, count: 40 },
+    { curve: -0.01, count: 50 },
+    { curve: 0, count: 60 },
+  ])
+
+  test('默认模式（不传 withTraffic）与 withTraffic:false 行为完全一致', () => {
+    const track = createStraightTrack(200)
+    const base = simulateLaps(track, createCarConfig(), createBotConfig(), { laps: 3 })
+    const explicit = simulateLaps(track, createCarConfig(), createBotConfig(), { laps: 3, withTraffic: false })
+    expect(explicit).toEqual(base)
+    // 旧字段结构保持（LapResult 向后兼容）
+    expect(explicit.finished).toBe(true)
+    expect(explicit.lapTimes).toHaveLength(3)
+    expect(explicit.violations).toBe(0)
+    expect(explicit.collisions).toBe(0)
+  })
+
+  test('默认模式 collisions 字段为 0（旧字段向后兼容）', () => {
+    const result = simulateLaps(createStraightTrack(200), createCarConfig(), createBotConfig(), { laps: 1 })
+    expect(result.collisions).toBe(0)
+  })
+
+  test('车流模式直道完成 1 圈：finished=true、collisions>=0、无异常', () => {
+    const track = createStraightTrack(200)
+    const result = simulateLaps(track, createCarConfig(), createBotConfig(), {
+      laps: 1,
+      withTraffic: true,
+      trafficSeed: 42,
+      trafficCount: 8,
+    })
+    expect(result.finished).toBe(true)
+    expect(result.collisions).toBeGreaterThanOrEqual(0)
+    expect(result.lapTimes).toHaveLength(1)
+    expect(result.lapTimes[0]).toBeGreaterThan(0)
+  })
+
+  test('车流模式弯道赛道完成且不越界崩溃', () => {
+    const result = simulateLaps(ringTrack, createCarConfig(), createBotConfig(), {
+      laps: 1,
+      withTraffic: true,
+      trafficSeed: 7,
+    })
+    expect(result.finished).toBe(true)
+    expect(result.collisions).toBeGreaterThanOrEqual(0)
+    expect(result.violations).toBeLessThanOrEqual(5)
+  })
+
+  test('车流模式确定性：相同 seed 产生相同结果', () => {
+    const track = createStraightTrack(200)
+    const a = simulateLaps(track, createCarConfig(), createBotConfig(), {
+      laps: 1,
+      withTraffic: true,
+      trafficSeed: 123,
+      trafficCount: 10,
+    })
+    const b = simulateLaps(track, createCarConfig(), createBotConfig(), {
+      laps: 1,
+      withTraffic: true,
+      trafficSeed: 123,
+      trafficCount: 10,
+    })
+    expect(b).toEqual(a)
   })
 })
