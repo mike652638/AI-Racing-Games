@@ -1,4 +1,4 @@
-import { Renderer } from '../engine/renderer'
+import { Renderer, type RenderView } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
 import { TRACK_DEFS } from '../engine/tracks'
 import { updateTraffic } from '../engine/traffic'
@@ -12,7 +12,7 @@ import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
-import { refreshTraffic } from './track-context'
+import { refreshTraffic, type TrackContext } from './track-context'
 import { updateCollisions } from './collision'
 import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
@@ -49,6 +49,20 @@ export function advancePreviewCameraZ(current: number, dt: number, lapLength: nu
 export function initialPreviewCameraZ(index: number, lapLength: number): number {
   const count = TRACK_DEFS.length
   return Math.floor((index * lapLength) / count)
+}
+
+/**
+ * 从赛道上下文构造渲染视图：分段/曲率前缀和/景物索引/车流。
+ * 分屏双世界各持一份 TrackContext，渲染时用各自 view（单次渲染零重建，
+ * 预计算在 TrackContext 创建时完成）。
+ */
+function viewFor(ctx: TrackContext): RenderView {
+  return {
+    track: ctx.segments,
+    curvePrefixSum: ctx.curvePrefixSum,
+    spriteIndex: ctx.spriteIndex,
+    traffic: ctx.traffic,
+  }
 }
 
 /**
@@ -99,13 +113,20 @@ export class GameLoop {
   private engineSound: EngineSound | null = null
   private music: MusicPlayer | null = null
   private bestTime: number | null
-  /** 菜单预览相机位置（仅 PHASE_MENU 推进；切换赛道时按圈长等分重置起点） */
-  private previewCameraZ = 0
+  /** 菜单预览相机位置（仅 PHASE_MENU 推进；分屏 P1/P2 各自独立，切换赛道时按圈长等分重置起点） */
+  private previewCameraZ: [number, number] = [0, 0]
   private last = performance.now()
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
     this.splitMode = new URLSearchParams(window.location.search).has('split')
+
+    // 分屏菜单提示：P1 用 1/2/3、P2 用 7/8/9 各自选赛道（#menu-hint 由 index.html 提供）
+    if (this.splitMode) {
+      const menuHint = document.getElementById('menu-hint')
+      if (menuHint) menuHint.textContent = 'P1: 1/2/3 选赛道 · P2: 7/8/9 选赛道 · 按任意键开始'
+    }
+
     this.canvas = $('game') as HTMLCanvasElement
 
     const hud2Container = $('hud2') as HTMLDivElement
@@ -185,12 +206,11 @@ export class GameLoop {
     requestAnimationFrame(this.frame)
   }
 
-  /** 重置对局：清玩家状态与计数，重建双世界车流并同步渲染器 P1 车流引用 */
+  /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
   private resetRace(): void {
     resetRaceState(this.race)
     refreshTraffic(this.race.tracks[0])
     refreshTraffic(this.race.tracks[1])
-    this.renderer.setTraffic(this.race.tracks[0].traffic)
     this.last = performance.now()
     this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
   }
@@ -214,12 +234,15 @@ export class GameLoop {
       this.applyPhase(togglePause(this.phase))
       return
     }
+    // 菜单选赛道：P1 用 1/2/3（左侧），分屏时 P2 用 7/8/9（右侧）
     if (this.phase === PHASE_MENU && e.code.startsWith('Digit')) {
-      const index = Number(e.code.slice(5)) - 1
-      if (index >= 0 && index < TRACK_DEFS.length) {
-        this.trackManager.selectTrack(0, index)
-        // 切换赛道后从不同起点开始预览，避免三条赛道起点直道视觉雷同
-        this.previewCameraZ = initialPreviewCameraZ(index, this.trackManager.getLapLength(0))
+      const digit = Number(e.code.slice(5))
+      if (digit >= 1 && digit <= 3) {
+        this.selectTrackFor(0, digit - 1)
+        return
+      }
+      if (this.splitMode && digit >= 7 && digit <= 9) {
+        this.selectTrackFor(1, digit - 7)
         return
       }
     }
@@ -236,6 +259,20 @@ export class GameLoop {
         lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)),
         this.trackManager.getTotalLaps(0),
       ),
+    )
+  }
+
+  /**
+   * 为指定玩家切换赛道：TrackManager 重建该玩家 TrackContext 后，
+   * 同步 race.tracks 引用（渲染视图/HUD 均取 race.tracks，需与 trackManager 一致），
+   * 并把该玩家菜单预览相机重置到新赛道的等分起点。另一玩家不受影响。
+   */
+  private selectTrackFor(playerIndex: 0 | 1, trackIndex: number): void {
+    this.trackManager.selectTrack(playerIndex, trackIndex)
+    this.race.tracks[playerIndex] = this.trackManager.getContext(playerIndex)
+    this.previewCameraZ[playerIndex] = initialPreviewCameraZ(
+      trackIndex,
+      this.race.tracks[playerIndex].lapLength,
     )
   }
 
@@ -276,32 +313,57 @@ export class GameLoop {
       )
       this.race.lastLap = lapRef.value
 
-      // P2 独立更新（分屏时输入有效，否则零输入；不参与圈速记录，保持原行为）
-      updatePlayerFrame(dt, input2, this.race.player2, this.carConfig, this.trackManager.getLapLength(0))
+      // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；不参与圈速记录，保持原行为）
+      updatePlayerFrame(dt, input2, this.race.player2, this.carConfig, this.trackManager.getLapLength(1))
 
       updateCollisions(this.race, dt, this.splitMode)
 
+      // 完赛判定：P1/P2 各自按本世界圈长/总圈数计算（分屏时 P2 独立判定）
       const finishedP1 =
         lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
       const finishedP2 =
         this.splitMode &&
-        lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
+        lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
       if (finishedP1 || finishedP2) this.applyPhase(PHASE_FINISHED)
     }
 
-    // 渲染：菜单阶段渲染缓慢滚动的赛道预览（分屏左右两区域都渲染，修复 P2 黑屏）
+    // 渲染：菜单阶段渲染缓慢滚动的赛道预览（分屏左右两区域各渲染各自赛道世界）
     const w = window.innerWidth
     if (this.phase === PHASE_MENU) {
-      this.previewCameraZ = advancePreviewCameraZ(this.previewCameraZ, dt, this.trackManager.getLapLength(0))
-      // 相机横向小幅摆动，让预览即使在直道也有动感
-      this.renderer.setCameraX(Math.sin(this.previewCameraZ * 0.001) * 0.3)
+      // 双预览相机按各自世界圈长推进（分屏时 P1/P2 预览独立滚动）
+      this.previewCameraZ[0] = advancePreviewCameraZ(
+        this.previewCameraZ[0],
+        dt,
+        this.trackManager.getLapLength(0),
+      )
+      this.previewCameraZ[1] = advancePreviewCameraZ(
+        this.previewCameraZ[1],
+        dt,
+        this.trackManager.getLapLength(1),
+      )
+      // 相机横向小幅摆动，让预览即使在直道也有动感（以 P1 预览位置为准）
+      this.renderer.setCameraX(Math.sin(this.previewCameraZ[0] * 0.001) * 0.3)
       if (this.splitMode) {
-        this.renderer.renderRegion(this.previewCameraZ, 0, w / 2, [], 0)
-        this.renderer.renderRegion(this.previewCameraZ, w / 2, w / 2, [], 0)
+        this.renderer.renderRegion(
+          this.previewCameraZ[0],
+          0,
+          w / 2,
+          [],
+          0,
+          viewFor(this.race.tracks[0]),
+        )
+        this.renderer.renderRegion(
+          this.previewCameraZ[1],
+          w / 2,
+          w / 2,
+          [],
+          0,
+          viewFor(this.race.tracks[1]),
+        )
         // 交界处深色分隔线：覆盖两区域近处路缘石交错瑕疵（标准分屏做法）
         this.renderer.drawDivider(w / 2)
       } else {
-        this.renderer.render(this.previewCameraZ, [], 0)
+        this.renderer.render(this.previewCameraZ[0], [], 0, viewFor(this.race.tracks[0]))
       }
     }
     else if (this.splitMode) {
@@ -312,6 +374,7 @@ export class GameLoop {
         w / 2,
         this.race.player1.driftState.smoke,
         this.race.player1.raceTime,
+        viewFor(this.race.tracks[0]),
       )
       this.renderer.setCameraX(this.race.player2.carState.position)
       this.renderer.renderRegion(
@@ -320,6 +383,7 @@ export class GameLoop {
         w / 2,
         this.race.player2.driftState.smoke,
         this.race.player2.raceTime,
+        viewFor(this.race.tracks[1]),
       )
       // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
       // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
@@ -331,6 +395,7 @@ export class GameLoop {
         this.race.player1.cameraZ,
         this.race.player1.driftState.smoke,
         this.race.player1.raceTime,
+        viewFor(this.race.tracks[0]),
       )
     }
 
@@ -340,8 +405,7 @@ export class GameLoop {
       this.carConfig,
       this.bestTime,
       this.splitMode,
-      this.trackManager.getLapLength(0),
-      this.trackManager.getTotalLaps(0),
+      this.race.tracks,
       this.phase,
     )
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)

@@ -70,6 +70,7 @@ interface Environment {
   fireKey: (code: string) => void
   driveFrames: (count: number) => void
   phase: () => Phase | undefined
+  debugValue: (key: string) => unknown
   getCanvas: () => MockCanvas
   getElement: (id: string) => StubElement
 }
@@ -155,11 +156,15 @@ function stubEnvironment(split = false): Environment {
   }
   const phase = (): Phase | undefined =>
     (windowStub as unknown as { __gameDebug?: { phase: Phase } }).__gameDebug?.phase
+  /** 读取 window.__gameDebug 任意字段（installDebugHook 注入的运行时状态） */
+  const debugValue = (key: string): unknown =>
+    (windowStub as unknown as { __gameDebug?: Record<string, unknown> }).__gameDebug?.[key]
 
   return {
     fireKey,
     driveFrames,
     phase,
+    debugValue,
     getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
   }
@@ -243,5 +248,46 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.driveFrames(2)
     expect(countDivider()).toBeGreaterThan(menuDivider)
     expect(splitEnv.phase()).toBe(PHASE_RACING)
+  })
+
+  it('分屏模式：P1/P2 独立按键选择各自赛道（Digit2→highway、Digit8→highway、Digit9→s-curve）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
+
+    splitEnv.fireKey('Digit2')
+    expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
+
+    // P2 键位与 P1 对称：Digit7→index0(classic)、Digit8→index1(highway)、Digit9→index2(s-curve)
+    splitEnv.fireKey('Digit8')
+    expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('highway')
+
+    splitEnv.fireKey('Digit9')
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
+
+    // 选赛道不退出菜单（返回后仍在 PHASE_MENU）
+    expect(splitEnv.phase()).toBe(PHASE_MENU)
+  })
+
+  it('单人模式：Digit7/8/9 不改变赛道选择（仍 classic），仅触发开始游戏', () => {
+    new GameLoop()
+    env.fireKey('Digit7')
+    expect(env.debugValue('selectedTrack')).toBe('classic')
+    expect(env.debugValue('selectedTrack2')).toBe('classic')
+    // 7/8/9 在非分屏不选赛道：走"任意键开始"路径进入比赛
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('分屏模式：P1 全油门跑完 3 圈（classic）进入结算，P2 静止不污染判定', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
+    // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
+    splitEnv.fireKey('KeyW')
+    splitEnv.driveFrames(2500)
+    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
   })
 })

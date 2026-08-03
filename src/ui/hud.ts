@@ -1,5 +1,6 @@
 import type { CarConfig } from '../physics/car'
 import type { RaceState } from '../game/state'
+import type { TrackContext } from '../game/track-context'
 import { formatLap, formatSpeed, formatTime, lapFromZ } from './format'
 import { PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
 
@@ -23,15 +24,15 @@ export interface HudElements {
   driftScoreValue: HTMLSpanElement
 }
 
-/** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示 */
+/** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。
+ *  圈数按各自赛道世界计算：P1 用 tracks[0]（圈长/总圈数），P2 用 tracks[1]。 */
 export function updateHud(
   elements: HudElements,
   race: RaceState,
   carConfig: CarConfig,
   bestTime: number | null,
   splitMode: boolean,
-  lapLength: number,
-  totalLaps: number,
+  tracks: [TrackContext, TrackContext],
   phase: Phase,
 ): void {
   // 分屏时切换布局类：P1 HUD 定位左侧区域上方、P2 HUD 定位右侧区域上方
@@ -63,7 +64,10 @@ export function updateHud(
   elements.hudLap.hidden = false
   elements.hudTime.hidden = false
   elements.hudSpeed.textContent = formatSpeed(race.player1.carState.speed, carConfig.maxSpeed)
-  elements.hudLap.textContent = formatLap(lapFromZ(race.player1.cameraZ, lapLength), totalLaps)
+  elements.hudLap.textContent = formatLap(
+    lapFromZ(race.player1.cameraZ, tracks[0].lapLength),
+    tracks[0].totalLaps,
+  )
   elements.hudTime.textContent = formatTime(race.player1.raceTime)
 
   elements.hudBest.hidden = bestTime === null
@@ -78,7 +82,10 @@ export function updateHud(
   elements.hudTime2.hidden = !splitMode
   if (splitMode) {
     elements.hudSpeed2.textContent = formatSpeed(race.player2.carState.speed, carConfig.maxSpeed)
-    elements.hudLap2.textContent = formatLap(lapFromZ(race.player2.cameraZ, lapLength), totalLaps)
+    elements.hudLap2.textContent = formatLap(
+      lapFromZ(race.player2.cameraZ, tracks[1].lapLength),
+      tracks[1].totalLaps,
+    )
     elements.hudTime2.textContent = formatTime(race.player2.raceTime)
   }
 
