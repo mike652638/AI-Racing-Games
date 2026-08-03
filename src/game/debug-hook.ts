@@ -21,6 +21,7 @@ declare global {
       readonly touchActive: boolean
       readonly volume: number
       readonly rainPlaying: boolean
+      readonly challengeTimeLeft: number | null
     }
   }
 }
@@ -44,6 +45,7 @@ export interface DebugHookSources {
   touchActive: () => boolean
   volume: () => number
   rainPlaying: () => boolean
+  challengeTimeLeft: () => number | null
 }
 
 /** 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取） */
@@ -99,6 +101,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get rainPlaying() {
       return sources.rainPlaying()
+    },
+    get challengeTimeLeft() {
+      return sources.challengeTimeLeft()
     },
   }
 }

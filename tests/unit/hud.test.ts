@@ -298,3 +298,15 @@ describe('hud 漂移得分 MAX 标记（F6）', () => {
     expect(elements.driftScoreValue.textContent).toBe('12345')
   })
 })
+
+describe('hud 挑战计时器类型兼容（G1）', () => {
+  it('challengeTimer 可选字段存在时 updateHud 不抛错且不干预（显隐/文本由 game-loop 帧块处理）', () => {
+    const elements = createMockHudElements()
+    const el = elements as unknown as { challengeTimer?: { hidden: boolean; textContent: string } }
+    el.challengeTimer = { hidden: false, textContent: '剩余 60.0s' }
+    const race = createRaceState()
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    // updateHud 不动 challengeTimer（非 HUD 管辖区），对象保持原样不抛错
+    expect(el.challengeTimer).toEqual({ hidden: false, textContent: '剩余 60.0s' })
+  })
+})

@@ -33,6 +33,8 @@ export interface HudElements {
   driftCombo?: HTMLDivElement
   /** 触屏暂停按钮（#pause-btn，RACING 阶段显示；click 由 GameLoop 构造器绑定） */
   pauseBtn?: HTMLButtonElement
+  /** 挑战倒计时（#challenge-timer，G1：显隐/文本由 game-loop 帧块处理，本模块不干预） */
+  challengeTimer?: HTMLDivElement
 }
 
 /** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。

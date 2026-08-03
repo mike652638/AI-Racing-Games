@@ -21,6 +21,7 @@ import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
+import { CHALLENGE_SECONDS } from './constants'
 import type { PlayerState } from './player-state'
 
 /** 圈数记录包装：updatePlayerFrame 内推进，调用方与 RaceState.lastLap 桥接 */
@@ -111,6 +112,10 @@ export class GameLoop {
   private readonly splitMode: boolean
   /** 热座轮流模式（?hotseat=1）：双人先后跑同赛道比成绩；split 优先互斥 */
   private readonly hotseatMode: boolean
+  /** 漂移挑战模式（?challenge=1）：60 秒限时刷分；与 split/hotseat 互斥 */
+  private readonly challengeMode: boolean
+  /** 挑战倒计时 HUD 元素（#challenge-timer，防御式缓存；显隐/文本由帧块处理） */
+  private challengeTimer: HTMLDivElement | null = null
   /** 热座当前回合玩家（1 = P1 先跑，交棒后为 2） */
   private hotseatPlayer: 1 | 2 = 1
   /** 热座 P1 回合完赛用时（交棒时快照，供 round 2 结算胜负比较） */
@@ -165,18 +170,23 @@ export class GameLoop {
     const params = new URLSearchParams(window.location.search)
     this.splitMode = params.has('split')
     this.hotseatMode = params.has('hotseat') && !this.splitMode
+    // G1（G1）：挑战模式——限时刷分（60 秒收束），与分屏/热座互斥
+    this.challengeMode = params.has('challenge') && !this.splitMode && !this.hotseatMode
     // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）；G7：分轨音量独立读取
     this.volume = this.loadVolume()
     this.musicVolume = this.loadMusicVolume()
     this.sfxVolume = this.loadSfxVolume()
 
-    // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
+    // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 挑战限时 / 默认单屏
     if (this.splitMode) {
       const menuHint = document.getElementById('menu-hint')
       if (menuHint) menuHint.textContent = 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始'
     } else if (this.hotseatMode) {
       const menuHint = document.getElementById('menu-hint')
       if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道'
+    } else if (this.challengeMode) {
+      const menuHint = document.getElementById('menu-hint')
+      if (menuHint) menuHint.textContent = '挑战模式：60 秒限时刷分 · 1-9 选赛道 · 任意键开始'
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -323,6 +333,8 @@ export class GameLoop {
       touchActive: () => this.joystick.isActive(),
       volume: () => this.volume,
       rainPlaying: () => this.rainSound?.isPlaying() ?? false,
+      challengeTimeLeft: () =>
+        this.challengeMode ? Math.max(0, CHALLENGE_SECONDS - this.race.player1.raceTime) : null,
     })
 
     window.addEventListener('keydown', this.onKeyDown)
@@ -552,7 +564,8 @@ export class GameLoop {
       if (winner) {
         winStats = recordWin(this.hotseatMode ? 'hotseat' : 'split', winner)
       }
-      if (finishedP1 && Math.round(this.race.player1.driftState.score) > 0) {
+      // G1（G1）：挑战模式无圈数完赛标记——P1 记分条件放宽为「完赛或挑战模式」且正分
+      if ((finishedP1 || this.challengeMode) && Math.round(this.race.player1.driftState.score) > 0) {
         addDriftScore({
           player: 'P1',
           trackId: this.trackManager.getTrackId(0),
@@ -560,6 +573,7 @@ export class GameLoop {
           time: this.race.player1.raceTime,
         })
       }
+      // 挑战模式单屏：P2 恒不参与记分（finishedP2 恒 false，条件天然跳过）
       if (finishedP2 && (this.splitMode || this.hotseatMode) && Math.round(this.race.player2.driftState.score) > 0) {
         addDriftScore({
           player: 'P2',
@@ -594,6 +608,7 @@ export class GameLoop {
         prevP1Time: this.prevP1Time,
         driftWinner,
         winStats,
+        challengeMode: this.challengeMode,
       },
     )
     if (newPhase === PHASE_FINISHED) {
@@ -735,6 +750,14 @@ export class GameLoop {
       else this.rainSound?.stop()
       // G3（G3）：雨天物理——与雨声同公式同源（raceTime 三态 phase 2）；热座/分屏 P2 世界统一同一 wet 值
       const wet = Math.floor(this.race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
+      // G1（G1）：挑战倒计时 HUD——仅挑战模式且比赛阶段可见，文本显示剩余秒数
+      if (this.challengeMode) {
+        this.challengeTimer ??= document.getElementById('challenge-timer') as HTMLDivElement | null
+        if (this.challengeTimer) {
+          this.challengeTimer.hidden = this.phase !== PHASE_RACING
+          this.challengeTimer.textContent = `剩余 ${Math.max(0, CHALLENGE_SECONDS - this.race.player1.raceTime).toFixed(1)}s`
+        }
+      }
       // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
       // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
       // P4（P4）：传玩家位置启用车流避让 AI（逼近同车道车流时让道）
@@ -833,6 +856,12 @@ export class GameLoop {
       const finishedP2 =
         (this.splitMode || this.hotseatMode) &&
         lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
+      // G1（G1）：挑战模式限时收束——raceTime 达 CHALLENGE_SECONDS 即结束（不看圈数）；
+      // 判定在正常完赛判定之前：限时先到时走挑战收束，正常完赛（3 圈）先到时仍走完赛路径（结算面板按 challengeMode 显示挑战文案）
+      if (this.challengeMode && this.race.player1.raceTime >= CHALLENGE_SECONDS) {
+        this.applyPhase(PHASE_FINISHED)
+        return
+      }
       if (finishedP1 || finishedP2) this.applyPhase(PHASE_FINISHED)
     }
 

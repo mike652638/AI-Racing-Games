@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHALLENGE_SECONDS,
   COLLISION_COOLDOWN,
   COLLISION_SPEED_FACTOR,
   DRIFT_CHARGE_THRESHOLD,
@@ -21,6 +22,10 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
     expect(DRIFT_CHARGE_THRESHOLD).toBe(0.25)
     expect(DRIFT_SPEED_FACTOR).toBe(0.985)
     expect(DRIFT_SCORE_MAX).toBe(99999)
+  })
+
+  it('挑战模式常量值与约定一致（G1：限时 60 秒刷分）', () => {
+    expect(CHALLENGE_SECONDS).toBe(60)
   })
 
   it('碰撞常量值与约定一致', () => {

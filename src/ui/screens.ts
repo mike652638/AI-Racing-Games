@@ -6,6 +6,7 @@ import {
   loadBestDriftScoreFor,
   loadBestTime,
   loadBestTimeFor,
+  loadDriftTop,
   saveBestDriftScore,
   saveBestDriftScoreFor,
   saveBestTime,
@@ -56,7 +57,8 @@ export interface ScreenElements {
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
  *  热座字段：hotseatMode 开热座、hotseatRound 当前回合（1 | 2）、prevP1Time 为 P1 回合快照用时；
  *  漂移竞速字段：driftWinner 为分屏双完赛时的漂移得分胜者（非分屏/未双完赛恒 null）；
- *  胜场统计字段：winStats 为 recordWin 后的最新统计（平手/单人不记时 null） */
+ *  胜场统计字段：winStats 为 recordWin 后的最新统计（平手/单人不记时 null）；
+ *  挑战模式字段：challengeMode 为 ?challenge=1 限时刷分（结算面板走挑战分支，G1） */
 export interface FinishPanelOptions {
   splitMode: boolean
   finishedP1: boolean
@@ -66,6 +68,7 @@ export interface FinishPanelOptions {
   prevP1Time: number | null
   driftWinner: 'P1' | 'P2' | null
   winStats: WinStats | null
+  challengeMode: boolean
 }
 
 /**
@@ -111,7 +114,28 @@ function fillFinishPanel(
   race.finishShown = true
 
   const trackId0 = race.tracks[0].def.id
-  if (opts.hotseatMode && opts.hotseatRound === 2 && opts.prevP1Time !== null) {
+  if (opts.challengeMode) {
+    // G1（G1）：挑战模式结算——限时刷分展示：时间行'挑战结束'、漂移得分行、漂移榜排名（前 10 内）
+    const score = Math.round(race.player1.driftState.score)
+    elements.finishTime.textContent = '挑战结束'
+    elements.finishSpeed.textContent = ''
+    // 漂移榜排名：loadDriftTop() 按 score 降序，findIndex 匹配本局得分 → 名次（无匹配/挤出榜外显示空）
+    const top = loadDriftTop()
+    const idx = top.findIndex((e) => e.score === score)
+    elements.finishBest.textContent = idx >= 0 ? `漂移榜第 ${idx + 1} 名` : ''
+    elements.finishScore.textContent = `挑战漂移得分 ${score}`
+    if (race.player1.driftState.score > 0) {
+      const isDriftRecord = saveBestDriftScore(score, trackId0)
+      const bestDriftScore = loadBestDriftScore(trackId0)
+      if (isDriftRecord) {
+        elements.finishScore.textContent += ' NEW DRIFT RECORD!'
+      }
+      else if (bestDriftScore !== null) {
+        elements.finishScore.textContent += ` (最高 ${bestDriftScore})`
+      }
+    }
+    elements.finishLaps.textContent = ''
+  } else if (opts.hotseatMode && opts.hotseatRound === 2 && opts.prevP1Time !== null) {
     // 热座 round 2：P1 行显示上一回合快照用时（不写存档、不显示纪录横幅，防止覆盖 P1 纪录）
     elements.finishTime.textContent = `P1 用时 ${formatTime(opts.prevP1Time)}`
     elements.finishSpeed.textContent = ''

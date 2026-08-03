@@ -13,6 +13,9 @@ export const DRIFT_SPEED_FACTOR = 0.985
 /** 单次漂移得分上限（当前仅为注册，score clamp 逻辑未落地） */
 export const DRIFT_SCORE_MAX = 99999
 
+/** 漂移挑战模式限时时长（秒，?challenge=1 时按此倒计时收束对局） */
+export const CHALLENGE_SECONDS = 60
+
 /** 碰撞速度惩罚因子（速度 ×0.5） */
 export const COLLISION_SPEED_FACTOR = 0.5
 /** 碰撞冷却时长（秒），冷却期内不重复触发 */

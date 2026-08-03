@@ -761,6 +761,27 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(saved).toBe('0.8')
   })
 
+  it('G1（G1）：挑战模式限时刷分——驱动到限时后 finished 且结算面板显示挑战文案', () => {
+    const chEnv = stubEnvironment('?challenge=1')
+    new GameLoop()
+    // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写）
+    expect(chEnv.getElement('menu-hint').textContent).toContain('挑战')
+    chEnv.fireKey('Enter')
+    chEnv.fireKey('KeyW')
+    // 首帧挑战剩余时间 60s（raceTime 0）
+    const first = chEnv.debugValue('challengeTimeLeft')
+    expect(first).toBe(60)
+    // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
+    // 结算面板走挑战分支 → finish-time '挑战结束'
+    chEnv.driveFrames(1250)
+    expect(chEnv.debugValue('phase')).toBe('finished')
+    expect(chEnv.getElement('finish-time').textContent).toBe('挑战结束')
+    // 挑战剩余时间递减（finished 后帧循环停止推进 raceTime，定格在完赛时刻）
+    const last = chEnv.debugValue('challengeTimeLeft')
+    expect(typeof last).toBe('number')
+    expect((last as number) < (first as number)).toBe(true)
+  }, 15000)
+
   it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: 15000 }, () => {
     new GameLoop()
     // Enter 开始比赛：音频惰性创建块实例化 RainSound/CollisionSound（注入 masterGain）
