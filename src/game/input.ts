@@ -1,13 +1,7 @@
-import {
-  PLAYER1_MAPPING,
-  PLAYER2_MAPPING,
-  inputFromKeys,
-} from '../physics/input'
+import { PLAYER1_MAPPING, PLAYER2_MAPPING, inputFromKeys } from '../physics/input'
 import type { CarInput } from '../physics/car'
 
-export function createInputManager(
-  win: Window,
-): {
+export function createInputManager(win: Window): {
   pressed: Set<string>
   getP1Input: () => CarInput
   getP2Input: () => CarInput

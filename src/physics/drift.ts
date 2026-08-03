@@ -1,9 +1,4 @@
-import {
-  DRIFT_CHARGE_THRESHOLD,
-  DRIFT_SCORE_MAX,
-  DRIFT_SPEED_FACTOR,
-  DRIFT_STEER_THRESHOLD,
-} from '../game/constants'
+import { DRIFT_CHARGE_THRESHOLD, DRIFT_SCORE_MAX, DRIFT_SPEED_FACTOR, DRIFT_STEER_THRESHOLD } from '../game/constants'
 import type { CarConfig, CarInput, CarState } from './car'
 
 export interface SmokeParticle {
@@ -74,9 +69,7 @@ export function updateDrift(
   const charging =
     Math.abs(input.steer) > DRIFT_STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
 
-  next.charge = charging
-    ? Math.min(next.charge + dt, 1)
-    : Math.max(next.charge - dt * CHARGE_DECAY, 0)
+  next.charge = charging ? Math.min(next.charge + dt, 1) : Math.max(next.charge - dt * CHARGE_DECAY, 0)
   next.active = next.charge > DRIFT_CHARGE_THRESHOLD
 
   // 连击：仅 active 期间累积 comboTimer，满窗口 combo+1；得分按倍率 1+combo*0.25 累计并 clamp

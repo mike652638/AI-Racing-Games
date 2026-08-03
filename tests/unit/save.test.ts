@@ -287,8 +287,12 @@ describe('漂移 TOP10（DriftEntry API）', () => {
 })
 
 describe('对局记录（MatchEntry API）', () => {
-  const entry = (winner: 'P1' | 'P2', p1Score: number, p2Score: number, trackId = 'classic'): MatchEntry =>
-    ({ winner, p1Score, p2Score, trackId })
+  const entry = (winner: 'P1' | 'P2', p1Score: number, p2Score: number, trackId = 'classic'): MatchEntry => ({
+    winner,
+    p1Score,
+    p2Score,
+    trackId,
+  })
 
   it('无存档时 loadMatchTop 返回空数组', () => {
     expect(loadMatchTop(fakeStorage())).toEqual([])

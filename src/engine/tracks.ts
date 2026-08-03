@@ -1,9 +1,4 @@
-import {
-  createSmoothTrack,
-  DEFAULT_CONTROL_POINTS,
-  type CurveControlPoint,
-  type Segment,
-} from './track'
+import { createSmoothTrack, DEFAULT_CONTROL_POINTS, type CurveControlPoint, type Segment } from './track'
 
 export interface TrackDef {
   /** 唯一标识（URL/存档用） */
@@ -163,11 +158,27 @@ export const TRACK_DEFS: TrackDef[] = [
   { id: 'highway', name: '高速公路', difficulty: 2, controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3, trafficCount: 12 },
   { id: 's-curve', name: 'S 弯挑战', difficulty: 2, controlPoints: SCURVE_CONTROL_POINTS, laps: 2, trafficCount: 6 },
   { id: 'island', name: '环岛巡回', difficulty: 2, controlPoints: ISLAND_CONTROL_POINTS, laps: 3, trafficCount: 10 },
-  { id: 'canyon', name: '峡谷疾驰', difficulty: 3, controlPoints: CANYON_CONTROL_POINTS, laps: 2, trafficCount: 8, timeOfDay: 'night' },
+  {
+    id: 'canyon',
+    name: '峡谷疾驰',
+    difficulty: 3,
+    controlPoints: CANYON_CONTROL_POINTS,
+    laps: 2,
+    trafficCount: 8,
+    timeOfDay: 'night',
+  },
   { id: 'desert', name: '沙漠疾驰', difficulty: 1, controlPoints: DESERT_CONTROL_POINTS, laps: 3, trafficCount: 10 },
   { id: 'forest', name: '森林穿梭', difficulty: 2, controlPoints: FOREST_CONTROL_POINTS, laps: 2, trafficCount: 8 },
   { id: 'coast', name: '海岸公路', difficulty: 2, controlPoints: COAST_CONTROL_POINTS, laps: 3, trafficCount: 12 },
-  { id: 'alpine', name: '山岳险道', difficulty: 3, controlPoints: ALPINE_CONTROL_POINTS, laps: 2, trafficCount: 6, timeOfDay: 'night' },
+  {
+    id: 'alpine',
+    name: '山岳险道',
+    difficulty: 3,
+    controlPoints: ALPINE_CONTROL_POINTS,
+    laps: 2,
+    trafficCount: 6,
+    timeOfDay: 'night',
+  },
 ]
 
 /** 按赛道定义生成分段数据 */

@@ -28,7 +28,7 @@ export function generateMountainProfile(width: number, seed: number, layers = 3)
   for (let x = 0; x < width; x++) {
     let value = 0
     for (let i = 0; i < layers; i++) {
-      const freq = (Math.PI * 2 / width) * (i + 1) * (1 + random() * 0.5)
+      const freq = ((Math.PI * 2) / width) * (i + 1) * (1 + random() * 0.5)
       value += Math.sin(x * freq + phase[i]) * amps[i]
     }
     const normalized = 0.5 + value / (2 * ampSum)
@@ -39,6 +39,6 @@ export function generateMountainProfile(width: number, seed: number, layers = 3)
 
 /** 视差偏移：cameraZ 按 factor 缩放后取模到 [0, width) */
 export function parallaxOffset(cameraZ: number, factor: number, width: number): number {
-  const shifted = ((cameraZ * factor) % width + width) % width
+  const shifted = (((cameraZ * factor) % width) + width) % width
   return Math.floor(shifted)
 }

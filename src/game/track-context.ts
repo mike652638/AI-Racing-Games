@@ -1,11 +1,6 @@
 import { buildRoadStrips, type RoadStrip } from '../engine/road-strip'
 import { SEGMENT_LENGTH, type Segment } from '../engine/track'
-import {
-  buildCurvePrefixSum,
-  buildSpriteIndex,
-  createRoadsideSprites,
-  type Sprite,
-} from '../engine/sprites'
+import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites, type Sprite } from '../engine/sprites'
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
 import { createTraffic, type TrafficCar } from '../engine/traffic'
 import { TRAFFIC_DEFAULT_COUNT } from './constants'

@@ -32,11 +32,7 @@ export interface Projected {
  * 地面平面 y=0，相机朝 +z 方向，z 增大即远离相机。
  * 相机后方或平齐的点返回 null（不可见）。
  */
-export function project(
-  opts: ProjectionOptions,
-  camera: Camera3D,
-  point: Point3D,
-): Projected | null {
+export function project(opts: ProjectionOptions, camera: Camera3D, point: Point3D): Projected | null {
   const dz = point.z - camera.z
   if (dz <= 0) {
     return null

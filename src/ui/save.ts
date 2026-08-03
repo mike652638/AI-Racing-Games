@@ -74,8 +74,7 @@ function getStorage(): Storage | null {
     if (typeof localStorage !== 'undefined') {
       return window.localStorage
     }
-  }
-  catch {
+  } catch {
     // localStorage 被禁用（隐私模式等）
   }
   return null
@@ -201,8 +200,7 @@ export function loadWins(mode: 'hotseat' | 'split', storage: Storage | null = ge
         streakPlayer: parsed.streakPlayer,
       }
     }
-  }
-  catch {
+  } catch {
     // JSON 损坏回退默认
   }
   return fallback
@@ -252,8 +250,7 @@ export function loadDriftTop(storage: Storage | null = getStorage()): DriftEntry
         typeof e.time === 'number',
     )
     return entries.sort((a, b) => b.score - a.score)
-  }
-  catch {
+  } catch {
     // JSON 损坏回退空数组
     return []
   }
@@ -300,8 +297,7 @@ export function loadMatchTop(storage: Storage | null = getStorage()): MatchEntry
         Number.isFinite(e.p2Score) &&
         typeof e.trackId === 'string',
     )
-  }
-  catch {
+  } catch {
     // JSON 损坏回退空数组
     return []
   }

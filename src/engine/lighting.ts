@@ -24,12 +24,7 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * Math.max(0, Math.min(1, t))
 }
 
-export function updateLighting(
-  timeSec: number,
-  overcast = false,
-  raining = false,
-  night = false,
-): LightingColors {
+export function updateLighting(timeSec: number, overcast = false, raining = false, night = false): LightingColors {
   // 夜晚模式（赛道级）：锁定深暗蓝紫/暗绿色板，不随昼夜时段插值；其余路径与旧版逐字节一致
   if (night) {
     return {
@@ -43,7 +38,7 @@ export function updateLighting(
   // 非 overcast/raining 时 build === hsl，输出与历史版本逐字节一致；阴天/雨天降饱和压暗
   // （雨天复用阴天配色，仅语义区分，供 renderer 三态天气循环消费）
   const build = overcast || raining ? overcastHsl : hsl
-  const phase = ((timeSec % CYCLE_SECONDS) + CYCLE_SECONDS) % CYCLE_SECONDS / CYCLE_SECONDS
+  const phase = (((timeSec % CYCLE_SECONDS) + CYCLE_SECONDS) % CYCLE_SECONDS) / CYCLE_SECONDS
 
   if (phase < 0.25) {
     const t = phase / 0.25

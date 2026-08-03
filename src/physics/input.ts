@@ -47,11 +47,7 @@ export interface TouchPoint {
  * 触屏四分区映射为车辆输入：
  * 左上=刹车、右上=油门、左下=左转、右下=右转；多点取并集
  */
-export function touchToCarInput(
-  touches: TouchPoint[],
-  width: number,
-  height: number,
-): CarInput {
+export function touchToCarInput(touches: TouchPoint[], width: number, height: number): CarInput {
   let up = false
   let down = false
   let left = false

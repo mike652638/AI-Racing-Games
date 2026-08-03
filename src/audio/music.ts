@@ -121,22 +121,16 @@ export class MusicPlayer {
   private playStep(step: number, when: number): void {
     // 分发由纯函数 stepEvents 决定（与重构前逐字节一致：bass 恒播、melody 隔拍、hat 每 4 拍）
     const { bass, melody, hat } = stepEvents(step)
-    this.oscillator(noteToFreq(bass), 'square', 0.1, when, tickMsForBpm(BPM) / 1000 * 0.9)
+    this.oscillator(noteToFreq(bass), 'square', 0.1, when, (tickMsForBpm(BPM) / 1000) * 0.9)
     if (melody !== null) {
-      this.oscillator(noteToFreq(melody), 'sawtooth', 0.06, when, tickMsForBpm(BPM) / 1000 * 0.5)
+      this.oscillator(noteToFreq(melody), 'sawtooth', 0.06, when, (tickMsForBpm(BPM) / 1000) * 0.5)
     }
     if (hat) {
       this.hat(when)
     }
   }
 
-  private oscillator(
-    freq: number,
-    type: OscillatorType,
-    gainValue: number,
-    when: number,
-    duration: number,
-  ): void {
+  private oscillator(freq: number, type: OscillatorType, gainValue: number, when: number, duration: number): void {
     const osc = this.ctx.createOscillator()
     const gain = this.ctx.createGain()
     osc.type = type

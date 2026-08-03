@@ -7,10 +7,7 @@ import { createTrackContext, type TrackContext } from '../../src/game/track-cont
 import { DRIFT_SCORE_MAX } from '../../src/game/constants'
 
 /** 双玩家各自独立赛道世界：P1 经典（3 圈）、P2 S 弯（2 圈） */
-const TRACKS: [TrackContext, TrackContext] = [
-  createTrackContext(TRACK_DEFS[0]),
-  createTrackContext(TRACK_DEFS[2]),
-]
+const TRACKS: [TrackContext, TrackContext] = [createTrackContext(TRACK_DEFS[0]), createTrackContext(TRACK_DEFS[2])]
 
 /** 用对象字面量模拟 HUD DOM 元素：仅暴露 updateHud 使用的 hidden/textContent/classList */
 function createMockHudElements(): HudElements {

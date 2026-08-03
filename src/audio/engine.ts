@@ -29,7 +29,7 @@ export class EngineSound {
     this.filter = ctx.createBiquadFilter()
     this.filter.type = 'lowpass'
     this.filter.frequency.value = 800
-    this.oscs = [0, 7].map(detune => {
+    this.oscs = [0, 7].map((detune) => {
       const osc = ctx.createOscillator()
       osc.type = 'sawtooth'
       osc.detune.value = detune
@@ -49,7 +49,7 @@ export class EngineSound {
   setSpeedRatio(ratio: number): void {
     const { frequency, gain } = computeEngineParams(ratio)
     const now = this.ctx.currentTime
-    this.oscs.forEach(osc => osc.frequency.setTargetAtTime(frequency, now, 0.05))
+    this.oscs.forEach((osc) => osc.frequency.setTargetAtTime(frequency, now, 0.05))
     this.filter.frequency.setTargetAtTime(300 + frequency * 6, now, 0.05)
     this.gain.gain.setTargetAtTime(gain, now, 0.05)
   }

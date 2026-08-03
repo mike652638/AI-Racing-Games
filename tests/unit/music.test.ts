@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  BASS_LINE,
-  MELODY_LINE,
-  nextStep,
-  noteToFreq,
-  stepEvents,
-  tickMsForBpm,
-} from '../../src/audio/music'
+import { BASS_LINE, MELODY_LINE, nextStep, noteToFreq, stepEvents, tickMsForBpm } from '../../src/audio/music'
 
 describe('noteToFreq 音符转频率', () => {
   it('A4 为 440Hz', () => {

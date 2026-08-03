@@ -52,8 +52,14 @@ describe('JoystickUI', () => {
   })
 
   it('F3（F3）：reset 清空指针跟踪与输入缓存（isActive false、getInput 零输入）', () => {
-    // stub 文档：createElement/body 返回带 style/appendChild/clientWidth 的最小元素替身
-    const elementStub = () => ({ style: {}, className: '', appendChild: vi.fn(), clientWidth: 0 })
+    // stub 文档：createElement/body 返回带 style/classList/appendChild/clientWidth 的最小元素替身
+    const elementStub = () => ({
+      style: {},
+      className: '',
+      classList: { add: vi.fn(), remove: vi.fn() },
+      appendChild: vi.fn(),
+      clientWidth: 0,
+    })
     vi.stubGlobal('document', {
       createElement: (): unknown => elementStub(),
       body: elementStub(),

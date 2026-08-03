@@ -86,10 +86,7 @@ export function updateHud(
   elements.hudLap.hidden = false
   elements.hudTime.hidden = false
   elements.hudSpeed.textContent = formatSpeed(race.player1.carState.speed, carConfig.maxSpeed)
-  elements.hudLap.textContent = formatLap(
-    lapFromZ(race.player1.cameraZ, tracks[0].lapLength),
-    tracks[0].totalLaps,
-  )
+  elements.hudLap.textContent = formatLap(lapFromZ(race.player1.cameraZ, tracks[0].lapLength), tracks[0].totalLaps)
   elements.hudTime.textContent = formatTime(race.player1.raceTime)
 
   elements.hudBest.hidden = bestTime === null
@@ -105,10 +102,7 @@ export function updateHud(
   if (elements.hudBest2) elements.hudBest2.hidden = !splitMode || bestTime2 === null
   if (splitMode) {
     elements.hudSpeed2.textContent = formatSpeed(race.player2.carState.speed, carConfig.maxSpeed)
-    elements.hudLap2.textContent = formatLap(
-      lapFromZ(race.player2.cameraZ, tracks[1].lapLength),
-      tracks[1].totalLaps,
-    )
+    elements.hudLap2.textContent = formatLap(lapFromZ(race.player2.cameraZ, tracks[1].lapLength), tracks[1].totalLaps)
     elements.hudTime2.textContent = formatTime(race.player2.raceTime)
     if (elements.hudBest2 && bestTime2 !== null) {
       elements.hudBest2.textContent = `BEST ${formatTime(bestTime2)}`
@@ -131,9 +125,7 @@ export function updateHud(
   if (driftPlayer.driftState.active) {
     // F6（F6）：得分达 DRIFT_SCORE_MAX 上限时显示 MAX 标记（drift.ts 已 clamp，非上限保持 Math.round 格式）
     elements.driftScoreValue.textContent =
-      driftPlayer.driftState.score >= DRIFT_SCORE_MAX
-        ? 'MAX'
-        : String(Math.round(driftPlayer.driftState.score))
+      driftPlayer.driftState.score >= DRIFT_SCORE_MAX ? 'MAX' : String(Math.round(driftPlayer.driftState.score))
   }
 
   // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*0.25)，否则隐藏

@@ -29,9 +29,7 @@ export function projectTraffic(
   camera: Camera3D,
 ): TrafficProjection[] {
   const farZ = cameraZ + DRAW_DISTANCE * SEGMENT_LENGTH
-  const seen = traffic
-    .filter((car) => car.z > cameraZ && car.z <= farZ)
-    .sort((a, b) => b.z - a.z)
+  const seen = traffic.filter((car) => car.z > cameraZ && car.z <= farZ).sort((a, b) => b.z - a.z)
 
   const result: TrafficProjection[] = []
   for (const car of seen) {

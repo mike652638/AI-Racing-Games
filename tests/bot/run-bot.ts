@@ -29,7 +29,7 @@ const reports: TrackReport[] = TRACK_DEFS.map((def) => {
     name: def.name,
     laps: def.laps,
     finished: result.finished,
-    lapTimesSec: result.lapTimes.map(t => Number(t.toFixed(3))),
+    lapTimesSec: result.lapTimes.map((t) => Number(t.toFixed(3))),
     totalTimeSec: Number(result.timeSec.toFixed(3)),
     avgSpeed: Number((result.distance / result.timeSec).toFixed(1)),
     violations: result.violations,
@@ -41,6 +41,6 @@ for (const report of reports) {
   console.log(JSON.stringify(report))
 }
 
-const ok = reports.every(r => r.finished && r.violations <= MAX_VIOLATIONS)
+const ok = reports.every((r) => r.finished && r.violations <= MAX_VIOLATIONS)
 console.log(ok ? `✅ bot 跑圈通过（${reports.length} 条赛道全部完成，0 违规超标）` : '❌ bot 跑圈失败')
 process.exit(ok ? 0 : 1)

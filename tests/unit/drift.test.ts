@@ -1,16 +1,19 @@
 import { describe, expect, test } from 'vitest'
-import {
-  driftSpeedFactor,
-  effectiveTurnRate,
-  updateDrift,
-  type DriftState,
-} from '../../src/physics/drift'
+import { driftSpeedFactor, effectiveTurnRate, updateDrift, type DriftState } from '../../src/physics/drift'
 import { createCarConfig } from '../../src/physics/car'
 import { DRIFT_SCORE_MAX } from '../../src/game/constants'
 
 const DT = 1 / 60
 
-const idleDrift = (): DriftState => ({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
+const idleDrift = (): DriftState => ({
+  charge: 0,
+  active: false,
+  lastSmoke: 0,
+  smoke: [],
+  score: 0,
+  combo: 0,
+  comboTimer: 0,
+})
 
 describe('漂移状态机', () => {
   test('高速强转向积累 charge 并激活漂移', () => {
@@ -93,15 +96,35 @@ describe('漂移状态机', () => {
 describe('漂移对物理的影响', () => {
   test('active 时转向率提升 1.5 倍', () => {
     const cfg = createCarConfig()
-    const active = effectiveTurnRate(cfg, { charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
+    const active = effectiveTurnRate(cfg, {
+      charge: 1,
+      active: true,
+      lastSmoke: 0,
+      smoke: [],
+      score: 0,
+      combo: 0,
+      comboTimer: 0,
+    })
     expect(active).toBeCloseTo(cfg.turnRate * 1.5, 10)
-    const idle = effectiveTurnRate(cfg, { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
+    const idle = effectiveTurnRate(cfg, {
+      charge: 0,
+      active: false,
+      lastSmoke: 0,
+      smoke: [],
+      score: 0,
+      combo: 0,
+      comboTimer: 0,
+    })
     expect(idle).toBe(cfg.turnRate)
   })
 
   test('active 时速度有损耗因子', () => {
-    expect(driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })).toBeCloseTo(0.985, 10)
-    expect(driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })).toBe(1)
+    expect(
+      driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }),
+    ).toBeCloseTo(0.985, 10)
+    expect(
+      driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }),
+    ).toBe(1)
   })
 })
 
@@ -110,7 +133,15 @@ describe('漂移得分', () => {
   const state = { position: 0.5, speed: 6000 }
   const steerInput = { throttle: 0, brake: false, steer: 1 }
   const idleInput = { throttle: 0, brake: false, steer: 0 }
-  const scored = (): DriftState => ({ charge: 1, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
+  const scored = (): DriftState => ({
+    charge: 1,
+    active: false,
+    lastSmoke: 0,
+    smoke: [],
+    score: 0,
+    combo: 0,
+    comboTimer: 0,
+  })
 
   test('漂移中按速度累计得分', () => {
     const drift = scored()
@@ -173,8 +204,15 @@ describe('漂移连击与得分上限', () => {
   const steerInput = { throttle: 0, brake: false, steer: 1 }
   const idleInput = { throttle: 0, brake: false, steer: 0 }
   /** 已激活（active=true）的漂移态：避免 updateDrift 的新漂移段检测重置 combo */
-  const activeDrift = (combo: number): DriftState =>
-    ({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo, comboTimer: 0 })
+  const activeDrift = (combo: number): DriftState => ({
+    charge: 1,
+    active: true,
+    lastSmoke: 0,
+    smoke: [],
+    score: 0,
+    combo,
+    comboTimer: 0,
+  })
 
   /** 持续漂移 frames 帧后返回状态（含 30 帧 charge 激活预热） */
   const driftFor = (frames: number, start: DriftState = idleDrift()): DriftState => {
@@ -233,8 +271,15 @@ describe('scoreMultiplier 加成（H1）', () => {
   const state = { position: 0.5, speed: 6000 }
   const steerInput = { throttle: 0, brake: false, steer: 1 }
   /** 已激活（active=true）漂移态：避免新段重置 combo */
-  const activeDrift = (combo: number): DriftState =>
-    ({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo, comboTimer: 0 })
+  const activeDrift = (combo: number): DriftState => ({
+    charge: 1,
+    active: true,
+    lastSmoke: 0,
+    smoke: [],
+    score: 0,
+    combo,
+    comboTimer: 0,
+  })
 
   test('scoreMultiplier=1.5 时得分 = 基准 ×1.5（挑战加成透传）', () => {
     const base = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0)

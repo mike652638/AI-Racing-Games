@@ -36,10 +36,7 @@ export function createRaceState(): RaceState {
   return {
     player1: createPlayerState(),
     player2: createPlayerState(),
-    tracks: [
-      createTrackContext(TRACK_DEFS[0]),
-      createTrackContext(TRACK_DEFS[0]),
-    ],
+    tracks: [createTrackContext(TRACK_DEFS[0]), createTrackContext(TRACK_DEFS[0])],
     collisionCount: 0,
     lapTimes: [],
     lastLap: 1,

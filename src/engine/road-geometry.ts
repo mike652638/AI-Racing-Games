@@ -19,12 +19,7 @@ export interface Quad {
 }
 
 /** 计算单个分段的四边形投影（纯函数），z 在相机后方返回 null */
-export function projectSegmentQuad(
-  opts: ProjectionOptions,
-  camera: Camera3D,
-  z: number,
-  centerX: number,
-): Quad | null {
+export function projectSegmentQuad(opts: ProjectionOptions, camera: Camera3D, z: number, centerX: number): Quad | null {
   const cx = centerX - camera.x
   const l1 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
   const l2 = project(opts, camera, {

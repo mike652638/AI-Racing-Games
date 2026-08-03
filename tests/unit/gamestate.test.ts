@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import {
-  nextPhase, togglePause,
-  PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED,
-} from '../../src/ui/gamestate'
+import { nextPhase, togglePause, PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED } from '../../src/ui/gamestate'
 
 describe('nextPhase', () => {
   test('菜单按任意键进入比赛', () => {

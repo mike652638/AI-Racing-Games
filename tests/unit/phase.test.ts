@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import {
-  PHASE_MENU,
-  PHASE_RACING,
-  PHASE_FINISHED,
-  PHASE_PAUSED,
-  type Phase,
-} from '../../src/game/phase'
+import { PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED, type Phase } from '../../src/game/phase'
 import { nextPhase, togglePause } from '../../src/game/phase-logic'
 
 describe('nextPhase（game/phase-logic）', () => {
