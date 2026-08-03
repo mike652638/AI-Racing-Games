@@ -3,6 +3,7 @@ import type { RaceState } from '../game/state'
 import type { TrackContext } from '../game/track-context'
 import { formatLap, formatSpeed, formatTime, lapFromZ } from './format'
 import { PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
+import { DRIFT_SCORE_MAX } from '../game/constants'
 
 /** HUD 全部 DOM 引用：P1/P2 速度、圈数、计时、最佳时间与漂移指示 */
 export interface HudElements {
@@ -124,7 +125,11 @@ export function updateHud(
   const driftPlayer = hotseatPlayer === 2 ? race.player2 : race.player1
   elements.driftIndicator.hidden = !driftPlayer.driftState.active
   if (driftPlayer.driftState.active) {
-    elements.driftScoreValue.textContent = String(Math.round(driftPlayer.driftState.score))
+    // F6（F6）：得分达 DRIFT_SCORE_MAX 上限时显示 MAX 标记（drift.ts 已 clamp，非上限保持 Math.round 格式）
+    elements.driftScoreValue.textContent =
+      driftPlayer.driftState.score >= DRIFT_SCORE_MAX
+        ? 'MAX'
+        : String(Math.round(driftPlayer.driftState.score))
   }
 
   // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*0.25)，否则隐藏

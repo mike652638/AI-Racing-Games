@@ -4,6 +4,7 @@ import { createRaceState } from '../../src/game/state'
 import { createCarConfig } from '../../src/physics/car'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 import { createTrackContext, type TrackContext } from '../../src/game/track-context'
+import { DRIFT_SCORE_MAX } from '../../src/game/constants'
 
 /** 双玩家各自独立赛道世界：P1 经典（3 圈）、P2 S 弯（2 圈） */
 const TRACKS: [TrackContext, TrackContext] = [
@@ -270,5 +271,30 @@ describe('hud 漂移连击显示（driftCombo）', () => {
     const race = createRaceState()
     updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
     expect(elements.driftIndicator.hidden).toBe(true)
+  })
+})
+
+describe('hud 漂移得分 MAX 标记（F6）', () => {
+  /** 构造 P1 已激活漂移态并指定得分（漂移指示与得分显示走 P1） */
+  const driftScoreRace = (score: number) => {
+    const race = createRaceState()
+    race.player1.driftState.active = true
+    race.player1.driftState.score = score
+    return race
+  }
+
+  it('active 且得分达 DRIFT_SCORE_MAX 时显示 MAX', () => {
+    const elements = createMockHudElements()
+    const race = driftScoreRace(DRIFT_SCORE_MAX)
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.driftIndicator.hidden).toBe(false)
+    expect(elements.driftScoreValue.textContent).toBe('MAX')
+  })
+
+  it('active 且得分未达上限时保持数字格式（Math.round 不变）', () => {
+    const elements = createMockHudElements()
+    const race = driftScoreRace(12345)
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.driftScoreValue.textContent).toBe('12345')
   })
 })
