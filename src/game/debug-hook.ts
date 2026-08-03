@@ -9,6 +9,8 @@ declare global {
       readonly phase: Phase
       readonly driftActive: boolean
       readonly split: boolean
+      readonly hotseatPlayer: 1 | 2
+      readonly player2CameraZ: number
       readonly bestTime: number | null
       readonly bestTime2: number | null
       readonly trafficCount: number
@@ -27,6 +29,8 @@ export interface DebugHookSources {
   phase: () => Phase
   driftActive: () => boolean
   split: boolean
+  hotseatPlayer: () => 1 | 2
+  player2CameraZ: () => number
   bestTime: () => number | null
   bestTime2: () => number | null
   trafficCount: () => number
@@ -53,6 +57,12 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get split() {
       return sources.split
+    },
+    get hotseatPlayer() {
+      return sources.hotseatPlayer()
+    },
+    get player2CameraZ() {
+      return sources.player2CameraZ()
     },
     get bestTime() {
       return sources.bestTime()

@@ -34,13 +34,19 @@ export interface ScreenElements {
   finishBest2?: HTMLParagraphElement
   finishScore2?: HTMLParagraphElement
   finishLaps2?: HTMLDivElement
+  /** 热座交棒/胜负提示（#finish-hint，仅热座模式填充） */
+  finishHint?: HTMLDivElement
 }
 
-/** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入） */
+/** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
+ *  热座字段：hotseatMode 开热座、hotseatRound 当前回合（1 | 2）、prevP1Time 为 P1 回合快照用时 */
 export interface FinishPanelOptions {
   splitMode: boolean
   finishedP1: boolean
   finishedP2: boolean
+  hotseatMode: boolean
+  hotseatRound: 1 | 2
+  prevP1Time: number | null
 }
 
 /**
@@ -86,7 +92,14 @@ function fillFinishPanel(
   race.finishShown = true
 
   const trackId0 = race.tracks[0].def.id
-  if (opts.finishedP1) {
+  if (opts.hotseatMode && opts.hotseatRound === 2 && opts.prevP1Time !== null) {
+    // 热座 round 2：P1 行显示上一回合快照用时（不写存档、不显示纪录横幅，防止覆盖 P1 纪录）
+    elements.finishTime.textContent = `P1 用时 ${formatTime(opts.prevP1Time)}`
+    elements.finishSpeed.textContent = ''
+    elements.finishBest.textContent = ''
+    elements.finishScore.textContent = ''
+    elements.finishLaps.textContent = ''
+  } else if (opts.finishedP1) {
     const avgSpeed = race.player1.cameraZ / Math.max(race.player1.raceTime, 0.001)
     elements.finishTime.textContent = `总用时 ${formatTime(race.player1.raceTime)}`
     elements.finishSpeed.textContent = `平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
@@ -120,8 +133,9 @@ function fillFinishPanel(
     elements.finishLaps.textContent = ''
   }
 
-  // P2 行：仅分屏且元素存在时填充并控制显隐（index.html 初始 hidden，仅写 textContent 会不可见）
-  if (opts.splitMode && elements.finishTime2) {
+  // P2 行：分屏或热座 round 2（P2 已跑）时填充并控制显隐；热座 round 1 P2 未跑天然跳过
+  // （index.html 初始 hidden，仅写 textContent 会不可见）
+  if ((opts.splitMode || (opts.hotseatMode && opts.hotseatRound === 2)) && elements.finishTime2) {
     const trackId1 = race.tracks[1].def.id
     if (opts.finishedP2) {
       // 全部 P2 结算行可见（视觉缺陷修复：显式 hidden=false）
@@ -175,6 +189,21 @@ function fillFinishPanel(
       if (elements.finishBest2) elements.finishBest2.textContent = ''
       if (elements.finishScore2) elements.finishScore2.textContent = ''
       if (elements.finishLaps2) elements.finishLaps2.textContent = ''
+    }
+  }
+
+  // 热座结算提示：round 1 提示交棒，round 2 按 P1/P2 用时显示胜负横幅；非热座隐藏
+  if (elements.finishHint) {
+    if (opts.hotseatMode && opts.hotseatRound === 1) {
+      elements.finishHint.hidden = false
+      elements.finishHint.textContent = '按回车，P2 开始'
+    } else if (opts.hotseatMode && opts.hotseatRound === 2 && opts.prevP1Time !== null) {
+      elements.finishHint.hidden = false
+      const t1 = opts.prevP1Time
+      const t2 = race.player2.raceTime
+      elements.finishHint.textContent = t1 < t2 ? 'P1 更快！' : t1 > t2 ? 'P2 更快！' : '平手！'
+    } else {
+      elements.finishHint.hidden = true
     }
   }
 }

@@ -77,14 +77,16 @@ interface Environment {
 
 /**
  * stub 全局 DOM/window/RAF/AudioContext，返回事件触发与帧驱动工具。
- * - split: 为 true 时 window.location.search = '?split=1'（GameLoop 据此进入分屏模式）
+ * - search: window.location.search 字符串（'' 单屏、'?split=1' 分屏、'?hotseat=1' 热座）；
+ *   兼容旧布尔签名——true 等价 '?split=1'、false 等价 ''（既有用例零改动）
  * - window：location、innerWidth/Height、addEventListener 记录监听器供 fireKey 触发
  * - document：getElementById 按 id 返回元素替身（'game' 返回 canvas mock）
  * - requestAnimationFrame：记录回调；GameLoop 构造时唯一注册的 rAF 回调即 frame，
  *   测试据此驱动帧循环（MusicPlayer.tick 等其它回调不驱动）
  * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
  */
-function stubEnvironment(split = false): Environment {
+function stubEnvironment(search: string | boolean = ''): Environment {
+  const query = typeof search === 'boolean' ? (search ? '?split=1' : '') : search
   const listeners = new Map<string, Array<(e: { code: string }) => void>>()
   const elements = new Map<string, StubElement>()
   const rafCallbacks: FrameRequestCallback[] = []
@@ -92,7 +94,7 @@ function stubEnvironment(split = false): Environment {
   let now = performance.now()
 
   const windowStub = {
-    location: { search: split ? '?split=1' : '' },
+    location: { search: query },
     innerWidth: 800,
     innerHeight: 600,
     devicePixelRatio: 1,
@@ -342,5 +344,66 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
     // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
+  })
+
+  it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
+    const hotEnv = stubEnvironment('?hotseat=1')
+    new GameLoop()
+    expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
+    hotEnv.fireKey('Enter')
+    hotEnv.fireKey('KeyW')
+    // P1 全油门跑 10s：P1 相机推进，P2 静止（热座输入只路由到当前玩家）
+    hotEnv.driveFrames(200)
+    expect(hotEnv.debugValue('player2CameraZ')).toBe(0)
+    expect(hotEnv.phase()).toBe(PHASE_RACING)
+  })
+
+  it('热座模式：P1 跑完 3 圈回车交棒 P2，P2 跑完后结算显示胜负', () => {
+    const hotEnv = stubEnvironment('?hotseat=1')
+    new GameLoop()
+    expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
+
+    // P1 选赛道：热座双人同一赛道（Digit2 → highway 同步到 P2 世界）
+    hotEnv.fireKey('Digit2')
+    expect(hotEnv.debugValue('selectedTrack')).toBe('highway')
+    expect(hotEnv.debugValue('selectedTrack2')).toBe('highway')
+
+    // Enter 开始 P1 回合
+    hotEnv.fireKey('Enter')
+    expect(hotEnv.phase()).toBe(PHASE_RACING)
+    hotEnv.driveFrames(1)
+    expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P1 驾驶中')
+
+    // KeyW 驱动 P1 跑完 3 圈
+    hotEnv.fireKey('KeyW')
+    hotEnv.driveFrames(2500)
+    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+    // round 1 结算：P1 行正常填充，finish-hint 提示交棒
+    expect(hotEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
+    expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
+    expect(hotEnv.getElement('finish-hint').textContent).toBe('按回车，P2 开始')
+    // round 1 不触碰 P2 结算行（splitMode=false 天然跳过）
+    expect(hotEnv.getElement('finish-time-2').hidden).toBe(true)
+
+    // Enter 交棒：进入 P2 回合且双方状态已重置（不会立刻再次判完赛）
+    hotEnv.fireKey('Enter')
+    expect(hotEnv.phase()).toBe(PHASE_RACING)
+    expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
+    hotEnv.driveFrames(10)
+    expect(hotEnv.phase()).toBe(PHASE_RACING)
+    expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P2 驾驶中')
+
+    // KeyW（热座共用 P1 键盘映射 input1）驱动 P2 跑完 3 圈
+    hotEnv.driveFrames(2500)
+    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+    // round 2 结算：P1 行显示上一回合用时（不写纪录），P2 行正常全填
+    expect(hotEnv.getElement('finish-time').textContent.startsWith('P1 用时')).toBe(true)
+    expect(hotEnv.getElement('finish-time-2').textContent.startsWith('P2 总用时')).toBe(true)
+    expect(hotEnv.getElement('finish-time-2').hidden).toBe(false)
+    // finish-hint 显示胜负（用可预测帧数驱动时 P1/P2 用时接近，三选一断言）
+    expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
+    expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(
+      hotEnv.getElement('finish-hint').textContent,
+    )
   })
 })

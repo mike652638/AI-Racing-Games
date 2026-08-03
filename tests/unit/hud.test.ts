@@ -38,7 +38,7 @@ describe('hud visibility', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'menu', null)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'menu', null, null)
     expect(elements.hudSpeed.hidden).toBe(true)
     expect(elements.hudSpeedUnit!.hidden).toBe(true)
     expect(elements.hudSpeedUnit2!.hidden).toBe(true)
@@ -55,7 +55,7 @@ describe('hud visibility', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, null)
     expect(elements.hudSpeed.hidden).toBe(false)
     expect(elements.hudSpeedUnit!.hidden).toBe(false)
     expect(elements.hudLap.hidden).toBe(false)
@@ -69,7 +69,7 @@ describe('hud split layout', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null, null)
     expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', true)
     expect(elements.hud2Container!.classList.toggle).toHaveBeenCalledWith('split', true)
   })
@@ -78,7 +78,7 @@ describe('hud split layout', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, null)
     expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', false)
     expect(elements.hud2Container!.classList.toggle).toHaveBeenCalledWith('split', false)
   })
@@ -90,7 +90,7 @@ describe('hud 双玩家圈数（各自独立赛道世界）', () => {
     const race = createRaceState()
     const carConfig = createCarConfig()
     // cameraZ=0 → lapFromZ 返回第 1 圈：LAP 1/3 与 LAP 1/2
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null, null)
     expect(elements.hudLap.textContent).toBe('LAP 1/3')
     expect(elements.hudLap2.textContent).toBe('LAP 1/2')
   })
@@ -99,7 +99,7 @@ describe('hud 双玩家圈数（各自独立赛道世界）', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, null)
     expect(elements.hudLap.textContent).toBe('LAP 1/3')
     expect(elements.hudLap2.hidden).toBe(true)
   })
@@ -110,7 +110,7 @@ describe('hud P2 BEST', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', 42.5)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', 42.5, null)
     expect(elements.hudBest2!.hidden).toBe(false)
     expect(elements.hudBest2!.textContent).toBe('BEST 0:42.500')
   })
@@ -119,7 +119,7 @@ describe('hud P2 BEST', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', null, null)
     expect(elements.hudBest2!.hidden).toBe(true)
   })
 
@@ -127,7 +127,7 @@ describe('hud P2 BEST', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', 42.5)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', 42.5, null)
     expect(elements.hudBest2!.hidden).toBe(true)
   })
 
@@ -135,7 +135,7 @@ describe('hud P2 BEST', () => {
     const elements = createMockHudElements()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'menu', 42.5)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'menu', 42.5, null)
     expect(elements.hudBest2!.hidden).toBe(true)
   })
 })
@@ -154,7 +154,7 @@ describe('单屏 P2 BEST', () => {
     const elements = withP2Best()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', 12.34)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', 12.34, null)
     expect(elements.hudBestP2!.hidden).toBe(false)
     expect(elements.hudBestP2!.textContent).toBe('P2 BEST 0:12.340')
   })
@@ -163,7 +163,7 @@ describe('单屏 P2 BEST', () => {
     const elements = withP2Best()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null)
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, null)
     expect(elements.hudBestP2!.hidden).toBe(true)
   })
 
@@ -171,7 +171,56 @@ describe('单屏 P2 BEST', () => {
     const elements = withP2Best()
     const race = createRaceState()
     const carConfig = createCarConfig()
-    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', 12.34)
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', 12.34, null)
     expect(elements.hudBestP2!.hidden).toBe(true)
+  })
+})
+
+describe('hud 热座玩家标签（hudPlayerTag）', () => {
+  /** 在既有 mock 基础上补 hudPlayerTag 字段（含 classList.toggle，热座回合标识用） */
+  const withTag = (): HudElements => {
+    const element = () => ({ hidden: false, textContent: '', classList: { toggle: vi.fn() } })
+    return {
+      ...createMockHudElements(),
+      hudPlayerTag: element() as unknown as HTMLDivElement,
+    } as unknown as HudElements
+  }
+
+  it('热座 P2 回合显示 P2 驾驶中并切换 p2 类', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, 2)
+    expect(elements.hudPlayerTag!.hidden).toBe(false)
+    expect(elements.hudPlayerTag!.textContent).toBe('P2 驾驶中')
+    expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p1', false)
+    expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p2', true)
+  })
+
+  it('热座 P1 回合显示 P1 驾驶中并切换 p1 类', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, 1)
+    expect(elements.hudPlayerTag!.hidden).toBe(false)
+    expect(elements.hudPlayerTag!.textContent).toBe('P1 驾驶中')
+    expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p1', true)
+    expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p2', false)
+  })
+
+  it('非热座（第 9 参 null）隐藏玩家标签', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudPlayerTag!.hidden).toBe(true)
+  })
+
+  it('菜单阶段隐藏玩家标签（即使热座回合 1）', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'menu', null, 1)
+    expect(elements.hudPlayerTag!.hidden).toBe(true)
   })
 })

@@ -100,6 +100,12 @@ export function updatePlayerFrame(
  */
 export class GameLoop {
   private readonly splitMode: boolean
+  /** 热座轮流模式（?hotseat=1）：双人先后跑同赛道比成绩；split 优先互斥 */
+  private readonly hotseatMode: boolean
+  /** 热座当前回合玩家（1 = P1 先跑，交棒后为 2） */
+  private hotseatPlayer: 1 | 2 = 1
+  /** 热座 P1 回合完赛用时（交棒时快照，供 round 2 结算胜负比较） */
+  private prevP1Time: number | null = null
   private readonly canvas: HTMLCanvasElement
   private readonly hudElements: HudElements
   private readonly screenElements: ScreenElements
@@ -121,12 +127,17 @@ export class GameLoop {
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
-    this.splitMode = new URLSearchParams(window.location.search).has('split')
+    const params = new URLSearchParams(window.location.search)
+    this.splitMode = params.has('split')
+    this.hotseatMode = params.has('hotseat') && !this.splitMode
 
-    // 分屏菜单提示：P1 用 1/2/3、P2 用 7/8/9 各自选赛道（#menu-hint 由 index.html 提供）
+    // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
     if (this.splitMode) {
       const menuHint = document.getElementById('menu-hint')
       if (menuHint) menuHint.textContent = 'P1: 1/2/3 选赛道 · P2: 7/8/9 选赛道 · 按任意键开始'
+    } else if (this.hotseatMode) {
+      const menuHint = document.getElementById('menu-hint')
+      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1/2/3 选赛道'
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -149,6 +160,7 @@ export class GameLoop {
       hudLap2: $('hud-lap-2') as HTMLDivElement,
       hudTime2: $('hud-time-2') as HTMLDivElement,
       hudBestP2: $('hud-best-p2') as HTMLDivElement,
+      hudPlayerTag: $('hud-player-tag') as HTMLDivElement,
       driftIndicator: $('drift-indicator') as HTMLDivElement,
       driftScoreValue: $('drift-score-value') as HTMLSpanElement,
     }
@@ -166,6 +178,7 @@ export class GameLoop {
       finishBest2: $('finish-best-2') as HTMLParagraphElement,
       finishScore2: $('finish-score-2') as HTMLParagraphElement,
       finishLaps2: $('finish-laps-2') as HTMLDivElement,
+      finishHint: $('finish-hint') as HTMLDivElement,
     }
     const trackName = $('track-name') as HTMLSpanElement
     const trackOptions = [
@@ -205,6 +218,8 @@ export class GameLoop {
       phase: () => this.phase,
       driftActive: () => this.race.player1.driftState.active,
       split: this.splitMode,
+      hotseatPlayer: () => this.hotseatPlayer,
+      player2CameraZ: () => this.race.player2.cameraZ,
       bestTime: () => this.bestTime,
       bestTime2: () => this.bestTime2,
       trafficCount: () => this.race.tracks[0].traffic.length,
@@ -234,17 +249,25 @@ export class GameLoop {
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
     // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
+    // 热座与分屏共用 finishedP2：P2 回合玩家2 跑完触发，P1 回合玩家2 静止不会误触
     const finishedP1 =
       lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
     const finishedP2 =
-      this.splitMode &&
+      (this.splitMode || this.hotseatMode) &&
       lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
     applyPhaseToScreens(
       this.screenElements,
       newPhase,
       this.race,
       this.carConfig,
-      { splitMode: this.splitMode, finishedP1, finishedP2 },
+      {
+        splitMode: this.splitMode,
+        finishedP1,
+        finishedP2,
+        hotseatMode: this.hotseatMode,
+        hotseatRound: this.hotseatPlayer,
+        prevP1Time: this.prevP1Time,
+      },
     )
     if (newPhase === PHASE_FINISHED) {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
@@ -263,6 +286,15 @@ export class GameLoop {
       const digit = Number(e.code.slice(5))
       if (digit >= 1 && digit <= 3) {
         this.selectTrackFor(0, digit - 1)
+        if (this.hotseatMode) {
+          // 热座双人同一赛道：P1 选赛道后同步 P2 世界（TrackContext 与预览起点）
+          this.trackManager.selectTrack(1, digit - 1)
+          this.race.tracks[1] = this.trackManager.getContext(1)
+          this.previewCameraZ[1] = initialPreviewCameraZ(
+            digit - 1,
+            this.race.tracks[1].lapLength,
+          )
+        }
         return
       }
       if (this.splitMode && digit >= 7 && digit <= 9) {
@@ -270,6 +302,22 @@ export class GameLoop {
         return
       }
       // 缺陷①修复：菜单阶段所有数字键一律吞掉，无效数字键静默忽略，不触发"任意键开始"
+      return
+    }
+    // 热座交棒：P1 回合完赛后回车/R 交棒 P2（绕过 nextPhase 直接赋值 RACING，Phase 保持四态）。
+    // 位置在"任意键回菜单"之前：hotseatPlayer===2 或非 Enter/R 键时走既有 FINISHED→MENU 逻辑
+    if (
+      this.phase === PHASE_FINISHED &&
+      this.hotseatMode &&
+      (e.code === 'Enter' || e.code === 'KeyR') &&
+      this.hotseatPlayer === 1
+    ) {
+      this.prevP1Time ??= this.race.player1.raceTime
+      this.hotseatPlayer = 2
+      this.resetRace()
+      // resetRaceState 已重置 finishShown=false（state.ts 确认），P2 回合结算可再次填充
+      this.race.phase = PHASE_RACING
+      this.applyPhase(PHASE_RACING)
       return
     }
     if (!this.engineSound) {
@@ -326,39 +374,70 @@ export class GameLoop {
         ? this.input.getP2Input()
         : { throttle: 0, brake: false, steer: 0 }
 
-      // P1 独立更新（车辆/漂移/相机/计时/圈速），圈数记录桥接到 race.lastLap
-      const lapRef = { value: this.race.lastLap }
-      updatePlayerFrame(
-        dt,
-        input1,
-        this.race.player1,
-        this.carConfig,
-        this.trackManager.getLapLength(0),
-        this.race.lapTimes,
-        lapRef,
-      )
-      this.race.lastLap = lapRef.value
+      if (this.hotseatMode) {
+        // 热座：输入只路由到当前回合玩家（共用同一键盘映射 input1）。
+        // P1 回合圈速记录传 lapTimes/lastLap，P2 回合传 lapTimes2/lastLap2（与分屏 P2 同语义）；
+        // 另一玩家本回合不更新、不推进相机/计时
+        if (this.hotseatPlayer === 1) {
+          const lapRef = { value: this.race.lastLap }
+          updatePlayerFrame(
+            dt,
+            input1,
+            this.race.player1,
+            this.carConfig,
+            this.trackManager.getLapLength(0),
+            this.race.lapTimes,
+            lapRef,
+          )
+          this.race.lastLap = lapRef.value
+        } else {
+          const lapRef2 = { value: this.race.lastLap2 }
+          updatePlayerFrame(
+            dt,
+            input1,
+            this.race.player2,
+            this.carConfig,
+            this.trackManager.getLapLength(1),
+            this.race.lapTimes2,
+            lapRef2,
+          )
+          this.race.lastLap2 = lapRef2.value
+        }
+      } else {
+        // P1 独立更新（车辆/漂移/相机/计时/圈速），圈数记录桥接到 race.lastLap
+        const lapRef = { value: this.race.lastLap }
+        updatePlayerFrame(
+          dt,
+          input1,
+          this.race.player1,
+          this.carConfig,
+          this.trackManager.getLapLength(0),
+          this.race.lapTimes,
+          lapRef,
+        )
+        this.race.lastLap = lapRef.value
 
-      // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；圈速记录到 lapTimes2）
-      const lapRef2 = { value: this.race.lastLap2 }
-      updatePlayerFrame(
-        dt,
-        input2,
-        this.race.player2,
-        this.carConfig,
-        this.trackManager.getLapLength(1),
-        this.race.lapTimes2,
-        lapRef2,
-      )
-      this.race.lastLap2 = lapRef2.value
+        // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；圈速记录到 lapTimes2）
+        const lapRef2 = { value: this.race.lastLap2 }
+        updatePlayerFrame(
+          dt,
+          input2,
+          this.race.player2,
+          this.carConfig,
+          this.trackManager.getLapLength(1),
+          this.race.lapTimes2,
+          lapRef2,
+        )
+        this.race.lastLap2 = lapRef2.value
+      }
 
       updateCollisions(this.race, dt, this.splitMode)
 
-      // 完赛判定：P1/P2 各自按本世界圈长/总圈数计算（分屏时 P2 独立判定）
+      // 完赛判定：P1/P2 各自按本世界圈长/总圈数计算（分屏与热座 P2 回合独立判定）
       const finishedP1 =
         lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
       const finishedP2 =
-        this.splitMode &&
+        (this.splitMode || this.hotseatMode) &&
         lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
       if (finishedP1 || finishedP2) this.applyPhase(PHASE_FINISHED)
     }
@@ -444,6 +523,7 @@ export class GameLoop {
       this.race.tracks,
       this.phase,
       this.bestTime2,
+      this.hotseatMode ? this.hotseatPlayer : null,
     )
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
     requestAnimationFrame(this.frame)
