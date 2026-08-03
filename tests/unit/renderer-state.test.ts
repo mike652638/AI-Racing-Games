@@ -200,14 +200,40 @@ describe('Renderer 状态切换', () => {
     expect(callCount(canvas.__ctx.__calls, 'fill')).toBeGreaterThan(0)
   })
 
-  it('雨天（timeSec=90，phase 2 雨）渲染产生雨滴 stroke 路径调用', () => {
+  it('雨天（timeSec=90，phase 2 雨）渲染：雨丝预渲染离屏后主 ctx 帧内零 stroke', () => {
     const { canvas, renderer } = createHarness()
     renderer.render(0, [], 0)
     const clearStroke = callCount(canvas.__ctx.__calls, 'stroke')
     renderer.render(0, [], 90)
     const rainStroke = callCount(canvas.__ctx.__calls, 'stroke')
-    // 晴天渲染无 stroke；雨天绘制 80 条雨丝后 stroke() 至少一次
-    expect(rainStroke).toBeGreaterThan(clearStroke)
+    // F5：雨丝在构建期预绘制到离屏 canvas（独立 mock ctx），主 ctx 帧内不再逐段 stroke
+    expect(rainStroke).toBe(clearStroke)
+  })
+
+  it('雨天渲染：雨滴离屏双幅 drawImage 平铺（drawImage 增量高于晴天）', () => {
+    const { canvas, renderer } = createHarness()
+    renderer.render(0, [], 0)
+    const before = callCount(canvas.__ctx.__calls, 'drawImage')
+    renderer.render(0, [], 90)
+    const afterRain = callCount(canvas.__ctx.__calls, 'drawImage')
+    renderer.render(0, [], 0)
+    const afterClear = callCount(canvas.__ctx.__calls, 'drawImage')
+    const rainIncr = afterRain - before
+    const clearIncr = afterClear - afterRain
+    // 雨天比晴天多 2 次 drawImage（双幅平铺覆盖环形回绕）；远山平铺两态一致
+    expect(rainIncr).toBeGreaterThan(clearIncr)
+  })
+
+  it('setViewport 后雨滴离屏 canvas 尺寸重建（宽 = 视口宽、高 = 视口高 + 20）', () => {
+    const { canvas, renderer } = createHarness(800, 600)
+    // setViewport 会重建离屏 canvas（buildRainCanvas 替换引用），须每次重新读取
+    const getRainCanvas = (): MockCanvas =>
+      (renderer as unknown as { rainCanvas: MockCanvas }).rainCanvas
+    expect(getRainCanvas().width).toBe(800)
+    expect(getRainCanvas().height).toBe(620)
+    renderer.setViewport(canvas, 400, 300)
+    expect(getRainCanvas().width).toBe(400)
+    expect(getRainCanvas().height).toBe(320)
   })
 
   it('night RenderView 渲染车灯光晕：不抛错且 arc 调用增量增加', () => {

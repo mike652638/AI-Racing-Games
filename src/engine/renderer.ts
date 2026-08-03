@@ -115,6 +115,8 @@ export class Renderer {
   private spriteIndex = new Map<number, Sprite[]>()
   /** 雨滴数据（构造时确定性生成，x 归一化 0-1） */
   private rainDrops: RainDrop[]
+  /** 雨丝离屏缓存（F5）：预渲染全部 80 条雨丝，帧内双幅 drawImage 平铺替代逐段绘制 */
+  private rainCanvas: HTMLCanvasElement | null = null
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -132,6 +134,7 @@ export class Renderer {
     this.curvePrefixSum = buildCurvePrefixSum(track)
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
     this.rainDrops = this.buildRainDrops()
+    this.buildRainCanvas(this.opts)
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
@@ -140,6 +143,7 @@ export class Renderer {
     this.opts = this.buildOpts(width, height)
     this.mountains = this.buildMountains(width, '#27425e', '#1f3046')
     this.mountainsNight = this.buildMountains(width, '#101a2a', '#0a1220')
+    this.buildRainCanvas(this.opts)
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
@@ -163,6 +167,28 @@ export class Renderer {
       drops.push({ x: rnd(), y0: rnd(), len: 8 + rnd() * 6 })
     }
     return drops
+  }
+
+  /** 预渲染全部雨丝到离屏 canvas（宽 = opts.width、高 = opts.height + 20，与 drawRain 的 y 环形范围一致）；
+   *  帧内双幅 drawImage 平铺替代每帧 80 段线段逐段绘制（F5 性能优化） */
+  private buildRainCanvas(opts: ProjectionOptions): void {
+    const width = opts.width
+    const height = opts.height + 20
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')!
+    ctx.strokeStyle = 'rgba(180, 200, 220, 0.35)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (const drop of this.rainDrops) {
+      const x = drop.x * width
+      const y = drop.y0 * height
+      ctx.moveTo(x, y)
+      ctx.lineTo(x - 3, y + drop.len)
+    }
+    ctx.stroke()
+    this.rainCanvas = canvas
   }
 
   private applyCanvasSize(
@@ -322,23 +348,17 @@ export class Renderer {
     }
   }
 
-  /** 雨滴 overlay：全屏斜线雨丝（最上层特效，忽略投影；y 随 timeSec 以 600px/s 下落并环形回绕） */
+  /** 雨滴 overlay：双幅 drawImage 平铺离屏雨丝（最上层特效，忽略投影；
+   *  yOffset 随 timeSec 以 600px/s 下落并环形回绕，保留原 -10 上移视觉语义） */
   private drawRain(timeSec: number, opts: ProjectionOptions): void {
     const { ctx } = this
-    const { width, height } = opts
-    ctx.strokeStyle = 'rgba(180, 200, 220, 0.35)'
-    ctx.lineWidth = 1
-    try {
-      ctx.beginPath()
-      for (const drop of this.rainDrops) {
-        const y = (drop.y0 * (height + 20) + timeSec * 600) % (height + 20) - 10
-        const x = drop.x * width
-        ctx.moveTo(x, y)
-        ctx.lineTo(x - 3, y + drop.len)
-      }
-    } finally {
-      ctx.stroke()
-    }
+    const rain = this.rainCanvas
+    if (!rain) return
+    const h = opts.height + 20
+    const yOffset = ((timeSec * 600) % h) - 10
+    // 双幅平铺覆盖 [yOffset - h, yOffset + h)，屏幕 [0, height] 恒被覆盖（环形回绕无缝）
+    ctx.drawImage(rain, 0, yOffset - h)
+    ctx.drawImage(rain, 0, yOffset)
   }
 
   /** 绘制车流（车身 + 车窗，远→近）；数据取自视图 v；night 时加车前灯光晕 */
