@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameLoop } from '../../src/game/game-loop'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/game/phase'
+import { TRACK_DEFS } from '../../src/engine/tracks'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
 /** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
@@ -79,13 +80,15 @@ interface Environment {
  * stub 全局 DOM/window/RAF/AudioContext，返回事件触发与帧驱动工具。
  * - search: window.location.search 字符串（'' 单屏、'?split=1' 分屏、'?hotseat=1' 热座）；
  *   兼容旧布尔签名——true 等价 '?split=1'、false 等价 ''（既有用例零改动）
+ * - initialStorage: 可选 localStorage 初始数据（如 { 'outrun-pseudo3d-best-classic': '42.5' }）；
+ *   不传时全局 localStorage 不存在，save.ts getStorage() 安全降级 null（与既有用例行为一致）
  * - window：location、innerWidth/Height、addEventListener 记录监听器供 fireKey 触发
  * - document：getElementById 按 id 返回元素替身（'game' 返回 canvas mock）
  * - requestAnimationFrame：记录回调；GameLoop 构造时唯一注册的 rAF 回调即 frame，
  *   测试据此驱动帧循环（MusicPlayer.tick 等其它回调不驱动）
  * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
  */
-function stubEnvironment(search: string | boolean = ''): Environment {
+function stubEnvironment(search: string | boolean = '', initialStorage?: Record<string, string>): Environment {
   const query = typeof search === 'boolean' ? (search ? '?split=1' : '') : search
   const listeners = new Map<string, Array<(e: { code: string; shiftKey: boolean }) => void>>()
   const elements = new Map<string, StubElement>()
@@ -93,11 +96,30 @@ function stubEnvironment(search: string | boolean = ''): Environment {
   let gameCanvas: MockCanvas | null = null
   let now = performance.now()
 
+  // localStorage stub：仅当 initialStorage 传入时挂载（save.ts getStorage 双重检查：
+  // 全局 typeof localStorage + window.localStorage，两者都必须提供才会启用存储）
+  const storageBackend = new Map<string, string>(Object.entries(initialStorage ?? {}))
+  const fakeStorage: Storage = {
+    getItem: (k: string) => storageBackend.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      storageBackend.set(k, String(v))
+    },
+    removeItem: (k: string) => {
+      storageBackend.delete(k)
+    },
+    clear: () => storageBackend.clear(),
+    key: (i: number) => [...storageBackend.keys()][i] ?? null,
+    get length() {
+      return storageBackend.size
+    },
+  }
+
   const windowStub = {
     location: { search: query },
     innerWidth: 800,
     innerHeight: 600,
     devicePixelRatio: 1,
+    localStorage: fakeStorage,
     addEventListener: (type: string, cb: (e: { code: string; shiftKey: boolean }) => void): void => {
       const arr = listeners.get(type) ?? []
       arr.push(cb)
@@ -151,6 +173,10 @@ function stubEnvironment(search: string | boolean = ''): Environment {
 
   vi.stubGlobal('window', windowStub as unknown as Window & typeof globalThis)
   vi.stubGlobal('document', documentStub as unknown as Document)
+  if (initialStorage !== undefined) {
+    // save.ts getStorage 的全局 typeof localStorage 检查需要全局变量存在才走 window.localStorage
+    vi.stubGlobal('localStorage', fakeStorage)
+  }
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
     rafCallbacks.push(cb)
     return rafCallbacks.length
@@ -572,5 +598,33 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     env.driveFrames(2500)
     expect(env.phase()).toBe(PHASE_FINISHED)
     expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
+  })
+
+  it('P3（P3）：构造后菜单 BEST 汇总全无记录时显示占位文本', () => {
+    new GameLoop()
+    const summary = env.getElement('best-summary')
+    // 无任何存档（P1/P2 均 null）→ 占位文本（元素存在即可断言，stub 对未知 id 自动建最小替身）
+    expect(summary.textContent).toBe('暂无最佳成绩')
+  })
+
+  it('P3（P3）：预设 9 条赛道存档后 BEST 汇总渲染齐全且对应行含格式化时间', () => {
+    // 注入全部 9 条赛道的 P1 best（key: outrun-pseudo3d-best-<id>，P1 无后缀）
+    const storage = Object.fromEntries(
+      TRACK_DEFS.map((def) => [`outrun-pseudo3d-best-${def.id}`, '42.5']),
+    )
+    const env2 = stubEnvironment('', storage)
+    new GameLoop()
+    const summary = env2.getElement('best-summary')
+    // 9 行渲染，每行含赛道名；遍历 TRACK_DEFS 动态断言全部出现
+    const lines = summary.textContent.split('\n')
+    expect(lines.length).toBe(TRACK_DEFS.length)
+    for (const def of TRACK_DEFS) {
+      expect(summary.textContent).toContain(def.name)
+    }
+    // 首行（TRACK_DEFS[0] = classic）格式：`1. 经典赛道  P1 0:42.500`（formatTime(42.5) → '0:42.500'）
+    expect(lines[0]).toContain(TRACK_DEFS[0].name)
+    expect(lines[0]).toContain('P1 0:42.500')
+    // 未注入 P2 存档 → P2 部分不出现（t2 null 时无 '· P2' 后缀）
+    expect(lines[0]).not.toContain('P2')
   })
 })

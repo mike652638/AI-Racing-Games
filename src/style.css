@@ -189,6 +189,18 @@ canvas {
   white-space: pre-line;
 }
 
+/* 各赛道 BEST 汇总（#best-summary：菜单静态元素，GameLoop refreshBestSummary 遍历 TRACK_DEFS 刷新；
+   小字白 0.7 居中 pre-line，风格与 #drift-top 一致） */
+#best-summary {
+  margin: 12px auto 0;
+  max-width: 320px;
+  font-size: var(--hint-fs);
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  text-align: center;
+  white-space: pre-line;
+}
+
 #start-screen,
 #finish-screen,
 #pause-screen {

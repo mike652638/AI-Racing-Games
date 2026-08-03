@@ -9,6 +9,7 @@ import { MusicPlayer } from '../audio/music'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
+import { formatTime } from '../ui/format'
 import { addDriftScore, loadBestTime, loadBestTimeFor, loadDriftTop, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
@@ -241,6 +242,7 @@ export class GameLoop {
     window.addEventListener('resize', this.resize)
     this.resize()
     this.refreshDriftTop()
+    this.refreshBestSummary()
     requestAnimationFrame(this.frame)
   }
 
@@ -259,6 +261,29 @@ export class GameLoop {
               (e, i) => `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
             )
             .join('\n')
+  }
+
+  /**
+   * 刷新菜单各赛道 BEST 汇总（#best-summary，菜单静态元素）：遍历 TRACK_DEFS 读 P1/P2 最佳圈速，
+   * 每行 `${i+1}. ${name}  P1 <时间>`（P2 有纪录追加 ` · P2 <时间>`；无纪录用 --）。
+   * 全部赛道均无任何纪录时显示占位文本（与 #drift-top 的"暂无漂移记录"风格一致）。
+   */
+  private refreshBestSummary(): void {
+    const el = document.getElementById('best-summary')
+    if (!el) {
+      return
+    }
+    const lines = TRACK_DEFS.map((def, i) => {
+      const t1 = loadBestTimeFor(0, def.id)
+      const t2 = loadBestTimeFor(1, def.id)
+      const p1 = t1 !== null ? formatTime(t1) : '--'
+      const p2 = t2 !== null ? ` · P2 ${formatTime(t2)}` : ''
+      return `${i + 1}. ${def.name}  P1 ${p1}${p2}`
+    })
+    const hasAny = TRACK_DEFS.some(
+      (def) => loadBestTimeFor(0, def.id) !== null || loadBestTimeFor(1, def.id) !== null,
+    )
+    el.textContent = hasAny ? lines.join('\n') : '暂无最佳成绩'
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
@@ -345,6 +370,7 @@ export class GameLoop {
     if (newPhase === PHASE_MENU) {
       this.resetRace()
       this.refreshDriftTop()
+      this.refreshBestSummary()
     }
   }
 
