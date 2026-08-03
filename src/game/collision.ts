@@ -1,11 +1,7 @@
+import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR } from './constants'
 import { collidePlayers, type CarState } from '../physics/car'
 import { collideWithPlayer, type TrafficCar } from '../engine/traffic'
 import type { RaceState } from './state'
-
-/** 碰撞速度惩罚因子（速度 ×0.5） */
-const COLLISION_SPEED_FACTOR = 0.5
-/** 碰撞冷却时长（秒），冷却期内不重复触发 */
-const COLLISION_COOLDOWN = 1
 
 /**
  * 单个玩家与车流的碰撞检测 + 惩罚。

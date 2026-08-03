@@ -1,3 +1,8 @@
+import {
+  DRIFT_CHARGE_THRESHOLD,
+  DRIFT_SPEED_FACTOR,
+  DRIFT_STEER_THRESHOLD,
+} from '../game/constants'
 import type { CarConfig, CarInput, CarState } from './car'
 
 export interface SmokeParticle {
@@ -25,9 +30,7 @@ export function createDriftState(): DriftState {
   return { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 }
 }
 
-const STEER_THRESHOLD = 0.7
 const SPEED_RATIO_THRESHOLD = 0.5
-const CHARGE_THRESHOLD = 0.25
 const CHARGE_DECAY = 2
 const SMOKE_INTERVAL = 1
 const SMOKE_LIFETIME = 0.6
@@ -36,8 +39,6 @@ const DRIFT_SCORE_RATE = 0.01
 
 /** 漂移激活时的转向率倍率 */
 const DRIFT_TURN_MULTIPLIER = 1.5
-/** 漂移激活时的每帧速度损耗因子 */
-const DRIFT_SPEED_FACTOR = 0.985
 
 /**
  * 更新漂移状态（纯函数：不修改入参 drift/carState/config，基于它们计算并返回新对象）。
@@ -53,12 +54,12 @@ export function updateDrift(
 ): DriftState {
   const next: DriftState = { ...drift, smoke: [...drift.smoke] }
   const charging =
-    Math.abs(input.steer) > STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
+    Math.abs(input.steer) > DRIFT_STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
 
   next.charge = charging
     ? Math.min(next.charge + dt, 1)
     : Math.max(next.charge - dt * CHARGE_DECAY, 0)
-  next.active = next.charge > CHARGE_THRESHOLD
+  next.active = next.charge > DRIFT_CHARGE_THRESHOLD
 
   if (next.active) {
     next.score += state.speed * dt * DRIFT_SCORE_RATE

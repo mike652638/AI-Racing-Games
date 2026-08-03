@@ -1,11 +1,12 @@
+import { EDGE_WIDTH, RENDER_DRAW_DISTANCE, ROAD_HALF_WIDTH } from '../game/constants'
 import { project, type Projected, type ProjectionOptions, type Camera3D } from './projection'
 
-/** 路面半宽（世界单位） */
-export const ROAD_HALF_WIDTH = 1
-/** 路缘宽度（世界单位） */
-export const EDGE_WIDTH = 0.15
-/** 渲染可视距离（分段数） */
-export const DRAW_DISTANCE = 120
+export { EDGE_WIDTH, ROAD_HALF_WIDTH }
+/**
+ * 渲染可视距离（分段数）——兼容名导出。
+ * 真源为 constants.RENDER_DRAW_DISTANCE，消费方若使用 DRAW_DISTANCE 请迁移。
+ */
+export const DRAW_DISTANCE = RENDER_DRAW_DISTANCE
 
 const ROAD_COLORS = ['#4a4a4a', '#3c3c3c']
 const SIDE_COLORS = ['#d03030', '#e8e8e8']

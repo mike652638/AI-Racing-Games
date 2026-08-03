@@ -1,3 +1,4 @@
+import { RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../game/constants'
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
@@ -105,14 +106,14 @@ export class Renderer {
   }
 
   private buildMountains(width: number): MountainLayer[] {
-    const layers: MountainLayer[] = [
-      { profile: generateMountainProfile(width, 2024), factor: 0.02, color: '#27425e', peak: 0.5, offscreen: null! },
-      { profile: generateMountainProfile(width, 77), factor: 0.05, color: '#1f3046', peak: 0.35, offscreen: null! },
+    const layerDefs = [
+      { profile: generateMountainProfile(width, 2024), factor: 0.02, color: '#27425e', peak: 0.5 },
+      { profile: generateMountainProfile(width, 77), factor: 0.05, color: '#1f3046', peak: 0.35 },
     ]
-    for (const layer of layers) {
-      layer.offscreen = renderMountainOffscreen(layer, width)
-    }
-    return layers
+    return layerDefs.map((def) => ({
+      ...def,
+      offscreen: renderMountainOffscreen(def as MountainLayer, width),
+    }))
   }
 
   private applyCanvasSize(
@@ -127,7 +128,7 @@ export class Renderer {
   }
 
   private buildOpts(width: number, height: number): ProjectionOptions {
-    return { width, height, horizon: height * 0.35, depth: width * 0.84 }
+    return { width, height, horizon: height * RENDER_HORIZON_RATIO, depth: width * RENDER_DEPTH_RATIO }
   }
 
   /** 设置相机横向偏移（跟随车辆位置） */

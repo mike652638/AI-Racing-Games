@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest'
+import {
+  COLLISION_COOLDOWN,
+  COLLISION_SPEED_FACTOR,
+  DRIFT_CHARGE_THRESHOLD,
+  DRIFT_SCORE_MAX,
+  DRIFT_SPEED_FACTOR,
+  DRIFT_STEER_THRESHOLD,
+  EDGE_WIDTH,
+  RENDER_DEPTH_RATIO,
+  RENDER_DRAW_DISTANCE,
+  RENDER_HORIZON_RATIO,
+  ROAD_HALF_WIDTH,
+} from '../../src/game/constants'
+import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
+
+describe('constants 常量注册表（防魔法数字回潮）', () => {
+  it('漂移常量值与约定一致', () => {
+    expect(DRIFT_STEER_THRESHOLD).toBe(0.7)
+    expect(DRIFT_CHARGE_THRESHOLD).toBe(0.25)
+    expect(DRIFT_SPEED_FACTOR).toBe(0.985)
+    expect(DRIFT_SCORE_MAX).toBe(99999)
+  })
+
+  it('碰撞常量值与约定一致', () => {
+    expect(COLLISION_SPEED_FACTOR).toBe(0.5)
+    expect(COLLISION_COOLDOWN).toBe(1)
+  })
+
+  it('渲染常量值与约定一致', () => {
+    expect(RENDER_DRAW_DISTANCE).toBe(120)
+    expect(RENDER_HORIZON_RATIO).toBe(0.35)
+    expect(RENDER_DEPTH_RATIO).toBe(0.84)
+  })
+
+  it('路面几何常量值与约定一致', () => {
+    expect(ROAD_HALF_WIDTH).toBe(1)
+    expect(EDGE_WIDTH).toBe(0.15)
+  })
+
+  it('road-geometry 兼容导出 DRAW_DISTANCE 与真源 RENDER_DRAW_DISTANCE 一致', () => {
+    expect(DRAW_DISTANCE).toBe(RENDER_DRAW_DISTANCE)
+  })
+})

@@ -889,7 +889,7 @@ git commit -m "refactor(physics): make updateDrift pure and simplify collision c
 **Interfaces:**
 - Produces: `DRIFT_*`, `COLLISION_*`, `RENDER_*`, `CAR_*` 等常量
 
-- [ ] **Step 1: 创建 constants.ts**
+- [x] **Step 1: 创建 constants.ts**
 
 ```typescript
 // src/game/constants.ts
@@ -909,14 +909,14 @@ export const ROAD_HALF_WIDTH = 1
 export const EDGE_WIDTH = 0.15
 ```
 
-- [ ] **Step 2: 替换各文件魔法数字**
+- [x] **Step 2: 替换各文件魔法数字**
 
 - `src/physics/drift.ts` 使用 `DRIFT_*`
 - `src/game/collision.ts` 使用 `COLLISION_*`
 - `src/engine/renderer.ts` 使用 `RENDER_HORIZON_RATIO`, `RENDER_DEPTH_RATIO`
 - `src/engine/road-geometry.ts` 使用 `RENDER_DRAW_DISTANCE`, `ROAD_HALF_WIDTH`, `EDGE_WIDTH`
 
-- [ ] **Step 3: 修复 Renderer null! 断言**
+- [x] **Step 3: 修复 Renderer null! 断言**
 
 将 `MountainLayer` 构建改为工厂模式：
 
@@ -933,7 +933,7 @@ private buildMountains(width: number): MountainLayer[] {
 }
 ```
 
-- [ ] **Step 4: 运行测试与提交**
+- [x] **Step 4: 运行测试与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -943,6 +943,14 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/game/constants.ts src/physics/drift.ts src/game/collision.ts src/engine/renderer.ts src/engine/road-geometry.ts tests/unit/constants.test.ts
 git commit -m "refactor(config): centralize game constants and remove null assertion in renderer"
 ```
+
+#### 实施偏差（Task 7 实际落地与设计的差异）
+
+1. **DRIFT_SCORE_MAX 仅为注册常量**：当前代码（drift.ts）没有 score 上限 clamp 逻辑（2026-08-02-optimize.md 中"score 不超上限 99999"的 RED/GREEN 计划未落地），constants.ts 按约定值 99999 注册该常量，drift.ts 未引入 clamp，保持渲染与计分行为完全不变。
+2. **RENDER_DRAW_DISTANCE 为新增名，保留 DRAW_DISTANCE 兼容导出**：现有消费方（renderer.ts、traffic-render.ts、traffic-render.test.ts）均 import `DRAW_DISTANCE`，road-geometry.ts 以 `export const DRAW_DISTANCE = RENDER_DRAW_DISTANCE` 保留兼容名，消费方未迁移（常量注册表测试断言两值一致）。
+3. **buildMountains 已有雏形**：实际代码是"先建数组字面量（offscreen: null!）再循环赋值"；改造为 layerDefs + map 工厂，profile/factor/color/peak 与 renderMountainOffscreen 调用完全不变，仅消除 `null!` 断言，渲染行为不变。
+4. **drift.ts 未集中的常量保留本地定义**：SPEED_RATIO_THRESHOLD、CHARGE_DECAY、SMOKE_INTERVAL、SMOKE_LIFETIME、DRIFT_SCORE_RATE、DRIFT_TURN_MULTIPLIER 不在 Task 7 常量清单内，按范围保留本地定义。
+5. **road-geometry.test.ts 无需改动**：ROAD_HALF_WIDTH/EDGE_WIDTH 仍从 road-geometry 导出（re-export），测试 import 路径不变。
 
 ---
 
