@@ -1,199 +1,59 @@
-import { Renderer, type BoostParticle, type RenderView } from '../engine/renderer'
+import { Renderer, type BoostParticle } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
-import { TRACK_DEFS, getTrackDef } from '../engine/tracks'
+import { TRACK_DEFS } from '../engine/tracks'
 import { updateTraffic } from '../engine/traffic'
-import { createCarConfig, updateCar, type CarConfig, type CarInput } from '../physics/car'
-import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
+import { createCarConfig, type CarConfig, type CarInput } from '../physics/car'
 import { BoostSound, CollisionSound, EngineSound, RainSound } from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
 import { WEATHER_CYCLE_SECONDS } from '../engine/lighting'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
+import { Minimap } from '../ui/minimap'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
-import { formatTime } from '../ui/format'
-import { addDriftScore, addMatchResult, loadBestTime, loadBestTimeFor, loadDriftTop, loadMatchTop, recordWin, type WinStats } from '../ui/save'
+import { addDriftScore, addMatchResult, loadBestTime, loadBestTimeFor, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
-import { refreshTraffic, type TrackContext } from './track-context'
+import { refreshTraffic } from './track-context'
 import { updateCollisions } from './collision'
 import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
-import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE, CHALLENGE_SECONDS } from './constants'
-import type { PlayerState } from './player-state'
-
-/** 圈数记录包装已移除（H5）：updatePlayerFrame 现返回新 lastLap，调用方直接赋值 race.lastLap */
-
-/**
- * 渲染降级参数（Task 8 性能优化）：按模式（分屏/性能/默认）返回不同负载档位。
- * drawDistance 控制可视道路段数（渲染深度），skip* 跳过对应粒子/特效渲染。
- */
-export interface PerformanceConfig {
-  /** 可视道路段数（默认 120，分屏 80，性能模式 60） */
-  drawDistance: number
-  /** 是否跳过漂移烟雾渲染 */
-  skipSmoke: boolean
-  /** 是否跳过 BOOST 尾焰粒子渲染 */
-  skipBoostParticles: boolean
-  /** 是否跳过雨丝渲染 */
-  skipRain: boolean
+import { CHALLENGE_SECONDS } from './constants'
+import { refreshBestSummary, refreshDriftTop, refreshMatchTop } from './top-refresh'
+import {
+  clampAndSyncGain,
+  loadMusicVolumeFromStorage,
+  loadSfxVolumeFromStorage,
+  loadVolumeFromStorage,
+  MUSIC_VOLUME_KEY,
+  persistVolume,
+  SFX_VOLUME_KEY,
+  VOLUME_KEY,
+} from './volume'
+// Task D（Task D）：纯函数/常量/类型迁移至 frame-pure.ts——import 供本模块内部使用，
+// 同名 re-export 保持外部 'game-loop' import 路径与导出签名不变（isolatedModules：type 用 export type）
+import {
+  advancePreviewCameraZ,
+  initialPreviewCameraZ,
+  PREVIEW_CAMERA_SPEED,
+  resolvePerformanceConfig,
+  updateBoostCharge,
+  updatePlayerFrame,
+  viewFor,
+  type PerformanceConfig,
+} from './frame-pure'
+export {
+  advancePreviewCameraZ,
+  initialPreviewCameraZ,
+  PREVIEW_CAMERA_SPEED,
+  resolvePerformanceConfig,
+  updateBoostCharge,
+  updatePlayerFrame,
+  viewFor,
 }
-
-/** 全效档（默认）：120 段 + 渲染全部特效 */
-const PERF_HIGH: PerformanceConfig = {
-  drawDistance: 120,
-  skipSmoke: false,
-  skipBoostParticles: false,
-  skipRain: false,
-}
-/** 分屏档：80 段 + 跳过全部特效（双区域渲染负载减半） */
-const PERF_MID: PerformanceConfig = {
-  drawDistance: 80,
-  skipSmoke: true,
-  skipBoostParticles: true,
-  skipRain: true,
-}
-/** 性能档：60 段 + 跳过全部特效（最激进降级） */
-const PERF_LOW: PerformanceConfig = {
-  drawDistance: 60,
-  skipSmoke: true,
-  skipBoostParticles: true,
-  skipRain: true,
-}
-
-/**
- * 按模式解析降级参数（纯函数，Task 8）：
- * - 性能模式（?perf）优先：最激进档位（60 段 + 全跳过）——用户显式请求降级，与分屏共存时也取该档
- * - 分屏模式：80 段 + 全跳过
- * - 默认：120 段 + 全渲染
- * 返回只读共享实例（仿 _viewCache 复用模式），调用方勿修改。
- */
-export function resolvePerformanceConfig(splitMode: boolean, perfMode: boolean): PerformanceConfig {
-  if (perfMode) {
-    return PERF_LOW
-  }
-  if (splitMode) {
-    return PERF_MID
-  }
-  return PERF_HIGH
-}
-
-/**
- * BOOST 蓄力/消耗（G4，纯函数）：漂移激活期间按 BOOST_CHARGE_RATE 蓄力（封顶 1）；
- * inputBoost 按下且 charge > 0 时激活 boost 并按 BOOST_DRAIN_RATE 消耗（不越 0）。
- * 帧块调用后把返回的 boost 并入传给 updatePlayerFrame 的 input（{ ...input, boost }）。
- */
-export function updateBoostCharge(
-  charge: number,
-  dt: number,
-  inputBoost: boolean,
-  driftActive: boolean,
-): { charge: number; boost: boolean } {
-  if (driftActive) {
-    charge = Math.min(1, charge + dt * BOOST_CHARGE_RATE)
-  }
-  const boost = inputBoost && charge > 0
-  if (boost) {
-    charge = Math.max(0, charge - dt * BOOST_DRAIN_RATE)
-  }
-  return { charge, boost }
-}
-
-/**
- * 菜单预览相机每秒推进的世界单位数。
- * 文档初稿为 50，但相对 24000 视距（DRAW_DISTANCE×SEGMENT_LENGTH）每帧仅 0.8 单位，
- * 肉眼不可感知；微调至 500（每帧约 8 单位，横向 sin 摆动周期约 12.6 秒），
- * 仍属"缓慢滚动"语义且三赛道预览差异可辨。
- */
-export const PREVIEW_CAMERA_SPEED = 500
-
-/** 菜单预览相机推进一帧：超过圈长则回绕到圈内（保持 previewCameraZ ∈ [0, lapLength]） */
-export function advancePreviewCameraZ(current: number, dt: number, lapLength: number): number {
-  const next = current + PREVIEW_CAMERA_SPEED * dt
-  return next > lapLength ? next - lapLength : next
-}
-
-/** 主音量持久化 key（localStorage，存 0-1 字符串） */
-const VOLUME_KEY = 'outrun-pseudo3d-volume'
-/** 音乐/音效分级音量持久化 key（G7：独立于总音量的分轨控制） */
-const MUSIC_VOLUME_KEY = 'outrun-pseudo3d-music-volume'
-const SFX_VOLUME_KEY = 'outrun-pseudo3d-sfx-volume'
-
-/**
- * 切换赛道时的预览起点：按赛道序号等分圈长（等分数 = TRACK_DEFS.length）。
- * 各赛道起点附近（z < 8000）都是直道，index*5000 无法区分不同赛道；
- * 按圈长 1/N 等分后落在不同曲率区段，预览画面差异明显。
- */
-export function initialPreviewCameraZ(index: number, lapLength: number): number {
-  const count = TRACK_DEFS.length
-  return Math.floor((index * lapLength) / count)
-}
-
-/**
- * viewFor 渲染视图缓存（Task B6 对象池复用）：模块级单例，复用而非每帧新建 RenderView。
- * 渲染为同步消费（renderWithOpts 内局部使用、不跨帧持有），分屏两区域先后渲染互不冲突；
- * 消费者均为内部代码，按只读使用、不做防御性拷贝。初始占位对象字段会被 viewFor 全量覆盖。
- */
-const _viewCache: RenderView = {
-  track: [],
-  curvePrefixSum: new Float64Array(0),
-  spriteIndex: new Map(),
-  traffic: [],
-}
-
-/**
- * 从赛道上下文构造渲染视图：分段/曲率前缀和/景物索引/车流。
- * 分屏双世界各持一份 TrackContext，渲染时用各自 view（单次渲染零重建，
- * 预计算在 TrackContext 创建时完成）。Task B6：复用模块级 _viewCache 赋值各字段后
- * 返回同一引用（两次调用之间渲染已完成，覆盖安全；导出供单测验证引用复用）。
- */
-export function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): RenderView {
-  _viewCache.track = ctx.segments
-  _viewCache.curvePrefixSum = ctx.curvePrefixSum
-  _viewCache.spriteIndex = ctx.spriteIndex
-  _viewCache.traffic = ctx.traffic
-  _viewCache.night = ctx.def.timeOfDay === 'night'
-  // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
-  _viewCache.boostParticles = boostParticles
-  return _viewCache
-}
-
-/**
- * 单玩家一帧更新：漂移 → 速度修正 → 车辆运动学 → 相机推进 → 个人计时 → 圈数记录。
- * 纯函数式收敛 P1/P2 的重复更新逻辑；lapTimes 可选传入——
- * 分屏 P2 不参与圈速记录（保持原 main.ts 行为：仅 P1 记录 lapTimes）。
- * H5：返回「新 lastLap」——传入 lapTimes 时返回当前圈数（currentLap，过圈时已 push raceTime），
- * 未传 lapTimes 返回 1；wet（雨天物理，G3）上移为第 6 尾参。
- * H1：scoreMultiplier（挑战加成）为第 7 尾参，默认 1 时行为不变。
- */
-export function updatePlayerFrame(
-  dt: number,
-  input: CarInput,
-  player: PlayerState,
-  carConfig: CarConfig,
-  lapLength: number,
-  lapTimes?: number[],
-  wet = false,
-  scoreMultiplier = 1,
-): number {
-  player.driftState = updateDrift(dt, input, player.carState, carConfig, player.driftState, player.cameraZ, scoreMultiplier)
-  player.carState.speed *= driftSpeedFactor(player.driftState)
-  updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState), wet)
-  player.cameraZ += player.carState.speed * dt
-  player.raceTime += dt
-
-  if (lapTimes !== undefined) {
-    const currentLap = lapFromZ(player.cameraZ, lapLength)
-    // lastLap 由 lapTimes 已有记录数推断（每次过圈 push 一条，圈数 = 条数 + 1），消除外部 { value } 桥接
-    if (currentLap > lapTimes.length + 1) {
-      lapTimes.push(player.raceTime)
-    }
-    return currentLap
-  }
-  return 1
-}
+export type { PerformanceConfig }
 
 /**
  * 游戏主循环：迁移自 main.ts 的全部运行时职责——DOM 引用、初始化、
@@ -209,10 +69,16 @@ export class GameLoop {
   private readonly challengeMode: boolean
   /** 挑战倒计时 HUD 元素（#challenge-timer，防御式缓存；显隐/文本由帧块处理） */
   private challengeTimer: HTMLDivElement | null = null
+  /** 挑战模式实时得分 HUD 元素（#challenge-score，挑战模式竞赛中显示当前漂移得分） */
+  private challengeScore: HTMLDivElement | null = null
   /** BOOST 条 HUD 元素（#boost-bar，防御式缓存；宽度/显隐由帧块处理，G4） */
   private boostBar: HTMLDivElement | null = null
+  /** 小地图（#hud-minimap，Batch 6）：单屏比赛阶段显示玩家赛道进度；防御式惰性获取，测试环境无 canvas 时为 null */
+  private minimap: Minimap | null = null
   /** 热座当前回合玩家（1 = P1 先跑，交棒后为 2） */
   private hotseatPlayer: 1 | 2 = 1
+  /** 分屏最近活跃玩家（P9：暂停标题标注暂停来源；帧循环按输入更新，P1 优先，默认 P1） */
+  private lastActivePlayer: 1 | 2 = 1
   /** 热座 P1 回合完赛用时（交棒时快照，供 round 2 结算胜负比较） */
   private prevP1Time: number | null = null
   private readonly canvas: HTMLCanvasElement
@@ -267,21 +133,25 @@ export class GameLoop {
     this.hotseatMode = params.has('hotseat') && !this.splitMode
     // G1（G1）：挑战模式——限时刷分（60 秒收束），与分屏/热座互斥
     this.challengeMode = params.has('challenge') && !this.splitMode && !this.hotseatMode
-    // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）；G7：分轨音量独立读取
-    this.volume = this.loadVolume()
-    this.musicVolume = this.loadMusicVolume()
-    this.sfxVolume = this.loadSfxVolume()
+    // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）；G7：分轨音量独立读取（Task D：委托 volume.ts 纯函数）
+    this.volume = loadVolumeFromStorage()
+    this.musicVolume = loadMusicVolumeFromStorage()
+    this.sfxVolume = loadSfxVolumeFromStorage()
 
-    // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 挑战限时 / 默认单屏
-    if (this.splitMode) {
-      const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始'
-    } else if (this.hotseatMode) {
-      const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道'
-    } else if (this.challengeMode) {
-      const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = '挑战模式：60 秒限时刷分 · 1-9 选赛道 · 任意键开始'
+    // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 挑战限时 / 默认单屏。
+    // Batch 3：文案统一为 [操作说明] · [开始方式] 格式——默认单屏补驾驶说明，热座补开始提示，
+    // 挑战模式重排为「限时说明 · 驾驶 · 开始」，分屏保持原样（已符合格式）
+    const menuHint = document.getElementById('menu-hint')
+    if (menuHint) {
+      if (this.splitMode) {
+        menuHint.textContent = 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始'
+      } else if (this.hotseatMode) {
+        menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道 · 按任意键开始'
+      } else if (this.challengeMode) {
+        menuHint.textContent = '60 秒限时刷分 · WASD / 方向键驾驶 · 按任意键开始'
+      } else {
+        menuHint.textContent = 'WASD / 方向键驾驶 · 1-9 选赛道 · 按任意键开始'
+      }
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -332,14 +202,18 @@ export class GameLoop {
       pauseResume: $('pause-resume') as HTMLButtonElement,
       pauseMusicVolume: $('pause-music-volume') as HTMLInputElement,
       pauseSfxVolume: $('pause-sfx-volume') as HTMLInputElement,
+      pauseTitle: $('pause-title') as HTMLHeadingElement,
     }
-    // P6（P6）：暂停菜单控件事件——音量 slider input → setVolume；重开按钮 click → 回菜单。
-    // 元素恒存在（hidden 仅面板控制），input/click 监听在构造器绑定一次即可。
+    // P6（P6）：暂停菜单控件事件——音量 slider input → clamp+gain 同步+持久化；重开按钮 click → 回菜单。
+    // Task D：原 setVolume 等方法迁移为 volume.ts 纯函数，此处闭包内联（masterGain 未惰性创建时为 null，
+    // clampAndSyncGain 仅 clamp 不同步，与旧 setVolume 行为一致）；元素恒存在（hidden 仅面板控制），
+    // input/click 监听在构造器绑定一次即可。
     const pauseVolume = this.screenElements.pauseVolume
     const pauseRestart = this.screenElements.pauseRestart
     if (pauseVolume) {
       pauseVolume.addEventListener('input', () => {
-        this.setVolume(Number(pauseVolume.value) / 100)
+        this.volume = clampAndSyncGain(Number(pauseVolume.value) / 100, this.masterGain)
+        persistVolume(VOLUME_KEY, this.volume)
       })
     }
     if (pauseRestart) {
@@ -352,12 +226,14 @@ export class GameLoop {
     const pauseSfxVolume = this.screenElements.pauseSfxVolume
     if (pauseMusicVolume) {
       pauseMusicVolume.addEventListener('input', () => {
-        this.setMusicVolume(Number(pauseMusicVolume.value) / 100)
+        this.musicVolume = clampAndSyncGain(Number(pauseMusicVolume.value) / 100, this.musicGain)
+        persistVolume(MUSIC_VOLUME_KEY, this.musicVolume)
       })
     }
     if (pauseSfxVolume) {
       pauseSfxVolume.addEventListener('input', () => {
-        this.setSfxVolume(Number(pauseSfxVolume.value) / 100)
+        this.sfxVolume = clampAndSyncGain(Number(pauseSfxVolume.value) / 100, this.sfxGain)
+        persistVolume(SFX_VOLUME_KEY, this.sfxVolume)
       })
     }
     // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
@@ -375,10 +251,7 @@ export class GameLoop {
     }
     const trackName = $('track-name') as HTMLSpanElement
     // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
-    const trackOptions = Array.from(
-      { length: TRACK_DEFS.length },
-      (_, i) => $(`track-option-${i}`) as HTMLDivElement,
-    )
+    const trackOptions = Array.from({ length: TRACK_DEFS.length }, (_, i) => $(`track-option-${i}`) as HTMLDivElement)
     // 按钮文本：序号 + 名称 + 难度星级（★×difficulty + ☆×(3-difficulty)，覆盖 index.html 初始纯文本）
     trackOptions.forEach((option, i) => {
       const def = TRACK_DEFS[i]
@@ -404,6 +277,9 @@ export class GameLoop {
       createRoadsideSprites(this.trackManager.getContext(0).segments),
       this.race.tracks[0].traffic,
     )
+    // Task A 缓存激活：初始赛道立即预热道路段离屏缓存（渲染 view 取自 race.tracks，
+    // 与 Renderer 构造入参的 trackManager 上下文引用不同，须以 race.tracks 为准才能命中 useCache 判定）
+    this.syncRendererTrack(0)
     this.input = createInputManager(window)
     this.joystick = new JoystickUI()
     this.joystick.attach(this.canvas)
@@ -434,11 +310,21 @@ export class GameLoop {
     })
 
     window.addEventListener('keydown', this.onKeyDown)
+    // 开始按钮点击事件（支持鼠标/触屏）：菜单阶段点击"开始游戏"等价于按任意键开始
+    const startBtn = document.getElementById('start-btn')
+    if (startBtn) {
+      startBtn.addEventListener('click', () => {
+        if (this.phase === PHASE_MENU) {
+          this.startGame()
+        }
+      })
+    }
     window.addEventListener('resize', this.resize)
     this.resize()
-    this.refreshDriftTop()
-    this.refreshBestSummary()
-    this.refreshMatchTop()
+    // Task D：排行榜刷新迁移至 top-refresh.ts 独立函数（无 this 依赖）
+    refreshDriftTop()
+    refreshBestSummary()
+    refreshMatchTop()
     requestAnimationFrame(this.frame)
   }
 
@@ -448,176 +334,6 @@ export class GameLoop {
    */
   getPerformanceConfig(): PerformanceConfig {
     return resolvePerformanceConfig(this.splitMode, this._perfMode)
-  }
-
-  /** 读取持久化主音量（0-1；localStorage 不可用/值无效回退 0.6，防御模式仿 save.ts getStorage） */
-  private loadVolume(): number {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const raw = window.localStorage.getItem(VOLUME_KEY)
-        if (raw !== null) {
-          const v = Number(raw)
-          if (Number.isFinite(v)) {
-            return Math.max(0, Math.min(1, v))
-          }
-        }
-      }
-    }
-    catch {
-      // localStorage 被禁用（隐私模式等）
-    }
-    return 0.6
-  }
-
-  /** 读取持久化音乐分轨音量（0-1；不可用/无效回退 0.8，G7） */
-  private loadMusicVolume(): number {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const raw = window.localStorage.getItem(MUSIC_VOLUME_KEY)
-        if (raw !== null) {
-          const v = Number(raw)
-          if (Number.isFinite(v)) {
-            return Math.max(0, Math.min(1, v))
-          }
-        }
-      }
-    }
-    catch {
-      // localStorage 被禁用
-    }
-    return 0.8
-  }
-
-  /** 读取持久化音效分轨音量（0-1；不可用/无效回退 1.0，G7） */
-  private loadSfxVolume(): number {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const raw = window.localStorage.getItem(SFX_VOLUME_KEY)
-        if (raw !== null) {
-          const v = Number(raw)
-          if (Number.isFinite(v)) {
-            return Math.max(0, Math.min(1, v))
-          }
-        }
-      }
-    }
-    catch {
-      // localStorage 被禁用
-    }
-    return 1.0
-  }
-
-  /** 设置音乐分轨音量：clamp 0-1、更新字段、musicGain 存在时立即生效、持久化 localStorage（G7） */
-  setMusicVolume(v: number): void {
-    this.musicVolume = Math.max(0, Math.min(1, v))
-    if (this.musicGain) {
-      this.musicGain.gain.value = this.musicVolume
-    }
-    try {
-      if (typeof localStorage !== 'undefined') {
-        window.localStorage.setItem(MUSIC_VOLUME_KEY, String(this.musicVolume))
-      }
-    }
-    catch {
-      // localStorage 不可用时忽略持久化
-    }
-  }
-
-  /** 设置音效分轨音量：clamp 0-1、更新字段、sfxGain 存在时立即生效、持久化 localStorage（G7） */
-  setSfxVolume(v: number): void {
-    this.sfxVolume = Math.max(0, Math.min(1, v))
-    if (this.sfxGain) {
-      this.sfxGain.gain.value = this.sfxVolume
-    }
-    try {
-      if (typeof localStorage !== 'undefined') {
-        window.localStorage.setItem(SFX_VOLUME_KEY, String(this.sfxVolume))
-      }
-    }
-    catch {
-      // localStorage 不可用时忽略持久化
-    }
-  }
-
-  /** 设置主音量：clamp 0-1、更新字段、masterGain 存在时立即生效、持久化 localStorage */
-  setVolume(v: number): void {
-    this.volume = Math.max(0, Math.min(1, v))
-    if (this.masterGain) {
-      this.masterGain.gain.value = this.volume
-    }
-    try {
-      if (typeof localStorage !== 'undefined') {
-        window.localStorage.setItem(VOLUME_KEY, String(this.volume))
-      }
-    }
-    catch {
-      // localStorage 不可用时忽略持久化
-    }
-  }
-
-  /** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：取前 5 条渲染，无记录显示占位文本 */
-  private refreshDriftTop(): void {
-    const el = document.getElementById('drift-top')
-    if (!el) {
-      return
-    }
-    const top = loadDriftTop().slice(0, 5)
-    el.textContent =
-      top.length === 0
-        ? '暂无漂移记录'
-        : top
-            .map(
-              (e, i) =>
-                `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}` +
-                // H4（H4）：最高连击档位 → ` · 连击 x倍率`（1 + combo*0.25）；旧条目无 combo 不追加
-                (e.combo ? ` · 连击 x${(1 + e.combo * 0.25).toFixed(2)}` : ''),
-            )
-            .join('\n')
-  }
-
-  /**
-   * 刷新菜单各赛道 BEST 汇总（#best-summary，菜单静态元素）：遍历 TRACK_DEFS 读 P1/P2 最佳圈速，
-   * 每行 `${i+1}. ${name}  P1 <时间>`（P2 有纪录追加 ` · P2 <时间>`；无纪录用 --）。
-   * 全部赛道均无任何纪录时显示占位文本（与 #drift-top 的"暂无漂移记录"风格一致）。
-   */
-  private refreshBestSummary(): void {
-    const el = document.getElementById('best-summary')
-    if (!el) {
-      return
-    }
-    const lines = TRACK_DEFS.map((def, i) => {
-      const t1 = loadBestTimeFor(0, def.id)
-      const t2 = loadBestTimeFor(1, def.id)
-      const p1 = t1 !== null ? formatTime(t1) : '--'
-      const p2 = t2 !== null ? ` · P2 ${formatTime(t2)}` : ''
-      return `${i + 1}. ${def.name}  P1 ${p1}${p2}`
-    })
-    const hasAny = TRACK_DEFS.some(
-      (def) => loadBestTimeFor(0, def.id) !== null || loadBestTimeFor(1, def.id) !== null,
-    )
-    el.textContent = hasAny ? lines.join('\n') : '暂无最佳成绩'
-  }
-
-  /**
-   * 刷新菜单分屏漂移对局 TOP10（#match-top，菜单静态元素）：取前 MATCH_TOP_MAX 条渲染
-   * （`${i+1}. ${winner} 胜 · ${p1Score}:${p2Score} · ${getTrackDef(trackId)?.name ?? trackId}`），
-   * 无记录显示占位文本（仿 refreshDriftTop 模式）。
-   */
-  private refreshMatchTop(): void {
-    const el = document.getElementById('match-top')
-    if (!el) {
-      return
-    }
-    const top = loadMatchTop()
-    el.textContent =
-      top.length === 0
-        ? '暂无对局记录'
-        : top
-            .map(
-              (e, i) =>
-                `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
-            )
-            .join('\n')
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
@@ -637,10 +353,35 @@ export class GameLoop {
     // F3（F3）：进入暂停时清理摇杆残留输入（防恢复首帧误输入）；触屏暂停按钮仅比赛阶段可见
     if (newPhase === PHASE_PAUSED) {
       this.joystick.reset()
+      // P9：暂停标题按暂停玩家动态标注——分屏按最近活跃玩家（lastActivePlayer，触屏按钮无输入时默认 P1）、
+      // 热座按当前回合玩家（hotseatPlayer）、单屏保持通用 "PAUSED"；
+      // 配色类与 HUD P1/P2 标签风格一致（p1/p2 class，见 hud.ts hudPlayerTag）
+      const pauseTitle = this.screenElements.pauseTitle
+      if (pauseTitle) {
+        const pausedWho = this.splitMode ? this.lastActivePlayer : this.hotseatMode ? this.hotseatPlayer : null
+        if (pausedWho !== null) {
+          pauseTitle.textContent = pausedWho === 2 ? 'P2 已暂停' : 'P1 已暂停'
+          pauseTitle.classList.toggle('p1', pausedWho === 1)
+          pauseTitle.classList.toggle('p2', pausedWho === 2)
+        } else {
+          pauseTitle.textContent = 'PAUSED'
+        }
+      }
     }
     const pauseBtn = this.hudElements.pauseBtn
     if (pauseBtn) {
       pauseBtn.hidden = newPhase !== PHASE_RACING
+    }
+    // 挑战模式 HUD 兜底显隐：倒计时/实时得分仅比赛阶段可见（帧块按 phase 刷新，此处覆盖退出 RACING 后的残留）
+    if (this.challengeTimer) {
+      this.challengeTimer.hidden = newPhase !== PHASE_RACING
+    }
+    if (this.challengeScore) {
+      this.challengeScore.hidden = newPhase !== PHASE_RACING
+    }
+    // Batch 6（Batch 6）：小地图兜底显隐——退出 RACING（暂停/结算/回菜单）时隐藏（帧块按 phase 刷新，此处覆盖残留）
+    if (this.minimap) {
+      this.minimap.canvas.hidden = newPhase !== PHASE_RACING
     }
     // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
     // 热座与分屏共用 finishedP2：P2 回合玩家2 跑完触发，P1 回合玩家2 静止不会误触
@@ -702,35 +443,37 @@ export class GameLoop {
           trackId: this.trackManager.getTrackId(0),
         })
       }
-      this.refreshDriftTop()
-      this.refreshMatchTop()
+      // Task D：排行榜刷新迁移至 top-refresh.ts 独立函数
+      refreshDriftTop()
+      refreshMatchTop()
     }
-    applyPhaseToScreens(
-      this.screenElements,
-      newPhase,
-      this.race,
-      this.carConfig,
-      {
-        splitMode: this.splitMode,
-        finishedP1,
-        finishedP2,
-        hotseatMode: this.hotseatMode,
-        hotseatRound: this.hotseatPlayer,
-        prevP1Time: this.prevP1Time,
-        driftWinner,
-        winStats,
-        challengeMode: this.challengeMode,
-      },
-    )
+    applyPhaseToScreens(this.screenElements, newPhase, this.race, this.carConfig, {
+      splitMode: this.splitMode,
+      finishedP1,
+      finishedP2,
+      hotseatMode: this.hotseatMode,
+      hotseatRound: this.hotseatPlayer,
+      prevP1Time: this.prevP1Time,
+      driftWinner,
+      winStats,
+      challengeMode: this.challengeMode,
+    })
     if (newPhase === PHASE_FINISHED) {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
       this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
+      // Batch 6（Batch 6）：小地图 canvas 惰性获取——仅单屏创建（分屏双世界无单一进度语义）；
+      // 特性检测 getContext 而非 instanceof HTMLCanvasElement：Node 测试环境无该全局（ReferenceError），
+      // 且 document.getElementById 对未知 id 返回普通对象替身（无 getContext 方法），判空自然跳过
+      const minimapEl = document.getElementById('hud-minimap') as HTMLCanvasElement | null
+      if (minimapEl !== null && !this.splitMode && typeof minimapEl.getContext === 'function') {
+        this.minimap = new Minimap(this.race.tracks[0], minimapEl)
+      }
     }
     if (newPhase === PHASE_MENU) {
       this.resetRace()
-      this.refreshDriftTop()
-      this.refreshBestSummary()
-      this.refreshMatchTop()
+      refreshDriftTop()
+      refreshBestSummary()
+      refreshMatchTop()
     }
   }
 
@@ -759,10 +502,7 @@ export class GameLoop {
           // 热座双人同一赛道：P1 选赛道后同步 P2 世界（TrackContext 与预览起点）
           this.trackManager.selectTrack(1, digit - 1)
           this.race.tracks[1] = this.trackManager.getContext(1)
-          this.previewCameraZ[1] = initialPreviewCameraZ(
-            digit - 1,
-            this.race.tracks[1].lapLength,
-          )
+          this.previewCameraZ[1] = initialPreviewCameraZ(digit - 1, this.race.tracks[1].lapLength)
         }
         return
       }
@@ -772,9 +512,14 @@ export class GameLoop {
     // 缺陷修复：菜单阶段修饰键单独按下（如 P2 选赛道先按 Shift）不触发"任意键开始"
     if (
       this.phase === PHASE_MENU &&
-      (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ControlLeft' ||
-        e.code === 'ControlRight' || e.code === 'AltLeft' || e.code === 'AltRight' ||
-        e.code === 'MetaLeft' || e.code === 'MetaRight')
+      (e.code === 'ShiftLeft' ||
+        e.code === 'ShiftRight' ||
+        e.code === 'ControlLeft' ||
+        e.code === 'ControlRight' ||
+        e.code === 'AltLeft' ||
+        e.code === 'AltRight' ||
+        e.code === 'MetaLeft' ||
+        e.code === 'MetaRight')
     ) {
       return
     }
@@ -794,6 +539,15 @@ export class GameLoop {
       this.applyPhase(PHASE_RACING)
       return
     }
+    this.startGame()
+  }
+
+  /**
+   * 开始游戏：首次调用时惰性创建 AudioContext 并注入全部音效（主音量 masterGain 总控，
+   * G7 起下挂 musicGain/sfxGain 分轨），随后推进阶段 FSM（menu→racing，超圈→finished，finished→menu）。
+   * 键盘"任意键开始"与 #start-btn 点击共用此逻辑（M12 按钮修复）。
+   */
+  private startGame(): void {
     if (!this.engineSound) {
       const ctx = new AudioContext()
       // P6（P6）：主音量节点——总控；G7 起分轨：musicGain/sfxGain 各连 masterGain，独立调节
@@ -837,19 +591,35 @@ export class GameLoop {
   private selectTrackFor(playerIndex: 0 | 1, trackIndex: number): void {
     this.trackManager.selectTrack(playerIndex, trackIndex)
     this.race.tracks[playerIndex] = this.trackManager.getContext(playerIndex)
-    this.previewCameraZ[playerIndex] = initialPreviewCameraZ(
-      trackIndex,
-      this.race.tracks[playerIndex].lapLength,
-    )
+    this.previewCameraZ[playerIndex] = initialPreviewCameraZ(trackIndex, this.race.tracks[playerIndex].lapLength)
+    // Task A 缓存激活：赛道切换后重建道路段离屏缓存（race.tracks 引用已更新，
+    // 传新 TrackContext 的预计算字段使 viewFor 的 track 与 renderer.cachedTrack 同引用）
+    this.syncRendererTrack(playerIndex)
+  }
+
+  /**
+   * 激活渲染器道路段缓存消费（Task A 缓存路径在真实游戏的接入点）：
+   * 把指定玩家 TrackContext 的预计算（segments/sprites/roadStrips）推给 renderer.setTrack，
+   * 使 viewFor(ctx) 返回的 RenderView.track 与 renderer.cachedTrack 同引用且缓存非空 → useCache 成立。
+   * 注意：渲染 view 取自 race.tracks（createRaceState 自建 TrackContext，与 TrackManager 上下文引用不同），
+   * 必须传 race.tracks 的字段才能命中缓存判定。
+   * 分屏双世界共用同一 Renderer（engine 层 cachedTrack 单引用）：缓存指向最近切换的玩家世界，
+   * 另一玩家世界回退逐段 drawQuad（渲染正确性不受影响）。热座双人同赛道且渲染只走 tracks[0]。
+   */
+  private syncRendererTrack(playerIndex: 0 | 1): void {
+    const ctx = this.race.tracks[playerIndex]
+    // node 测试环境无 OffscreenCanvas 全局（roadStripCache 预渲染依赖 new OffscreenCanvas）：
+    // 降级为不带 roadStrips 的 setTrack（缓存停用、渲染走逐段 drawQuad，与激活前行为一致）；
+    // 真实浏览器存在 OffscreenCanvas，传 roadStrips 激活道路段离屏缓存消费。
+    if (typeof OffscreenCanvas === 'undefined') {
+      this.renderer.setTrack(ctx.segments, ctx.sprites)
+      return
+    }
+    this.renderer.setTrack(ctx.segments, ctx.sprites, ctx.roadStrips)
   }
 
   private readonly resize = (): void => {
-    this.renderer.setViewport(
-      this.canvas,
-      window.innerWidth,
-      window.innerHeight,
-      window.devicePixelRatio || 1,
-    )
+    this.renderer.setViewport(this.canvas, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1)
   }
 
   private readonly frame = (now: number): void => {
@@ -875,6 +645,12 @@ export class GameLoop {
           this.challengeTimer.hidden = this.phase !== PHASE_RACING
           this.challengeTimer.textContent = `剩余 ${Math.max(0, CHALLENGE_SECONDS - this.race.player1.raceTime).toFixed(1)}s`
         }
+        // 挑战模式实时得分——与倒计时同生命周期，显示当前漂移得分（整数）
+        this.challengeScore ??= document.getElementById('challenge-score') as HTMLDivElement | null
+        if (this.challengeScore) {
+          this.challengeScore.hidden = this.phase !== PHASE_RACING
+          this.challengeScore.textContent = `得分 ${Math.round(this.race.player1.driftState.score)}`
+        }
       }
       // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
       // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
@@ -890,9 +666,16 @@ export class GameLoop {
         })
       }
       const input1 = this.joystick.isActive() ? this.joystick.getInput() : this.input.getP1Input()
-      const input2 = this.splitMode
-        ? this.input.getP2Input()
-        : { throttle: 0, brake: false, steer: 0 }
+      const input2 = this.splitMode ? this.input.getP2Input() : { throttle: 0, brake: false, steer: 0 }
+      // P9：分屏暂停标题标注数据源——最近活跃玩家（P1 优先：双人同时活跃归 P1，
+      // 仅 P2 有输入才标 P2；触屏摇杆输入走 input1 分支自然归 P1）
+      if (this.splitMode) {
+        if (input1.throttle > 0 || input1.brake || input1.steer !== 0) {
+          this.lastActivePlayer = 1
+        } else if (input2.throttle > 0 || input2.brake || input2.steer !== 0) {
+          this.lastActivePlayer = 2
+        }
+      }
 
       // G4（G4）：BOOST 蓄力/消耗——漂移激活蓄力、按键（Space/Enter）且 charge>0 时消耗并激活；
       // 并入 boost 字段后传给 updatePlayerFrame（触屏 input.boost 恒 false 不受影响）
@@ -996,11 +779,7 @@ export class GameLoop {
 
       // 碰撞检测：分屏双人全检；热座仅当前回合玩家参与——P2 回合检 player2 与 P2 世界车流，
       // P1 回合 player2 静止不参与（保持 M8 热座语义，避免起点车流误撞静止 P2）
-      updateCollisions(
-        this.race,
-        dt,
-        this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2),
-      )
+      updateCollisions(this.race, dt, this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2))
       // F4（F4）：碰撞计数增长 → 触发碰撞冲击音（CollisionSound 内部 80ms 防刷屏）；
       // H6（H6）：强度 = 双玩家速度比取较快者（单屏 player2 speed=0 自然取 P1），高速撞击更响
       if (this.race.collisionCount > this.lastCollisionCount) {
@@ -1031,42 +810,19 @@ export class GameLoop {
     const w = window.innerWidth
     if (this.phase === PHASE_MENU) {
       // 双预览相机按各自世界圈长推进（分屏时 P1/P2 预览独立滚动）
-      this.previewCameraZ[0] = advancePreviewCameraZ(
-        this.previewCameraZ[0],
-        dt,
-        this.trackManager.getLapLength(0),
-      )
-      this.previewCameraZ[1] = advancePreviewCameraZ(
-        this.previewCameraZ[1],
-        dt,
-        this.trackManager.getLapLength(1),
-      )
+      this.previewCameraZ[0] = advancePreviewCameraZ(this.previewCameraZ[0], dt, this.trackManager.getLapLength(0))
+      this.previewCameraZ[1] = advancePreviewCameraZ(this.previewCameraZ[1], dt, this.trackManager.getLapLength(1))
       // 相机横向小幅摆动，让预览即使在直道也有动感（以 P1 预览位置为准）
       this.renderer.setCameraX(Math.sin(this.previewCameraZ[0] * 0.001) * 0.3)
       if (this.splitMode) {
-        this.renderer.renderRegion(
-          this.previewCameraZ[0],
-          0,
-          w / 2,
-          [],
-          0,
-          viewFor(this.race.tracks[0]),
-        )
-        this.renderer.renderRegion(
-          this.previewCameraZ[1],
-          w / 2,
-          w / 2,
-          [],
-          0,
-          viewFor(this.race.tracks[1]),
-        )
+        this.renderer.renderRegion(this.previewCameraZ[0], 0, w / 2, [], 0, viewFor(this.race.tracks[0]))
+        this.renderer.renderRegion(this.previewCameraZ[1], w / 2, w / 2, [], 0, viewFor(this.race.tracks[1]))
         // 交界处深色分隔线：覆盖两区域近处路缘石交错瑕疵（标准分屏做法）
         this.renderer.drawDivider(w / 2)
       } else {
         this.renderer.render(this.previewCameraZ[0], [], 0, viewFor(this.race.tracks[0]))
       }
-    }
-    else if (this.splitMode) {
+    } else if (this.splitMode) {
       this.renderer.setCameraX(this.race.player1.carState.position)
       this.renderer.renderRegion(
         this.race.player1.cameraZ,
@@ -1088,8 +844,7 @@ export class GameLoop {
       // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
       // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
       this.renderer.drawDivider(w / 2)
-    }
-    else {
+    } else {
       this.renderer.setCameraX(this.race.player1.carState.position)
       this.renderer.render(
         this.race.player1.cameraZ,
@@ -1097,6 +852,19 @@ export class GameLoop {
         this.race.player1.raceTime,
         viewFor(this.race.tracks[0], this.boostParticles),
       )
+    }
+
+    // Batch 6（Batch 6）：小地图（#hud-minimap）——仅单屏比赛阶段显示玩家赛道进度；
+    // 菜单切赛道后 race.tracks[0] 引用更新，据此重建轨迹折线；分屏不创建（构造器已判空，此处双保险）
+    if (this.minimap) {
+      if (this.minimap.trackContext !== this.race.tracks[0]) {
+        this.minimap = new Minimap(this.race.tracks[0], this.minimap.canvas)
+      }
+      const showMinimap = this.phase === PHASE_RACING && !this.splitMode
+      this.minimap.canvas.hidden = !showMinimap
+      if (showMinimap) {
+        this.minimap.update(this.race.player1.cameraZ)
+      }
     }
 
     updateHud(
