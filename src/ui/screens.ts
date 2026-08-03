@@ -105,16 +105,17 @@ function fillFinishPanel(
     elements.finishLaps.textContent = ''
   } else if (opts.finishedP1) {
     const avgSpeed = race.player1.cameraZ / Math.max(race.player1.raceTime, 0.001)
-    elements.finishTime.textContent = `总用时 ${formatTime(race.player1.raceTime)}`
-    elements.finishSpeed.textContent = `平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
+    // E1：分屏模式下 P1 结算行加 'P1 ' 前缀（与 P2 行对称）；圈速行 finishLaps 不加（与 P2 对称）
+    elements.finishTime.textContent = `${opts.splitMode ? 'P1 ' : ''}总用时 ${formatTime(race.player1.raceTime)}`
+    elements.finishSpeed.textContent = `${opts.splitMode ? 'P1 ' : ''}平均速度 ${formatSpeed(avgSpeed, carConfig.maxSpeed)} km/h`
 
     const isRecord = saveBestTime(race.player1.raceTime, trackId0)
     const bestTime = loadBestTime(trackId0)
     elements.finishBest.textContent = isRecord
-      ? 'NEW RECORD!'
-      : `最佳 ${formatTime(bestTime ?? race.player1.raceTime)}`
+      ? `${opts.splitMode ? 'P1 ' : ''}NEW RECORD!`
+      : `${opts.splitMode ? 'P1 ' : ''}最佳 ${formatTime(bestTime ?? race.player1.raceTime)}`
 
-    elements.finishScore.textContent = `漂移得分 ${Math.round(race.player1.driftState.score)}`
+    elements.finishScore.textContent = `${opts.splitMode ? 'P1 ' : ''}漂移得分 ${Math.round(race.player1.driftState.score)}`
     if (race.player1.driftState.score > 0) {
       const isDriftRecord = saveBestDriftScore(Math.round(race.player1.driftState.score), trackId0)
       const bestDriftScore = loadBestDriftScore(trackId0)

@@ -373,8 +373,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('KeyW')
     splitEnv.driveFrames(2500)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // C3 双人结算：P1 完赛填 P1 行，P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
-    expect(splitEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
+    // C3 双人结算：P1 完赛填 P1 行（E1：分屏加 'P1 ' 前缀），P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
+    expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
     expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
     expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
     // D3 漂移竞速横幅：未双完赛（P2 未完赛）时保持隐藏
@@ -412,6 +412,11 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('ArrowUp')
     splitEnv.driveFrames(4000)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+    // E1：分屏结算 P1 行加 'P1 ' 前缀（与 P2 行对称，圈速行除外）
+    expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
+    expect(splitEnv.getElement('finish-speed').textContent.startsWith('P1 平均速度')).toBe(true)
+    expect(splitEnv.getElement('finish-best').textContent.startsWith('P1')).toBe(true)
+    expect(splitEnv.getElement('finish-score').textContent.startsWith('P1 漂移得分')).toBe(true)
     // 双方均零漂移（无转向输入）：Math.round(0) >= Math.round(0) → P1 获胜；
     // 横幅须可见、文本含 'P1 获胜' 且精确匹配（含 DRIFT 竞速 前缀）
     const banner = splitEnv.getElement('finish-drift-winner')
