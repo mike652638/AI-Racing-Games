@@ -1,0 +1,223 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GameLoop } from '../../src/game/game-loop'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/game/phase'
+import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
+
+/** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
+interface StubElement {
+  textContent: string
+  hidden: boolean
+  className: string
+  style: Record<string, string>
+  classList: { toggle: ReturnType<typeof vi.fn> }
+  appendChild: ReturnType<typeof vi.fn>
+  addEventListener: ReturnType<typeof vi.fn>
+  setPointerCapture: ReturnType<typeof vi.fn>
+  clientWidth: number
+  clientHeight: number
+}
+
+function createElementStub(): StubElement {
+  return {
+    textContent: '',
+    hidden: false,
+    className: '',
+    style: {},
+    classList: { toggle: vi.fn() },
+    appendChild: vi.fn(),
+    addEventListener: vi.fn(),
+    setPointerCapture: vi.fn(),
+    clientWidth: 0,
+    clientHeight: 0,
+  }
+}
+
+/** WebAudio 节点替身：EngineSound 构造/调速所需的最小方法集 */
+function createAudioNode(): {
+  connect: () => unknown
+  type: string
+  buffer: unknown
+  frequency: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void }
+  detune: { value: number }
+  gain: {
+    value: number
+    setTargetAtTime: () => void
+    setValueAtTime: () => void
+    exponentialRampToValueAtTime: () => void
+  }
+  start: () => void
+  stop: () => void
+} {
+  const node = {
+    connect: (): unknown => node,
+    type: '',
+    buffer: null,
+    frequency: { value: 0, setTargetAtTime: (): void => undefined, setValueAtTime: (): void => undefined },
+    detune: { value: 0 },
+    gain: {
+      value: 0,
+      setTargetAtTime: (): void => undefined,
+      setValueAtTime: (): void => undefined,
+      exponentialRampToValueAtTime: (): void => undefined,
+    },
+    start: (): void => undefined,
+    stop: (): void => undefined,
+  }
+  return node
+}
+
+interface Environment {
+  fireKey: (code: string) => void
+  driveFrames: (count: number) => void
+  phase: () => Phase | undefined
+  getCanvas: () => MockCanvas
+  getElement: (id: string) => StubElement
+}
+
+/**
+ * stub 全局 DOM/window/RAF/AudioContext，返回事件触发与帧驱动工具。
+ * - window：location（非分屏）、innerWidth/Height、addEventListener 记录监听器供 fireKey 触发
+ * - document：getElementById 按 id 返回元素替身（'game' 返回 canvas mock）
+ * - requestAnimationFrame：记录回调；GameLoop 构造时唯一注册的 rAF 回调即 frame，
+ *   测试据此驱动帧循环（MusicPlayer.tick 等其它回调不驱动）
+ * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
+ */
+function stubEnvironment(): Environment {
+  const listeners = new Map<string, Array<(e: { code: string }) => void>>()
+  const elements = new Map<string, StubElement>()
+  const rafCallbacks: FrameRequestCallback[] = []
+  let gameCanvas: MockCanvas | null = null
+  let now = performance.now()
+
+  const windowStub = {
+    location: { search: '' },
+    innerWidth: 800,
+    innerHeight: 600,
+    devicePixelRatio: 1,
+    addEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+      const arr = listeners.get(type) ?? []
+      arr.push(cb)
+      listeners.set(type, arr)
+    },
+    removeEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+      const arr = listeners.get(type)
+      if (arr) {
+        const idx = arr.indexOf(cb)
+        if (idx >= 0) arr.splice(idx, 1)
+      }
+    },
+  }
+
+  const documentStub = {
+    getElementById: (id: string): unknown => {
+      if (id === 'game') {
+        gameCanvas ??= createMockCanvas(800, 600)
+        return gameCanvas
+      }
+      if (!elements.has(id)) elements.set(id, createElementStub())
+      return elements.get(id)
+    },
+    createElement: (tag: string): unknown => (tag === 'canvas' ? createMockCanvas() : createElementStub()),
+    body: createElementStub(),
+  }
+
+  class FakeAudioContext {
+    state = 'running'
+    currentTime = 0
+    sampleRate = 44100
+    destination = {}
+    createGain = (): unknown => createAudioNode()
+    createBiquadFilter = (): unknown => createAudioNode()
+    createOscillator = (): unknown => createAudioNode()
+    resume = (): void => undefined
+  }
+
+  vi.stubGlobal('window', windowStub as unknown as Window & typeof globalThis)
+  vi.stubGlobal('document', documentStub as unknown as Document)
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
+    rafCallbacks.push(cb)
+    return rafCallbacks.length
+  })
+  vi.stubGlobal('cancelAnimationFrame', (): void => undefined)
+  vi.stubGlobal('AudioContext', FakeAudioContext as unknown as typeof AudioContext)
+
+  const fireKey = (code: string): void => {
+    for (const cb of listeners.get('keydown') ?? []) cb({ code })
+  }
+  /** 驱动 GameLoop 帧回调：固定 50ms/帧（dt=0.05），与真实帧节奏一致 */
+  const driveFrames = (count: number): void => {
+    const frame = rafCallbacks[0] as FrameRequestCallback
+    for (let i = 0; i < count; i++) {
+      now += 50
+      frame(now)
+    }
+  }
+  const phase = (): Phase | undefined =>
+    (windowStub as unknown as { __gameDebug?: { phase: Phase } }).__gameDebug?.phase
+
+  return {
+    fireKey,
+    driveFrames,
+    phase,
+    getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
+    getElement: (id: string) => elements.get(id) ?? createElementStub(),
+  }
+}
+
+describe('GameLoop 主循环集成冒烟测试', () => {
+  let env: Environment
+
+  beforeEach(() => {
+    env = stubEnvironment()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('构造后初始阶段为菜单', () => {
+    new GameLoop()
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
+  it('菜单阶段驱动帧渲染预览画面（不抛错且有绘制输出）', () => {
+    new GameLoop()
+    const before = env.getCanvas().__ctx.__calls.fill ?? 0
+    env.driveFrames(5)
+    expect(env.getCanvas().__ctx.__calls.fill ?? 0).toBeGreaterThan(before)
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
+  it('按键输入后从菜单进入比赛阶段', () => {
+    new GameLoop()
+    env.fireKey('KeyW')
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('Escape 在比赛与暂停间往返切换', () => {
+    new GameLoop()
+    env.fireKey('KeyW')
+    env.fireKey('Escape')
+    expect(env.phase()).toBe(PHASE_PAUSED)
+    env.fireKey('Escape')
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('比赛阶段驱动帧推进车辆并点亮 HUD', () => {
+    new GameLoop()
+    env.fireKey('KeyW')
+    env.driveFrames(60) // 3 秒满油门：速度达到上限，HUD 应显示速度
+    const hudSpeed = env.getElement('hud-speed')
+    expect(hudSpeed.hidden).toBe(false)
+    expect(hudSpeed.textContent).not.toBe('')
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('全油门跑完总圈数后进入结算阶段', () => {
+    new GameLoop()
+    env.fireKey('KeyW')
+    // 经典赛道 3 圈 ≈ 276000 世界单位；125 秒满油门（2500 帧×50ms）远超所需，
+    // 途中可能与车流碰撞减速，帧数留足余量
+    env.driveFrames(2500)
+    expect(env.phase()).toBe(PHASE_FINISHED)
+  })
+})

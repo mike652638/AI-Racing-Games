@@ -1032,7 +1032,7 @@ git commit -m "feat(ui): animate track preview on menu and reflect selected trac
 **Interfaces:**
 - Produces: 对 `Renderer.setViewport`, `setTrack`, `setTraffic` 的状态切换测试；对 `GameLoop` 的启动/暂停/完赛状态机测试
 
-- [ ] **Step 1: 创建 Canvas mock**
+- [x] **Step 1: 创建 Canvas mock**
 
 ```typescript
 // tests/__mocks__/canvas.ts
@@ -1064,7 +1064,7 @@ export function createMockCanvas(width = 800, height = 600): HTMLCanvasElement {
 }
 ```
 
-- [ ] **Step 2: 写 Renderer 状态测试**
+- [x] **Step 2: 写 Renderer 状态测试**
 
 ```typescript
 // tests/unit/renderer-state.test.ts
@@ -1086,7 +1086,7 @@ describe('renderer state', () => {
 })
 ```
 
-- [ ] **Step 3: 写主循环集成测试**
+- [x] **Step 3: 写主循环集成测试**
 
 ```typescript
 // tests/unit/game-loop-integration.test.ts
@@ -1105,7 +1105,7 @@ describe('game loop', () => {
 })
 ```
 
-- [ ] **Step 4: 运行测试与提交**
+- [x] **Step 4: 运行测试与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -1115,6 +1115,18 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add tests/__mocks__/canvas.ts tests/unit/renderer-state.test.ts tests/unit/game-loop-integration.test.ts
 git commit -m "test(integration): add renderer state and game loop smoke tests"
 ```
+
+### 实施偏差
+
+- **实际新增文件**：`tests/__mocks__/canvas.ts`、`tests/unit/renderer-state.test.ts`（8 用例）、`tests/unit/game-loop-integration.test.ts`（6 用例）。未修改任何 src 代码。
+- **Canvas mock 覆盖**：文档骨架只含 fillRect 等 14 个方法；按 renderer.ts 实际调用补齐为 fillRect/beginPath/moveTo/lineTo/closePath/fill/save/restore/translate/rect/clip/drawImage/arc/setTransform/getImageData + fillStyle 属性，另加 addEventListener/appendChild/setPointerCapture（GameLoop 的 JoystickUI.attach 需要）。扩展 `__calls` 调用计数与 `__ctx` 引用，使"渲染输出稳定"可断言（同参数重复渲染 fill 次数增量恒定）。
+- **createStraightTrack 来源**：文档示例从 `tests/helpers/track` 导入，该文件不存在；`createStraightTrack` 实际由 `src/engine/track.ts` 导出（引擎层既有纯函数），renderer-state.test.ts 直接 `import { createStraightTrack } from '../../src/engine/track'`，另用 `createTrackFromDef(TRACK_DEFS[1])` 覆盖真实赛道数据。
+- **createGameLoop 不存在**：Task 4-8 重构后为 `class GameLoop`（constructor 无参）+ `initGame()`，且 `phase` 是私有字段。测试改为实例化 `new GameLoop()`，通过 `installDebugHook` 暴露的 `window.__gameDebug.phase` getter（bot 脚本同款读取方式）断言阶段状态，不改 src。
+- **DOM 依赖解决方式**：node 测试环境无 DOM，用 `vi.stubGlobal` 替换 window/document/requestAnimationFrame/cancelAnimationFrame/AudioContext。document.getElementById 对 `'game'` 返回 canvas mock、其余 id 返回元素替身；AudioContext 用最小 FakeAudioContext（createGain/createBiquadFilter/createOscillator + 节点 value/setTargetAtTime 等）支撑 EngineSound 构造与 setSpeedRatio。
+- **帧驱动**：requestAnimationFrame stub 记录回调，构造时唯一注册的 rAF 回调即 GameLoop.frame，测试按 50ms/帧（dt=0.05）手动驱动；MusicPlayer.tick 等其它回调不驱动，避免 WebAudio 调度路径。初始 now 取 `performance.now()` 避免首帧负 dt。
+- **输入模拟**：window.addEventListener 记录监听器，`fireKey(code)` 同步触发全部 keydown 监听（input manager 记键 + GameLoop.onKeyDown 转阶段）。
+- **finished 场景**：按键 KeyW 全油门后驱动 2500 帧（125 秒模拟）跑完经典赛道 3 圈（276000 世界单位）。途中可能与车流碰撞减速（碰撞惩罚 speed×0.5、1 秒冷却），所需帧数约 1100，2500 留足余量且实测稳定。
+- **可测性建议（未改 src）**：GameLoop.phase 为私有、仅能经 debug hook 读取；若后续要更直接的状态断言，可考虑加只读 getter（如 `getPhase()`）。另外 `tests/__mocks__/canvas.ts` 中 `renderMountainOffscreen` 的离屏 canvas 也走同一 mock，未单独验证离屏缓存内容。
 
 ---
 
