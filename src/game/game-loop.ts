@@ -26,6 +26,31 @@ export interface LastLapRef {
 }
 
 /**
+ * 菜单预览相机每秒推进的世界单位数。
+ * 文档初稿为 50，但相对 24000 视距（DRAW_DISTANCE×SEGMENT_LENGTH）每帧仅 0.8 单位，
+ * 肉眼不可感知；微调至 500（每帧约 8 单位，横向 sin 摆动周期约 12.6 秒），
+ * 仍属"缓慢滚动"语义且三赛道预览差异可辨。
+ */
+export const PREVIEW_CAMERA_SPEED = 500
+
+/** 菜单预览相机推进一帧：超过圈长则回绕到圈内（保持 previewCameraZ ∈ [0, lapLength]） */
+export function advancePreviewCameraZ(current: number, dt: number, lapLength: number): number {
+  const next = current + PREVIEW_CAMERA_SPEED * dt
+  return next > lapLength ? next - lapLength : next
+}
+
+/**
+ * 切换赛道时的预览起点：按赛道序号等分圈长。
+ * 三条赛道起点附近都是直道（经典 12000 / 高速 15000 / S 弯 5000 前无曲率），
+ * index*5000 无法区分经典与高速；按圈长 1/3 等分后经典落在直道、高速落在右弯、
+ * S 弯落在左弯，预览画面差异明显。
+ */
+export function initialPreviewCameraZ(index: number, lapLength: number): number {
+  const count = TRACK_DEFS.length
+  return Math.floor((index * lapLength) / count)
+}
+
+/**
  * 单玩家一帧更新：漂移 → 速度修正 → 车辆运动学 → 相机推进 → 个人计时 → 圈数记录。
  * 纯函数式收敛 P1/P2 的重复更新逻辑；lapTimes/lastLapRef 可选传入——
  * 分屏 P2 不参与圈速记录（保持原 main.ts 行为：仅 P1 记录 lapTimes）。
@@ -73,6 +98,8 @@ export class GameLoop {
   private engineSound: EngineSound | null = null
   private music: MusicPlayer | null = null
   private bestTime: number | null
+  /** 菜单预览相机位置（仅 PHASE_MENU 推进；切换赛道时按圈长等分重置起点） */
+  private previewCameraZ = 0
   private last = performance.now()
 
   constructor() {
@@ -185,6 +212,8 @@ export class GameLoop {
       const index = Number(e.code.slice(5)) - 1
       if (index >= 0 && index < TRACK_DEFS.length) {
         this.trackManager.applyTrack(index)
+        // 切换赛道后从不同起点开始预览，避免三条赛道起点直道视觉雷同
+        this.previewCameraZ = initialPreviewCameraZ(index, this.trackManager.lapLength)
         return
       }
     }
@@ -250,16 +279,17 @@ export class GameLoop {
       if (finishedP1 || finishedP2) this.applyPhase(PHASE_FINISHED)
     }
 
-    // 渲染：菜单阶段也渲染赛道预览（分屏左右两区域都渲染，修复 P2 黑屏）
+    // 渲染：菜单阶段渲染缓慢滚动的赛道预览（分屏左右两区域都渲染，修复 P2 黑屏）
     const w = window.innerWidth
     if (this.phase === PHASE_MENU) {
+      this.previewCameraZ = advancePreviewCameraZ(this.previewCameraZ, dt, this.trackManager.lapLength)
+      // 相机横向小幅摆动，让预览即使在直道也有动感
+      this.renderer.setCameraX(Math.sin(this.previewCameraZ * 0.001) * 0.3)
       if (this.splitMode) {
-        this.renderer.setCameraX(0)
-        this.renderer.renderRegion(0, 0, w / 2, [], 0)
-        this.renderer.renderRegion(0, w / 2, w / 2, [], 0)
+        this.renderer.renderRegion(this.previewCameraZ, 0, w / 2, [], 0)
+        this.renderer.renderRegion(this.previewCameraZ, w / 2, w / 2, [], 0)
       } else {
-        this.renderer.setCameraX(0)
-        this.renderer.render(0, [], 0)
+        this.renderer.render(this.previewCameraZ, [], 0)
       }
     }
     else if (this.splitMode) {

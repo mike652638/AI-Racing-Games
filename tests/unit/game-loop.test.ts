@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'vitest'
-import { updatePlayerFrame } from '../../src/game/game-loop'
+import {
+  advancePreviewCameraZ,
+  initialPreviewCameraZ,
+  PREVIEW_CAMERA_SPEED,
+  updatePlayerFrame,
+} from '../../src/game/game-loop'
 import { createPlayerState } from '../../src/game/player-state'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
+import { TRACK_DEFS, createTrackFromDef } from '../../src/engine/tracks'
+import { SEGMENT_LENGTH } from '../../src/engine/track'
 
 const LAP_LENGTH = 1000
 /** 直线全油门输入 */
@@ -126,5 +133,38 @@ describe('updatePlayerFrame P1/P2 互不影响', () => {
     expect(p2.cameraZ).toBeGreaterThan(0)
     expect(lapTimes2).toEqual([1])
     expect(lapTimes1).toHaveLength(2)
+  })
+})
+
+describe('菜单预览相机', () => {
+  test('advancePreviewCameraZ 按固定速度线性推进', () => {
+    expect(advancePreviewCameraZ(0, 1, 10000)).toBe(PREVIEW_CAMERA_SPEED)
+    expect(advancePreviewCameraZ(1000, 0.5, 10000)).toBe(1000 + PREVIEW_CAMERA_SPEED * 0.5)
+  })
+
+  test('推进超过圈长后回绕回圈内', () => {
+    // 恰好到达圈长边界仍保留（> lapLength 才回绕），回绕后严格落在圈内
+    expect(advancePreviewCameraZ(10000 - PREVIEW_CAMERA_SPEED, 1, 10000)).toBe(10000)
+    expect(advancePreviewCameraZ(10000 - 1, 1, 10000)).toBe(PREVIEW_CAMERA_SPEED - 1)
+    expect(advancePreviewCameraZ(10000 - 1, 1, 10000)).toBeGreaterThanOrEqual(0)
+  })
+
+  test('initialPreviewCameraZ 按圈长等分起点', () => {
+    const lapLength = 90000
+    expect(initialPreviewCameraZ(0, lapLength)).toBe(0)
+    expect(initialPreviewCameraZ(1, lapLength)).toBe(Math.floor(90000 / 3))
+    expect(initialPreviewCameraZ(2, lapLength)).toBe(Math.floor(180000 / 3))
+  })
+
+  test('三条赛道真实圈长下预览起点互不相同', () => {
+    // 与 TrackManager 相同的圈长派生公式：track.length * SEGMENT_LENGTH
+    const lapLengths = TRACK_DEFS.map((def) => createTrackFromDef(def).length * SEGMENT_LENGTH)
+    const starts = TRACK_DEFS.map((_, i) => initialPreviewCameraZ(i, lapLengths[i]))
+    // 起点两两不同，且都落在各自圈内
+    expect(new Set(starts).size).toBe(starts.length)
+    for (let i = 0; i < starts.length; i++) {
+      expect(starts[i]).toBeGreaterThanOrEqual(0)
+      expect(starts[i]).toBeLessThan(lapLengths[i])
+    }
   })
 })

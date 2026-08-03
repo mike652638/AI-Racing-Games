@@ -969,13 +969,13 @@ git commit -m "refactor(config): centralize game constants and remove null asser
 
 **修复方案：** 菜单阶段使用当前赛道缓慢推进的 cameraZ 渲染预览，并在不同赛道切换时重置预览 cameraZ 到不同起点。
 
-- [ ] **Step 1: 在菜单阶段维护预览 cameraZ**
+- [x] **Step 1: 在菜单阶段维护预览 cameraZ**
 
 ```typescript
 let previewCameraZ = 0
 ```
 
-- [ ] **Step 2: 切换赛道时重置预览 cameraZ**
+- [x] **Step 2: 切换赛道时重置预览 cameraZ**
 
 ```typescript
 function applyTrack(index: number): void {
@@ -984,7 +984,7 @@ function applyTrack(index: number): void {
 }
 ```
 
-- [ ] **Step 3: 菜单阶段渲染缓慢滚动的预览**
+- [x] **Step 3: 菜单阶段渲染缓慢滚动的预览**
 
 ```typescript
 if (phase === PHASE_MENU) {
@@ -995,11 +995,11 @@ if (phase === PHASE_MENU) {
 }
 ```
 
-- [ ] **Step 4: 浏览器验证**
+- [x] **Step 4: 浏览器验证**
 
 切换赛道 1/2/3，确认右侧预览画面有明显差异。
 
-- [ ] **Step 5: 全量验证与提交**
+- [x] **Step 5: 全量验证与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -1009,6 +1009,16 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/main.ts src/game/track-manager.ts
 git commit -m "feat(ui): animate track preview on menu and reflect selected track"
 ```
+
+### 实施偏差
+
+- **实际改动文件**：Task 4/5 重构后 main.ts 已拆分，本任务只改 `src/game/game-loop.ts`（预览状态/推进/渲染分支）、`tests/unit/game-loop.test.ts`（纯函数单测）与本文档。`track-manager.ts`、`screens.ts`、`index.html`、`style.css` 无需改动（TrackManager 已封装赛道切换，选单 DOM 与半透明遮罩已就绪）。
+- **previewCameraZ 归属**：由 GameLoop 持有（TrackManager 保持纯赛道数据职责），切换赛道时在 `onKeyDown` 的 `applyTrack(index)` 之后重置。推进与初始位置提取为可单测纯函数 `advancePreviewCameraZ` / `initialPreviewCameraZ`。
+- **初始位置从 index*5000 改为按圈长等分**：三条赛道起点附近均为直道（经典 12000 / 高速 15000 / S 弯 5000 前无曲率），`index*5000` 使经典与高速预览同为直道无法区分；改为 `floor(index * lapLength / TRACK_DEFS.length)` 后经典落在直道、高速落在右弯中段、S 弯落在左弯中段。
+- **推进速度从 50 微调为 500**：50 单位/秒相对 24000 视距（DRAW_DISTANCE×SEGMENT_LENGTH）每帧仅 0.8 单位，肉眼不可感知；500 单位/秒每帧约 8 单位、横向 sin 摆动周期约 12.6 秒，仍属"缓慢滚动"且可见。见 `PREVIEW_CAMERA_SPEED` 注释。
+- **TDD**：GameLoop 依赖真实 DOM/canvas（canvas mock 属 Task 9），不写脆弱 DOM 测试；预览逻辑已提取为纯函数并在 `game-loop.test.ts` 新增 4 个单测（线性推进、超圈回绕、圈长等分、三赛道真实圈长下起点互异），game-loop.test.ts 由 8 → 12 个测试。
+- **分屏**：左右两区域共用同一 previewCameraZ 渲染（保持 Task 4 双区域预览），并叠加滚动与横向摆动。
+- **浏览器验证（程序化）**：Playwright 直读 canvas 像素签名，三赛道两两差异 45.9%~71.6%，同赛道 3 秒滚动差异 38.9%，切回赛道 1 起点重置生效。截图见 `shots/optimization/task8-track1.png`、`task8-track2.png`、`task8-track3.png`（shots/ 已 gitignore）。
 
 ---
 
