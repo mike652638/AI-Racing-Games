@@ -230,12 +230,14 @@ canvas {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin: 12px 0 8px;
+  margin: 12px auto 8px;
   flex-wrap: wrap;
+  /* 9 赛道按钮限宽：超宽时 flex-wrap 均匀换行，避免单行 8+1 贴边裁切 */
+  max-width: 900px;
 }
 
 .track-option {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 8px;
   cursor: pointer;
