@@ -19,3 +19,11 @@ npm-debug.log*
 # 系统
 .DS_Store
 Thumbs.db
+
+# 临时调试脚本与产物（Task F，物理删除属用户决策）
+/debug-*.py
+/test-m*.py
+/test-final.py
+/test-manual.py
+/night-bot-check.ts
+/screenshots/

@@ -10,11 +10,23 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "bot": "tsx tests/bot/run-bot.ts"
+    "bot": "tsx tests/bot/run-bot.ts",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,tsx,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",

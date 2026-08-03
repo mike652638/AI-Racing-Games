@@ -1,0 +1,12 @@
+# 构建产物
+dist/
+
+# 依赖
+node_modules/
+
+# 日志
+*.log
+
+# 验证截图等临时产物
+shots/
+screenshots/
