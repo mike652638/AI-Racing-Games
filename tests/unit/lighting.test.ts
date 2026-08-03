@@ -40,4 +40,20 @@ describe('updateLighting', () => {
       }
     }
   })
+
+  it('returns different skyTop when overcast vs clear at same time', () => {
+    const clear = updateLighting(30, false)
+    const over = updateLighting(30, true)
+    expect(over.skyTop).not.toBe(clear.skyTop)
+  })
+
+  it('reduces skyTop saturation when overcast (gray sky)', () => {
+    const saturationOf = (c: string): number => {
+      const m = c.match(/^hsl\([^,]+, (\d+(?:\.\d+)?)%,/)
+      return m ? Number(m[1]) : -1
+    }
+    const clear = updateLighting(30, false)
+    const over = updateLighting(30, true)
+    expect(saturationOf(over.skyTop)).toBeLessThan(saturationOf(clear.skyTop))
+  })
 })

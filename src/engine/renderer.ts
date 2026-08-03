@@ -11,7 +11,7 @@ import {
 } from './sprites'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
-import { updateLighting } from './lighting'
+import { updateLighting, WEATHER_CYCLE_SECONDS } from './lighting'
 import {
   DRAW_DISTANCE,
   projectSegmentQuad,
@@ -226,7 +226,9 @@ export class Renderer {
         traffic: this.traffic,
       }
     this.camera.z = cameraZ
-    const colors = updateLighting(timeSec)
+    // 天气循环：晴/阴各 45 秒交替（timeSec 为渲染用累计时间，由 game-loop 经 render/renderRegion 传入）
+    const overcast = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 2 === 1
+    const colors = updateLighting(timeSec, overcast)
 
     ctx.fillStyle = colors.skyTop
     ctx.fillRect(0, 0, opts.width, opts.horizon)
