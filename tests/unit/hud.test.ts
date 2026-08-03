@@ -27,7 +27,7 @@ function createMockHudElements(): HudElements {
 describe('hud visibility', () => {
   it('菜单阶段隐藏所有 HUD 元素', () => {
     const elements = createMockHudElements()
-    const race = createRaceState([])
+    const race = createRaceState()
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, false, 1000, 3, 'menu')
     expect(elements.hudSpeed.hidden).toBe(true)
@@ -44,7 +44,7 @@ describe('hud visibility', () => {
 
   it('比赛阶段显示 P1 HUD，漂移未激活时隐藏漂移指示', () => {
     const elements = createMockHudElements()
-    const race = createRaceState([])
+    const race = createRaceState()
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, false, 1000, 3, 'racing')
     expect(elements.hudSpeed.hidden).toBe(false)
@@ -58,7 +58,7 @@ describe('hud visibility', () => {
 describe('hud split layout', () => {
   it('分屏模式时给两个 HUD 容器切换 split 布局类', () => {
     const elements = createMockHudElements()
-    const race = createRaceState([])
+    const race = createRaceState()
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, true, 1000, 3, 'racing')
     expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', true)
@@ -67,7 +67,7 @@ describe('hud split layout', () => {
 
   it('非分屏模式时移除 split 布局类', () => {
     const elements = createMockHudElements()
-    const race = createRaceState([])
+    const race = createRaceState()
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, false, 1000, 3, 'racing')
     expect(elements.hudContainer!.classList.toggle).toHaveBeenCalledWith('split', false)

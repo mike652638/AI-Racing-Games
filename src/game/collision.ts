@@ -1,5 +1,5 @@
 import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR } from './constants'
-import { collidePlayers, type CarState } from '../physics/car'
+import type { CarState } from '../physics/car'
 import { collideWithPlayer, type TrafficCar } from '../engine/traffic'
 import type { RaceState } from './state'
 
@@ -31,18 +31,17 @@ export function applyTrafficCollision(
 
 /**
  * 完整碰撞调度（每帧调用一次，结果写回 RaceState）：
- * - P1 与车流碰撞（使用 player1.collisionCooldown）
- * - P2 与车流碰撞（分屏时，使用独立 player2.collisionCooldown）
- * - P1-P2 互碰（分屏时，两车同罚；命中后双方进入 1 秒冷却，冷却期内不重复触发）
- * 冷却迁移说明：原 playerCollisionCooldown（互碰冷却）与 collisionCooldown / collisionCooldown2
- * （车流冷却）合并为每个 PlayerState.collisionCooldown 单一字段。互碰命中时同时设置
- * 双方冷却，因此互碰后 1 秒内车流碰撞与互碰均不重复罚速。
+ * - P1 与 P1 世界车流碰撞（车流取 tracks[0].traffic，使用 player1.collisionCooldown）
+ * - P2 与 P2 世界车流碰撞（分屏时，车流取 tracks[1].traffic，使用独立 player2.collisionCooldown）
+ * 分屏语义（分屏升级为两个独立赛道世界后）：P1-P2 互碰已删除——左右画面是各自
+ * 独立的赛道世界（各持 TrackContext），跨世界碰撞无意义。PlayerState.collisionCooldown
+ * 单一字段仅用于各自世界内的车流碰撞冷却。
  */
 export function updateCollisions(race: RaceState, dt: number, splitMode: boolean): void {
   const r1 = applyTrafficCollision(
     race.player1.carState,
     race.player1.cameraZ,
-    race.traffic,
+    race.tracks[0].traffic,
     race.player1.collisionCooldown,
     dt,
   )
@@ -55,33 +54,13 @@ export function updateCollisions(race: RaceState, dt: number, splitMode: boolean
     const r2 = applyTrafficCollision(
       race.player2.carState,
       race.player2.cameraZ,
-      race.traffic,
+      race.tracks[1].traffic,
       race.player2.collisionCooldown,
       dt,
     )
     race.player2.collisionCooldown = r2.cooldown
     if (r2.hit) {
       race.collisionCount++
-    }
-
-    // P1-P2 互碰：任一方处于冷却期（含车流碰撞冷却）则不检测、不罚速，
-    // 避免重叠期间每帧重复罚速（速度指数衰减）。冷却在车流检测中已随 dt 衰减。
-    if (race.player1.collisionCooldown > 0 || race.player2.collisionCooldown > 0) {
-      return
-    }
-    if (
-      collidePlayers(
-        race.player1.cameraZ,
-        race.player1.carState.position,
-        race.player2.cameraZ,
-        race.player2.carState.position,
-      )
-    ) {
-      race.player1.carState.speed *= COLLISION_SPEED_FACTOR
-      race.player2.carState.speed *= COLLISION_SPEED_FACTOR
-      race.collisionCount++
-      race.player1.collisionCooldown = COLLISION_COOLDOWN
-      race.player2.collisionCooldown = COLLISION_COOLDOWN
     }
   }
 }

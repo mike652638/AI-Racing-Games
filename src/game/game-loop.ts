@@ -1,7 +1,7 @@
 import { Renderer } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
 import { TRACK_DEFS } from '../engine/tracks'
-import { createTraffic, updateTraffic } from '../engine/traffic'
+import { updateTraffic } from '../engine/traffic'
 import { createCarConfig, updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
 import { EngineSound } from '../audio/engine'
@@ -12,6 +12,7 @@ import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
+import { refreshTraffic } from './track-context'
 import { updateCollisions } from './collision'
 import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
@@ -149,7 +150,7 @@ export class GameLoop {
       trackOptions,
     })
     this.carConfig = createCarConfig()
-    this.race = createRaceState(createTraffic(this.trackManager.lapLength))
+    this.race = createRaceState()
     this.renderer = new Renderer(
       this.canvas,
       this.trackManager.track,
@@ -157,7 +158,7 @@ export class GameLoop {
       window.innerHeight,
       undefined,
       createRoadsideSprites(this.trackManager.track),
-      this.race.traffic,
+      this.race.tracks[0].traffic,
     )
     this.input = createInputManager(window)
     this.joystick = new JoystickUI()
@@ -171,7 +172,7 @@ export class GameLoop {
       driftActive: () => this.race.player1.driftState.active,
       split: this.splitMode,
       bestTime: () => this.bestTime,
-      trafficCount: () => this.race.traffic.length,
+      trafficCount: () => this.race.tracks[0].traffic.length,
       collisions: () => this.race.collisionCount,
       selectedTrack: () => this.trackManager.trackDef.id,
       touchActive: () => this.joystick.isActive(),
@@ -183,10 +184,12 @@ export class GameLoop {
     requestAnimationFrame(this.frame)
   }
 
-  /** 重置对局：重建车流并同步渲染器车流引用 */
+  /** 重置对局：清玩家状态与计数，重建双世界车流并同步渲染器 P1 车流引用 */
   private resetRace(): void {
-    resetRaceState(this.race, createTraffic(this.trackManager.lapLength))
-    this.renderer.setTraffic(this.race.traffic)
+    resetRaceState(this.race)
+    refreshTraffic(this.race.tracks[0])
+    refreshTraffic(this.race.tracks[1])
+    this.renderer.setTraffic(this.race.tracks[0].traffic)
     this.last = performance.now()
     this.bestTime = loadBestTime(this.trackManager.trackDef.id)
   }
@@ -249,7 +252,11 @@ export class GameLoop {
     this.last = now
 
     if (this.phase === PHASE_RACING) {
-      updateTraffic(this.race.traffic, dt, this.trackManager.lapLength)
+      // 双世界车流独立推进：P1 用 tracks[0]，分屏时 P2 用 tracks[1]（圈长各自取用）
+      updateTraffic(this.race.tracks[0].traffic, dt, this.race.tracks[0].lapLength)
+      if (this.splitMode) {
+        updateTraffic(this.race.tracks[1].traffic, dt, this.race.tracks[1].lapLength)
+      }
       const input1 = this.joystick.isActive() ? this.joystick.getInput() : this.input.getP1Input()
       const input2 = this.splitMode
         ? this.input.getP2Input()
