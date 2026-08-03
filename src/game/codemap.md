@@ -2,49 +2,127 @@
 
 ## Responsibility
 
-游戏逻辑（gameplay orchestration）层：在 `engine/`（伪 3D 渲染与赛道数据）与 `physics/`（车辆运动学）之上，编排一局完整比赛所需的三类运行时职责：
+游戏编排（game orchestration）层：在 `engine/`（伪 3D 渲染与赛道数据）与 `physics/`（车辆运动学）之上，编排一局完整比赛的全部运行时职责。M6/M7 重构后，原先散落在 `main.ts` 的 DOM 引用、初始化、赛道切换、流程控制、事件监听与每帧更新/渲染编排全部下沉至此，`main.ts` 只保留一行入口调用。本目录承担六类职责：
 
-- `state.ts` —— 对局可变状态容器（mutable state container）：集中持有单人/分屏双玩家的车辆、漂移、相机位置、计时、碰撞冷却、圈速记录与车流引用，并提供创建（`createRaceState`）与原地重置（`resetRaceState`）能力，是每帧数据流的唯一汇聚点，便于统一重置与单测。
-- `input.ts` —— 输入管理（input manager）：以工厂函数监听全局键盘事件，将按键按下集合映射为两套独立输入（P1/P2），供主循环与物理层消费。
-- `collision.ts` —— 碰撞检测与惩罚调度（collision resolution）：每帧检测玩家与车流碰撞及分屏 P1-P2 互碰，施加速度惩罚并维护冷却，结果写回 `RaceState`。
-
-该目录本身不含渲染与物理推导逻辑，只做状态编排、输入适配与碰撞裁决。
+- **主循环**（`game-loop.ts`）：`GameLoop` 类持有全部运行时引用（DOM、渲染器、输入、音频、状态），驱动每帧更新/渲染/自续，并编排四种游玩模式（单屏 / `?split` 分屏双键盘 / `?hotseat` 热座轮流 / `?challenge` 挑战限时刷分）；另导出 `updatePlayerFrame` 纯函数（H5 起直返 lastLap）与 `initGame` 入口。M13 H 系列新增：H1 挑战计分加成（雨天/难度倍率）、H2 BOOST 音效与尾焰粒子、H4 漂移连击入榜、H5 lastLap 直返重构（移除 ref 桥接）、H6 碰撞音强度随速度。
+- **状态容器**（`state.ts` / `player-state.ts`）：`RaceState` 集中管理双玩家可变状态、碰撞计数、圈速记录与双赛道上下文；`PlayerState` 为单玩家独立状态实例（含 M12 BOOST 蓄力）。
+- **赛道世界**（`track-context.ts` / `track-manager.ts`）：`TrackContext` 封装单个玩家的完整赛道世界（分段/圈长/渲染预计算/车流）；`TrackManager` 按玩家索引持有双上下文并管理赛道切换。
+- **碰撞裁决**（`collision.ts`）：每帧检测玩家与其所在世界的车流碰撞，施加速度惩罚并维护冷却，结果写回 `RaceState`（分屏双人全检；热座按当前回合玩家参与）。
+- **阶段 FSM**（`phase.ts` / `phase-logic.ts` / `lap.ts`）：阶段常量/类型、阶段转移纯函数（`nextPhase`/`togglePause`）与圈数计算（`lapFromZ`）下沉至此，UI 通过 re-export 消费。
+- **输入适配与基础件**（`input.ts` / `constants.ts` / `debug-hook.ts`）：键盘输入工厂、游戏参数唯一真源、`window.__gameDebug` 调试钩子（19 个 getter，含热座回合/车流观测/主音量/雨声/挑战倒计时/BOOST 蓄力字段）。
 
 ## Design
 
-- **集中式可变状态容器（single source of truth）**：`RaceState` 接口聚合全部运行时可变数据，主循环每帧读改写同一对象；`createRaceState` / `resetRaceState` 提供对称的构造与 in-place 重置，重置保留 `phase` 字段（阶段切换由屏幕管理 `ui/screens.ts` 负责）。
-- **双玩家对称抽象（split-screen support）**：P1/P2 的车辆、漂移、相机、计时、碰撞冷却均为成对字段（`carState/carState2`、`driftState/driftState2`、`cameraZ/cameraZ2`、`raceTime/raceTime2`、`collisionCooldown/collisionCooldown2`），输入侧通过 `PLAYER1_MAPPING` / `PLAYER2_MAPPING` 两套键位映射复用同一 `inputFromKeys` 纯函数。
-- **工厂函数 + 闭包封装**：`createInputManager(window)` 返回 `{ pressed, getP1Input, getP2Input, destroy }`，事件监听器封装在闭包内，`destroy()` 负责移除监听以防泄漏。
-- **纯函数 + 显式依赖注入**：碰撞模块不持有全局状态，所有依赖（`CarState`、`TrafficCar[]`、冷却）通过参数传入；冷却使用可变包装对象 `{ value }` 传递，使衰减与重置能同步写回 `RaceState` 的原始数字字段。
-- **职责分层清晰**：碰撞的几何判定下沉到 `physics/car.ts`（`collidePlayers`）与 `engine/traffic.ts`（`collideWithPlayer`），本目录只负责调度、惩罚因子（`COLLISION_SPEED_FACTOR = 0.5`）与冷却策略（`COLLISION_COOLDOWN = 1s`）。
+- **TrackContext 双世界建模（split-screen worlds）**：每个玩家持有独立的 `TrackContext`（`def`/`segments`/`lapLength`/`totalLaps`/`curvePrefixSum`/`spriteIndex`/`sprites`/`traffic`），P1/P2 各建一份、互不共享，车流独立推进与碰撞；单人模式仅 `[0]` 生效。渲染预计算在 `createTrackContext` 创建时完成（`buildCurvePrefixSum`/`buildSpriteIndex`/`createRoadsideSprites`），运行时零重建。车流密度由 `def.trafficCount ?? TRAFFIC_DEFAULT_COUNT` 决定（M8 起赛道可自定义车流量）。
+- **RaceState 集中可变状态 + 纯函数更新**：`RaceState` 是每帧数据流的唯一汇聚点，双玩家对称字段（`player1`/`player2`）、双世界 `tracks`、碰撞计数、圈速记录（`lapTimes`/`lastLap` 与分屏独立的 `lapTimes2`/`lastLap2`）全部集中于此，便于统一重置与单测。更新侧则收敛为纯函数 `updatePlayerFrame`（漂移 → 速度修正 → 车辆运动学 → 相机推进 → 计时 → 圈数记录），主循环按模式调用：非热座 P1/P2 各一次，热座仅当前回合玩家一次。
+- **Renderer 多 view 渲染（零重建）**：`viewFor(ctx)` 每次从 `TrackContext` 提取 `RenderView`（`{ track, curvePrefixSum, spriteIndex, traffic, night }`）——只是对象字面量组合，无任何预计算重建；H2 起可选第 2 参 `boostParticles`（BOOST 尾焰粒子数组，比赛渲染传、菜单预览不传）并入 `RenderView.boostParticles`。分屏双世界渲染时分别取 `tracks[0]`/`tracks[1]` 的 view，配合 `renderRegion` 双区域 + `drawDivider` 交界分隔线；单屏与菜单预览走 `render`。
+- **Phase 下沉 game 层**：阶段常量与转移逻辑原属 `ui/gamestate.ts`，M7 下沉到 `game/phase.ts`、`game/phase-logic.ts`；`ui/gamestate.ts` 变为纯 re-export 以保持既有消费方（hud、screens）兼容。阶段流转由 `GameLoop` 私有 `phase` 字段单一驱动（`RaceState.phase` 为保留字段：创建时初始化、重置时不改动）。
+- **updatePlayerFrame 纯函数收敛双玩家逻辑（H5 直返 lastLap）**：`updatePlayerFrame(dt, input, player, carConfig, lapLength, lapTimes?, wet = false, scoreMultiplier = 1): number` 对 P1/P2 共用同一更新管线；`lapTimes` 可选——传入时以 `lapTimes.length + 1` 推断当前圈数（每次过圈 push 一条 `raceTime`），`currentLap > lapTimes.length + 1` 判定过圈，返回 `currentLap`；未传返回 1。**H5 重构**：原 `lastLapRef?: LastLapRef` 可变包装尾参与 G5 的 `lapRef`/`lapRef2` 复用字段全部移除，调用方直接单行赋值 `race.lastLap = updatePlayerFrame(...)`（P2 写 `race.lastLap2`），消除每帧对象分配、行为零变化。`wet`（G3 雨天物理）为第 6 尾参、`scoreMultiplier`（H1 挑战加成）为第 7 尾参，默认值下逐字节不变。
+- **TrackManager 双玩家依赖注入**：`TrackManager` 构造时注入 `TrackManagerDeps`（`resetRace` 回调、双赛道名元素、`splitMode`、选单选项数组），内部持 `contexts: [TrackContext, TrackContext]` 双上下文与 `selectedIndexes`；`selectTrack` 重建该玩家上下文 → 触发 `resetRace` 回调 → 刷新选单双类高亮（P1 `selected` / P2 `selected-p2`），另一玩家不受影响。**双引用同步点**：渲染与 HUD 取 `race.tracks`，权威上下文由 `TrackManager.contexts` 持有，`selectTrackFor` 把 `getContext(playerIndex)` 写回 `race.tracks[playerIndex]` 完成同步。
+- **constants 唯一真源**：`constants.ts` 集中全部游戏参数（漂移/碰撞/渲染/路面几何），禁止散落魔法数字；不仅 game 层消费，`engine/renderer.ts`、`engine/road-geometry.ts`、`physics/drift.ts` 也反向从 game 层导入（如 `RENDER_DRAW_DISTANCE`、`DRIFT_STEER_THRESHOLD`）；`tests/unit/constants.test.ts` 以注册表断言锁定全部常量。
+- **mulberry32 确定性**：`engine/scenery.ts` 的 `mulberry32`（确定性伪随机）驱动风景与车流生成——`createTrackContext` 内 `createRoadsideSprites(segments)`（seed 1234）与 `createTraffic(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT)`（seed 777 + 每赛道车流数）均确定性产出，同赛道定义重建上下文结果完全一致，对 bot 自动跑圈校验友好。
+- **player-state 独立实例**：`PlayerState`（`carState`/`driftState`/`cameraZ`/`raceTime`/`collisionCooldown`/`boostCharge`）P1/P2 各持一份，主循环分别更新互不影响；`resetPlayerState` in-place 重置并重建漂移状态（清空烟雾与得分）。碰撞冷却原三字段（collisionCooldown/collisionCooldown2/playerCollisionCooldown）合并为单一 `collisionCooldown` 字段——分屏升级为独立赛道世界后，P1-P2 跨世界互碰已删除，冷却仅用于各自世界内的车流碰撞。
+- **三种游玩模式（单屏 / 分屏 / 热座）+ 挑战**：
+  - **分屏（`?split`）即"两个独立世界"**：P1/P2 各选各的赛道（`1-9` 与 `Shift+1-9`）、各自独立车流、各自独立渲染区域、各自独立完赛判定与圈速存档（P2 用 `loadBestTimeFor(1, ...)` 的 `-p2` key）；分屏双完赛时按漂移得分决出 `driftWinner`（平局归 P1，未双完赛恒 null），同时复用该胜者记入分屏胜场统计。
+  - **热座（`?hotseat`，与 split 互斥）**：双人先后跑**同一赛道**比成绩。`hotseatPlayer: 1|2` 记录当前回合（默认 P1 先跑），`prevP1Time` 在交棒时快照 P1 完赛用时；P1 完赛结算后按 `Enter`/`KeyR` 交棒——绕过 `nextPhase` 直接 `resetRace()` + `race.phase = PHASE_RACING` + `applyPhase(PHASE_RACING)` 开 P2 回合（Phase 保持四态不变）。热座输入只路由到当前回合玩家（共用同一键盘映射 `input1`）：P1 回合圈速记录传 `lapTimes`，P2 回合传 `lapTimes2`；另一玩家本回合不更新、不推进相机/计时。**热座车流/碰撞按回合**：`updateTraffic(tracks[1])` 与 `updateCollisions` 的 P2 检测条件均为 `splitMode || (hotseatMode && hotseatPlayer === 2)`——P1 回合 P2 世界车流静止、P2 不参与碰撞（避免起点车流误撞静止 P2），P2 回合车流随帧推进并参与碰撞。P1 在菜单选赛道后自动 `trackManager.selectTrack(1, ...)` 同步 P2 世界（保证同赛道）。HUD 以 `hudPlayerTag` 显示"P1/P2 驾驶中"；round 2 完赛按 `prevP1Time` 与 P2 用时比较记热座胜场（平手不记）。
+  - **单屏（默认）**：P2 输入为零输入 `{ throttle: 0, brake: false, steer: 0 }`，照常执行更新管线但不推进。
+  - **挑战（`?challenge`，与 split/hotseat 互斥）**：见 M12 G1 与 M13 H1。
+- **双人成绩持久化（胜场统计 + 漂移 TOP10）**：M9 起 `applyPhase` 在 `PHASE_FINISHED && !finishShown` 守卫块内（防 ESC 重入重复计数）——胜场 `recordWin(mode, winner)`（热座 round 2 按用时比较、分屏双完赛复用 `driftWinner`，平手/单人 null 不记）与漂移正分 `addDriftScore(...)`（P1/P2 各按完赛标记记录；M12 G1 起 P1 条件放宽为 `finishedP1 || challengeMode`；M13 H4 起记录 `combo`），随后 `refreshDriftTop()` 刷新菜单 `#drift-top` 榜单（`loadDriftTop().slice(0, 5)` 渲染前 5 条，`getTrackDef(trackId)?.name` 显示赛道中文名，无记录占位"暂无漂移记录"）。
+- **M10 各赛道 BEST 汇总（P3）**：`refreshBestSummary()` 遍历 `TRACK_DEFS` 对每条赛道读 `loadBestTimeFor(0, def.id)`（P1）与 `loadBestTimeFor(1, def.id)`（P2，分屏/热座独立存档），渲染 `#best-summary`（每行 `${i+1}. ${def.name}  P1 ${formatTime(t1)}`，P2 有纪录追加 ` · P2 ${formatTime(t2)}`，无纪录 `--`）；9 条赛道共 18 值全 null 时显示占位"暂无最佳成绩"。构造器（`refreshDriftTop` 旁）与 `PHASE_MENU` 分支（`resetRace` 后并列）两处调用。
+- **M10 主音量（P6）**：`volume` 字段（初值 0.6，localStorage key `outrun-pseudo3d-volume` 持久化 0-1）+ `loadVolume`（构造时读，无效/不可用回退 0.6）+ `setVolume(v)`（clamp 0-1、写字段、`masterGain` 存在时同步 `gain.value`、持久化）。音频惰性创建（首次按键）时先建 `masterGain = ctx.createGain()`（`gain.value = this.volume`，连 `ctx.destination`），再以 `masterGain` 为 output 注入 `EngineSound`/`MusicPlayer`——slider 在音频未创建时只改字段+持久化，惰性创建读 `this.volume` 生效。暂停菜单交互：`PHASE_PAUSED` + `KeyR` → 回菜单（重新开始）；`#pause-volume` slider `input` 事件 → `setVolume(Number(value)/100)`；`#pause-restart` 按钮 `click` → 回菜单（事件在构造器绑定，元素随面板显隐）。**M12 G7 起主音量作为总控，下挂 musicGain/sfxGain 分轨（见 M12 变更）**。
+- **M10 车流避让 AI（P4）**：`updateTraffic(traffic, dt, lapLength, player?)` 可选尾参——传入玩家位置后，对「车在玩家前方 d ∈ (0, 350) 且 `|car.offset - player.x| < 1.2`（同车道/近车道）」的车向远离玩家一侧渐变变道（步进 `0.8 * dt`，clamp `|offset| ≤ 0.85`，永久变道无恢复）；不传 player 时行为与旧版完全一致。frame 中两处调用（P1 世界恒传、P2 世界分屏/热座 P2 回合条件分支传）分别传 `{ z: player.cameraZ, x: player.carState.position }`。
+- **M11 夜晚赛道透传（F1）**：`viewFor(ctx)` 组装 `RenderView` 时增加 `night: ctx.def.timeOfDay === 'night'`——`TrackDef.timeOfDay`（可选 `'day'|'night'`，canyon/alpine 设 night）经 RenderView 透传给 renderer，后者据此选夜晚色板、深色远山缓存与车灯光晕；game 层零渲染逻辑，仅做数据映射。
+- **M11 分屏对局榜（F2）**：`applyPhase` 在 `PHASE_FINISHED && !finishShown` 守卫块内，`splitMode && finishedP1 && finishedP2` 时调 `addMatchResult({ winner: driftWinner ?? 'P1', p1Score, p2Score, trackId: getTrackId(0) })` 写入最近 10 局对局记录（`MATCH_TOP_KEY`，unshift + 截断）；`refreshMatchTop()` 渲染菜单 `#match-top`（`${i+1}. ${winner} 胜 · ${p1}:${p2} · 赛道名`，无记录占位"暂无对局记录"），构造器/FINISHED 块/PHASE_MENU 三处调用。
+- **M11 触屏暂停（F3）**：`#pause-btn`（hudElements 可选字段，仅 RACING 阶段显示）与 `#pause-resume`（screenElements 可选字段）click 均 → `applyPhase(togglePause(phase))`；进入 `PHASE_PAUSED` 时 `joystick.reset()`（清残留触屏输入，防止恢复后首帧误输入）+ `pauseBtn.hidden = newPhase !== PHASE_RACING`。
+- **M11 雨声与碰撞音（F4）**：音频惰性创建块内新增 `RainSound(ctx, sfxGain)` 与 `CollisionSound(ctx, sfxGain)`；PHASE_RACING 帧块按 `Math.floor(player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2`（雨段，与 renderer 天气三态同公式）驱动 `rainSound.start()/stop()`；`updateCollisions` 后 `collisionCount > lastCollisionCount` 触发 `collisionSound.play(...)`（80ms 防刷屏内置，M13 H6 起带速度强度参），`resetRace` 同步 `lastCollisionCount = 0`；debug hook 暴露 `rainPlaying` getter。
+- **M12 挑战模式（G1）**：`challengeMode = params.has('challenge') && !splitMode && !hotseatMode`——60 秒限时刷分：帧块 `raceTime >= CHALLENGE_SECONDS`（60，自 game/constants 导入）时 `applyPhase(PHASE_FINISHED)` + return（置于正常完赛判定前，3 圈先完赛仍走完赛路径但结算面板按 challengeMode 显示挑战文案）；FINISHED 块 P1 记分条件放宽为 `(finishedP1 || challengeMode) && score > 0`；`#challenge-timer` 由帧块惰性获取（`??=`）并按 `剩余 X.Xs` 更新（仅挑战且 RACING 可见）；debug hook 加 `challengeTimeLeft`。
+- **M12 雨天物理（G3）**：`updateCar(..., turnRateOverride?, wet = false)` 第 6 可选参——brake 分支 `config.braking * 0.7`（制动力降 30%）、转向 `(turnRateOverride ?? config.turnRate) * 0.85`（抓地力降 15%），wet=false 路径逐字节不变；`updatePlayerFrame` 第 6 尾参 `wet = false` 透传；帧块以 `Math.floor(player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2`（与雨声同公式）得 `wet`，4 处调用补尾参（P2 世界统一同一值）。
+- **M12 BOOST 氮气（G4）**：`PlayerState` 加 `boostCharge`（初始/重置 0）；导出纯函数 `updateBoostCharge(charge, dt, inputBoost, driftActive)`——漂移激活蓄力 `min(1, +dt×BOOST_CHARGE_RATE(0.3))`、按键（Space/Enter 经 inputFromKeys 条件产出 boost:true）且 charge>0 时激活并按 `max(0, -dt×BOOST_DRAIN_RATE(0.5))` 消耗；帧块 P1/P2 各算后 `effInput = { ...input, boost }` 传入 updatePlayerFrame；car.ts boost 分支（throttle 分支后独立，`min(speed + acc×0.6×dt, maxSpeed×1.15)`，BOOST_ACCEL_MULT/BOOST_MAX_SPEED_MULT 自 constants）；`#boost-bar` 帧块惰性获取，宽度 `Math.round(charge × 200)px`（8660e28 修复：像素映射避免百分比被 max-width 截断，注释说明勿用百分比），仅 RACING 可见；debug hook 加 `boostCharge`。
+- **M12 音量分级（G7）**：音频链 masterGain（总控，value=volume）下挂 `musicGain`/`sfxGain`（各连 masterGain，value=musicVolume/sfxVolume）——`MusicPlayer` 注入 musicGain、`EngineSound`/`RainSound`/`CollisionSound` 注入 sfxGain（M13 H2 起 `BoostSound` 同走 sfxGain）；新字段 `musicVolume=0.8`/`sfxVolume=1.0` + 独立 key（`outrun-pseudo3d-music-volume`/`-sfx-volume`）+ `loadMusicVolume`/`loadSfxVolume`（无效回退默认）+ `setMusicVolume`/`setSfxVolume`（clamp + gain 同步 + 持久化）；`#pause-music-volume`/`#pause-sfx-volume` slider 守卫式绑定（仿 pauseVolume）；既有 setVolume/pause-volume 行为不变（总音量）。
+- **M13 H1 挑战计分加成（雨天 + 难度）**：帧块计算 `challengeMult = 1 + (raining ? 0.5 : 0) + (this.race.tracks[0].def.difficulty - 1) * 0.25`（雨天 +50%、2★ +25%、3★ +50%；`raining` 与 `wet`/雨声同公式同源），仅 challengeMode 时定义（非挑战传 undefined）；经 `updatePlayerFrame` 第 7 尾参 `scoreMultiplier` 透传 `updateDrift`（`score += speed*dt*DRIFT_SCORE_RATE*multiplier*scoreMultiplier`，physics/drift.ts 尾参 `scoreMultiplier = 1`，默认时逐字节不变）。
+- **M13 H2 BOOST 音效与尾焰粒子**：音频惰性创建新增 `BoostSound(ctx, sfxGain)`（BOOST 氮气音效，走音效分轨）；帧块以 `boostActive`（上帧任一玩家 boost 是否激活）边沿检测——本帧激活且上帧未激活时 `boostSound.play()`；P1 激活期间每帧至多 push 1 粒 `BoostParticle { x, z: cameraZ + 2, t: 0 }`（z 取相机前方 +2 保证投影非 null），`t` 随帧推进、超 0.6s 移除；`viewFor(ctx, boostParticles?)` 把粒子数组并入 `RenderView.boostParticles`（比赛渲染传、菜单预览不传），renderer `drawBoostParticles` 投影（engine 层）。
+- **M13 H4 漂移连击入榜**：`addDriftScore` 调用新增 `combo: Math.round(driftState.combo)` 字段（P1/P2 各按完赛标记记录；旧榜单条目无 combo 字段不追加）；`refreshDriftTop` 榜单行对含 combo 的条目追加 ` · 连击 x${(1 + combo * 0.25).toFixed(2)}`（倍率展示，与 HUD `COMBO x…` 同公式）。
+- **M13 H6 碰撞音强度随速度**：碰撞音触发由 `collisionSound.play()` 改为 `collisionSound.play(impact)`——`impact = Math.max(player1.speed, player2.speed) / maxSpeed`（双玩家速度比取较快者；单屏 player2 speed=0 自然取 P1），高速撞击更响（`CollisionSound` 内部 80ms 防刷屏不变）。
 
 ## Flow
 
-1. **初始化**：`main.ts` 调用 `createRaceState(createTraffic(lapLength))` 创建状态（车流由调用方生成后传入），`createInputManager(window)` 注册 `keydown`/`keyup` 监听，渲染器持有 `race.traffic` 引用。
-2. **每帧（PHASE_RACING 阶段）**：主循环先推进车流 `updateTraffic`，再通过 `input.getP1Input()`（或 joystick 替代）与 `input.getP2Input()` 获取 `CarInput`。
-3. **物理更新**：`main.ts` 依次执行 `updateDrift` → `updateCar` → 推进 `cameraZ` 与 `raceTime`，期间读取输入管理器与 `RaceState`，物理结果写回 `RaceState`。
-4. **圈数检测**：`lapFromZ(cameraZ, lapLength)` 与 `lastLap` 比较，过圈则把当前 `raceTime` 压入 `lapTimes` 并推进 `lastLap`。
-5. **碰撞裁决**：调用 `updateCollisions(race, dt, splitMode)` —— 冷却先随 `dt` 衰减；命中则 `speed *= 0.5` 并重置冷却 1s；分屏模式下额外执行 P1-P2 互碰（两车同罚）；所有碰撞共享 `collisionCount` 计数。
-6. **消费与渲染**：渲染器读取 `carState.position` / `cameraZ` / `driftState.smoke` 绘制画面；`updateHud` 与 `applyPhaseToScreens` 读取 `RaceState` 展示速度、计时、圈数与结算。
-7. **重置**：菜单/换赛道时 `resetRace()` 调用 `resetRaceState` 原地清空状态并重建车流，随后 `renderer.setTraffic` 同步新引用。
+### 初始化（构造链）
+
+`main.ts` 调 `initGame()` → `new GameLoop()` 构造：
+
+1. **模式判定与 DOM 收集**：`?split` 与 `?hotseat`（`params.has('hotseat') && !splitMode`）解析模式，M12 加 `?challenge`（`params.has('challenge') && !splitMode && !hotseatMode`，与双人模式互斥）；`$()` 帮助函数取全部 HUD/屏幕元素（含 M8 新增 `hudBestP2`/`hudPlayerTag`/`finishHint`/`finishDriftWinner`、M9 新增 `finishWins`、M12 暂停分轨 slider `pauseMusicVolume`/`pauseSfxVolume`）；分屏时显示 `hud2`/`p2-track-name` 并按模式改写 `#menu-hint`（分屏 `'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始'` / 热座 `'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道'` / 挑战 `'挑战模式：60 秒限时刷分 · 1-9 选赛道 · 任意键开始'`）；`trackOptions` 按 `TRACK_DEFS.length`（9）动态构建，按钮文本渲染为 `${i + 1} ${def.name} ${'★'.repeat(difficulty)}${'☆'.repeat(3 - difficulty)}`（E5 星级）。
+2. **TrackManager**：注入 `{ resetRace: () => this.resetRace(), trackName, p2TrackName, splitMode, trackOptions }`，内部用 `TRACK_DEFS[0]` 创建双上下文并刷新选单高亮。
+3. **基础件**：`createCarConfig()`、`createRaceState()`（双 PlayerState + 双 `TrackContext(TRACK_DEFS[0])` + `lastLap/lastLap2` 初始 1 + `phase: PHASE_MENU`）。
+4. **Renderer**：以 `trackManager.getContext(0)` 的 segments/roadside sprites/traffic 创建；`createInputManager(window)` 注册键盘监听；`JoystickUI().attach(canvas)`。
+5. **存档与调试钩子**：`loadBestTime(getTrackId(0))` / `loadBestTimeFor(1, getTrackId(1))`；构造器读取持久化音量（`this.volume = this.loadVolume()` + M12 G7 分轨 `musicVolume`/`sfxVolume` 独立读取）；`installDebugHook` 暴露 19 个 getter 到 `window.__gameDebug`（含 M8 新增 `hotseatPlayer`/`player2CameraZ`、M9 新增 `p2TrafficZ`——P2 世界首车 z、M10 新增 `volume`、M11 新增 `rainPlaying`、M12 新增 `challengeTimeLeft`——挑战剩余秒数与 `boostCharge`——P1 BOOST 蓄力值）。
+6. **启动**：注册 `keydown`/`resize` 监听（及暂停菜单 `pause-volume` input / `pause-restart` click / `pause-btn`·`pause-resume` 触屏暂停按钮 click / M12 音乐·音效 slider input 事件绑定），调用 `refreshDriftTop()` + `refreshBestSummary()` + `refreshMatchTop()`（渲染菜单 `#drift-top` 榜单、`#best-summary` 汇总与 `#match-top` 对局榜），首次 `requestAnimationFrame(frame)` 自续。
+
+### 每帧（frame）
+
+`dt = min((now - last) / 1000, 0.05)` 截断防跳帧：
+
+1. **PHASE_RACING 更新段**：
+   - 双世界车流推进：`updateTraffic(tracks[0].traffic, dt, lapLength, { z: player1.cameraZ, x: player1.carState.position })`（P4 起传玩家位置启用车流避让）；`splitMode || (hotseatMode && hotseatPlayer === 2)` 时再推进 `tracks[1]`（传 player2 对应位置；分屏双世界 / 热座 P2 回合，P1 回合 P2 世界车流静止）。
+   - 输入获取：P1 为 `joystick.isActive() ? joystick.getInput() : input.getP1Input()`；P2 分屏时 `getP2Input()`，否则零输入。
+   - **BOOST 蓄力/消耗（M12 G4）**：P1/P2 各调 `updateBoostCharge(boostCharge, dt, input.boost === true, driftState.active)` → 回写 `boostCharge`，`effInput = { ...input, boost: 是否激活 }`；帧块惰性获取 `#boost-bar`（`??=`）设宽度 `Math.round(charge × 200)px`（像素映射防百分比截断）且仅 RACING 可见。
+   - **H2 BOOST 音效/粒子**：`boostOn = effInput1.boost || effInput2.boost`，`boostOn && !boostActive`（上帧未激活边沿）→ `boostSound.play()`，回写 `boostActive`；P1 激活期间每帧至多 push 1 粒 `BoostParticle { x: position, z: cameraZ + 2, t: 0 }`，倒序遍历 `t += dt`、超 0.6s splice 移除。
+   - **挑战倒计时与加成（M12 G1 / M13 H1）**：challengeMode 时惰性获取 `#challenge-timer` 设 `剩余 X.Xs`（仅 RACING 可见）；限时判定 `raceTime >= CHALLENGE_SECONDS`（60）→ `applyPhase(PHASE_FINISHED)` + return（在正常完赛判定前，3 圈先完赛仍走完赛路径）；`challengeMult = 1 + (raining ? 0.5 : 0) + (difficulty - 1) * 0.25`（仅 challengeMode，否则 undefined）作为 `updatePlayerFrame` 第 7 尾参。
+   - `updatePlayerFrame` 双玩家各一次（非热座）：**H5 直返赋值**——P1 `this.race.lastLap = updatePlayerFrame(dt, effInput1, player1, carConfig, getLapLength(0), this.race.lapTimes, wet, challengeMult)`，P2 同理写 `lastLap2` 传 `lapTimes2`（P2 圈速）；`wet`（G3 雨段判定同公式）为第 6 尾参、`challengeMult`（H1）为第 7 尾参。**热座分支**只更新当前回合玩家：`hotseatPlayer === 1` 时对 P1 传 `lapTimes`，否则对 P2 传 `lapTimes2`（共用 `input1` 键盘映射）；另一玩家本回合不更新。
+   - `updateCollisions(race, dt, splitMode || (hotseatMode && hotseatPlayer === 2))`：P1 与世界 0 车流恒检测；分屏时 P2 与世界 1 车流检测；热座仅 P2 回合检测 player2（P1 回合 P2 静止不参与，避免起点车流误撞）；冷却随 dt 衰减，命中 `speed *= COLLISION_SPEED_FACTOR` 并重置 `COLLISION_COOLDOWN`，`collisionCount++`。
+   - 完赛判定：`lapFromZ(cameraZ, lapLength) > getTotalLaps(...)`，`finishedP1` 恒计算、`finishedP2 = (splitMode || hotseatMode) && 圈数超限`（分屏/热座 P2 回合独立判定，单屏恒 false），任一完赛 → `applyPhase(PHASE_FINISHED)`。
+   - 环境音效驱动（M11 F4 / M13 H6）：雨段判定 `Math.floor(player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2` → `rainSound.start()`（离开雨段 `stop()`）；`updateCollisions` 后 `collisionCount > lastCollisionCount` → `collisionSound.play(impact)`（`impact = Math.max(p1.speed, p2.speed) / maxSpeed` 速度强度，80ms 防刷屏内置）并同步快照。
+2. **渲染三分支**（每帧必然执行其一）：
+   - `PHASE_MENU`：双预览相机按各自圈长推进（`advancePreviewCameraZ`，`PREVIEW_CAMERA_SPEED=500`），`setCameraX(sin(z*0.001)*0.3)` 横向摆动制造动感；分屏时 `renderRegion` 左右各渲染各自世界 + `drawDivider(w/2)`，单屏时 `render` P1 世界预览（预览不传 boostParticles）。
+   - 分屏比赛：`setCameraX(player.carState.position)` + `renderRegion`（各自 cameraZ/smoke/raceTime/view + `boostParticles`）+ `drawDivider(w/2)`。
+   - 单屏比赛：`setCameraX` + `render`（P1 数据 + `tracks[0]` view + `boostParticles`）。
+3. **收尾**：`updateHud(hudElements, race, carConfig, bestTime, splitMode, race.tracks, phase, bestTime2, hotseatPlayer)`（第 9 尾参：热座时传当前回合玩家 `1|2`，否则 `null`）；`engineSound.setSpeedRatio(speed / maxSpeed)`；`requestAnimationFrame(frame)` 自续。
+
+### 关键调用链
+
+- **`resetRace()`**（菜单进入前 / 换赛道后）：`resetRaceState(race)`（清双玩家状态与计数，保留 `phase`、不重建 `tracks`）→ `refreshTraffic(tracks[0])` + `refreshTraffic(tracks[1])`（引用替换重建车流）→ 重载双最佳圈速 + `lastCollisionCount = 0` 快照同步。
+- **`applyPhase(newPhase)`**：写入 `this.phase` → 按各世界圈长/总圈数算 `finishedP1`/`finishedP2`（`finishedP2` 条件含 `hotseatMode`）→ 计算 `driftWinner`（仅分屏且双完赛时按 `Math.round(driftState.score)` 比较，平局归 P1，否则 null）→ **M9 双人成绩持久化**（`PHASE_FINISHED && !finishShown` 守卫块）：热座 round 2 按 `prevP1Time` 与 P2 用时比较得胜者（平手 null）、分屏双完赛复用 `driftWinner`，非 null 时 `recordWin(this.hotseatMode ? 'hotseat' : 'split', winner)`；各完赛玩家漂移正分（`Math.round(score) > 0`）调 `addDriftScore({ player, trackId: getTrackId(i), score, time, combo: Math.round(driftState.combo) })`（M12 G1 起 P1 条件放宽为 `(finishedP1 || challengeMode) && score > 0`；M13 H4 起带连击字段）；**M11 分屏双完赛**另调 `addMatchResult({ winner: driftWinner ?? 'P1', p1Score, p2Score, trackId: getTrackId(0) })` 记对局榜；随后 `refreshDriftTop()` + `refreshMatchTop()` → `applyPhaseToScreens(screenElements, newPhase, race, carConfig, { splitMode, finishedP1, finishedP2, hotseatMode, hotseatRound, prevP1Time, driftWinner, winStats, challengeMode })`（9 字段 opts，屏幕显隐/结算由 ui/screens 负责）→ `PHASE_FINISHED` 时重载双最佳圈速；`PHASE_PAUSED` 时 `joystick.reset()` + `pauseBtn.hidden = newPhase !== PHASE_RACING`；`PHASE_MENU` 时 `resetRace()` + `refreshDriftTop()` + `refreshBestSummary()` + `refreshMatchTop()`（M10 P3：回菜单刷新 BEST 汇总；M11 F2：对局榜）。
+- **`selectTrackFor(playerIndex, trackIndex)`**（菜单数字键触发）：`trackManager.selectTrack(playerIndex, trackIndex)`（重建该玩家上下文 + 内部触发 `resetRace` 回调 + 刷新选单高亮）→ `race.tracks[playerIndex] = trackManager.getContext(playerIndex)`（双引用同步）→ `previewCameraZ[playerIndex] = initialPreviewCameraZ(trackIndex, lapLength)`（按圈长 1/N 等分重置预览起点，N = `TRACK_DEFS.length`）。热座模式 P1 选赛道后 onKeyDown 额外执行同样的三步同步到玩家 1（`trackManager.selectTrack(1, ...)` + `race.tracks[1]` + `previewCameraZ[1]`），保证双人同赛道。
+- **`onKeyDown`**：`Escape` → `applyPhase(togglePause(phase))`（racing↔paused）；**M10 暂停菜单重开**：`PHASE_PAUSED` + `KeyR` → `applyPhase(PHASE_MENU)` 回菜单（applyPhase MENU 块自动 `resetRace` + `refreshDriftTop` + `refreshBestSummary`）；`PHASE_MENU` 阶段数字键 `1-9`（P1）/ `Shift+1-9`（P2 分屏，原 `7/8/9` 键位废弃、E5 扩至 9 条）→ `selectTrackFor`，无效数字键静默吞掉；**菜单阶段修饰键单独按下**（`ShiftLeft`/`ShiftRight`/`ControlLeft`/`ControlRight`/`AltLeft`/`AltRight`/`MetaLeft`/`MetaRight` 共 8 个 code）不触发"任意键开始"（98e124f 修复）；**热座交棒**：`PHASE_FINISHED` + hotseatMode + (`Enter`|`KeyR`) + `hotseatPlayer === 1` 时 `prevP1Time ??= player1.raceTime` → `hotseatPlayer = 2` → `resetRace()` → `race.phase = PHASE_RACING` → `applyPhase(PHASE_RACING)`（绕过 `nextPhase`，resetRaceState 已重置 finishShown=false 保证 P2 回合结算可再次填充）；其他键首次触发时创建 `AudioContext` 并先建 `masterGain`（`gain.value = this.volume`，连 destination）→ **M12 G7 分轨**再建 `musicGain`/`sfxGain`（各连 masterGain，value = musicVolume/sfxVolume），`EngineSound(ctx, sfxGain)` / `RainSound(ctx, sfxGain)` / `CollisionSound(ctx, sfxGain)` / **`BoostSound(ctx, sfxGain)`（H2）** / `MusicPlayer(ctx, musicGain)` 注入后启动，再 `applyPhase(nextPhase(phase, lap, totalLaps))`（menu→racing，超圈 → finished，finished→menu）。
 
 ## Integration
 
-- Consumed by:
-  - `src/main.ts` —— 主循环唯一运行时入口，导入 `createInputManager`、`createRaceState`/`resetRaceState`、`updateCollisions`，每帧编排本目录与 physics/engine 各模块。
-  - `src/ui/hud.ts` —— 类型导入 `RaceState`，只读展示 HUD 数据。
-  - `src/ui/screens.ts` —— 类型导入 `RaceState`，结算面板填充数据。
-- Depends on:
-  - `src/physics/car.ts` —— `CarState`/`CarInput` 类型、`collidePlayers` 互碰判定。
-  - `src/physics/drift.ts` —— `DriftState` 类型与 `createDriftState` 工厂。
-  - `src/physics/input.ts` —— `PLAYER1_MAPPING`/`PLAYER2_MAPPING` 键位映射与 `inputFromKeys` 纯函数。
-  - `src/engine/traffic.ts` —— `TrafficCar` 类型与 `collideWithPlayer` 车流碰撞判定。
-  - `src/ui/gamestate.ts` —— `Phase` 类型与 `PHASE_MENU` 常量（仅类型/常量依赖）。
+- Consumed by：
+  - `src/main.ts` —— 唯一运行时入口，仅 `import { initGame } from './game/game-loop'` 后调用。
+  - `src/ui/hud.ts` —— 类型导入 `RaceState`（`../game/state`）与 `TrackContext`（`../game/track-context`），只读展示；`updateHud` 第 9 尾参 `hotseatPlayer: 1 | 2 | null`（热座时显示 `hudPlayerTag`"P1/P2 驾驶中"、`hudBestP2`）；阶段常量经 `./gamestate` 间接消费 `game/phase`。
+  - `src/ui/screens.ts` —— 类型导入 `RaceState`（`../game/state`），填充结算面板；`FinishPanelOptions` 现含 `splitMode`/`finishedP1`/`finishedP2`/`hotseatMode`/`hotseatRound`/`prevP1Time`/`driftWinner`/`winStats`/`challengeMode` 九字段（热座第 2 回合展示 P1 快照用时对比、分屏双完赛展示漂移竞速横幅 `finishDriftWinner`、热座/分屏分胜负展示胜场统计行 `finishWins`、挑战模式展示挑战结算文案）。
+  - `src/ui/gamestate.ts` —— 纯 re-export：`PHASE_*` 常量与 `Phase` 类型来自 `../game/phase`，`nextPhase`/`togglePause` 来自 `../game/phase-logic`（保持 hud/screens 兼容）。
+  - `src/ui/format.ts` —— re-export `lapFromZ`（`../game/lap`）。
+  - `src/engine/renderer.ts` —— 导入 `RENDER_DEPTH_RATIO`/`RENDER_HORIZON_RATIO`（`../game/constants`）；`RenderView` 含 `boostParticles`（H2，game-loop `viewFor` 传入）。
+  - `src/engine/road-geometry.ts` —— 导入 `EDGE_WIDTH`/`RENDER_DRAW_DISTANCE`/`ROAD_HALF_WIDTH`（`../game/constants`）。
+  - `src/physics/drift.ts` —— 导入 `DRIFT_STEER_THRESHOLD`/`DRIFT_CHARGE_THRESHOLD`/`DRIFT_SPEED_FACTOR`/`DRIFT_SCORE_MAX`（`../game/constants`；M10 P2 起新增得分上限，漂移得分 clamp 用；H1 `scoreMultiplier` 尾参由 game-loop 传入）。
+  - `tests/unit/*` —— `constants.test.ts`（常量注册表）、`collision.test.ts`（`applyTrafficCollision`/`updateCollisions`/`createRaceState`/`resetRaceState`）、`track-manager.test.ts`、`track-context.test.ts`、`player-state.test.ts`、`phase.test.ts`（`nextPhase`/`togglePause`）、`hud.test.ts`（`createRaceState`/`createTrackContext`）、`game-loop.test.ts`（`updatePlayerFrame` 等）、`game-loop-integration.test.ts`（`GameLoop` 实例 + 读 `window.__gameDebug` 断言阶段流转）。
+- Depends on（以实际 import 为准）：
+  - `src/engine/tracks.ts` —— `TRACK_DEFS`/`TrackDef`/`createTrackFromDef`/`getTrackDef`（game-loop、track-context、track-manager、state）。M9 起 `TRACK_DEFS` 扩为 9 条（classic 1★3 圈 / highway 2★3 圈 车流 12 / s-curve 2★2 圈 车流 6 / island 2★3 圈 车流 10 / canyon 3★2 圈 车流 8 / desert 1★3 圈 车流 10 / forest 2★2 圈 车流 8 / coast 2★3 圈 车流 12 / alpine 3★2 圈 车流 6），`TrackDef` 新增必选 `difficulty: 1|2|3`（星级，E5）、可选 `trafficCount?: number`（缺省走 `TRAFFIC_DEFAULT_COUNT`）与可选 `timeOfDay?: 'day'|'night'`（M11 F1，canyon/alpine 设 night）；`getTrackDef` 供 `refreshDriftTop` 榜单赛道名查询。
+  - `src/engine/track.ts` —— `SEGMENT_LENGTH`/`Segment`（track-context 计算 lapLength）。
+  - `src/engine/sprites.ts` —— `createRoadsideSprites`/`buildCurvePrefixSum`/`buildSpriteIndex`/`Sprite`（track-context 预计算；game-loop 构造 Renderer 时再建一次 P1 路边景物）。
+  - `src/engine/traffic.ts` —— `createTraffic(lapLength, seed?, count?)`/`updateTraffic`/`collideWithPlayer`/`TrafficCar`（track-context 以 `(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT)` 创建；game-loop、collision 消费）。
+  - `src/engine/lighting.ts` —— `WEATHER_CYCLE_SECONDS`（45s 晴/阴/雨三态周期，game-loop 帧块雨段判定 `% 3 === 2` 与 renderer 天气同公式同源）。
+  - `src/engine/renderer.ts` —— `Renderer`/`RenderView`（game-loop 渲染编排；H2 起经 `viewFor` 传 `boostParticles`，renderer `drawBoostParticles` 投影）。
+  - `src/physics/car.ts` —— `createCarConfig`/`updateCar`/`CarConfig`/`CarInput`/`CarState`（game-loop、collision、player-state、input）。
+  - `src/physics/drift.ts` —— `updateDrift`/`driftSpeedFactor`/`effectiveTurnRate`/`DriftState`/`createDriftState`（game-loop、player-state；H1 `scoreMultiplier` 尾参透传）。
+  - `src/physics/input.ts` —— `PLAYER1_MAPPING`/`PLAYER2_MAPPING`/`inputFromKeys`（input.ts）。
+  - `src/audio/engine.ts` / `src/audio/music.ts` —— `EngineSound`/`RainSound`/`CollisionSound`/`BoostSound`（H2 起新增）/`MusicPlayer`（game-loop 首次按键时惰性创建：先建 `masterGain` 主音量节点，M12 G7 起下挂 `musicGain`/`sfxGain` 分轨——EngineSound/RainSound/CollisionSound/BoostSound 注入 sfxGain、MusicPlayer 注入 musicGain；`collisionSound.play(impact)` H6 强度参）。
+  - `src/ui/hud.ts` / `src/ui/screens.ts` / `src/ui/joystick.ts` / `src/ui/save.ts` / `src/ui/format.ts` —— `updateHud`/`HudElements`、`applyPhaseToScreens`/`ScreenElements`、`JoystickUI`、`loadBestTime`/`loadBestTimeFor`/`recordWin`/`addDriftScore`/`loadDriftTop`/`addMatchResult`/`loadMatchTop`、`formatTime`（game-loop 消费：M9 起胜场统计与漂移 TOP10 由 applyPhase 调 `recordWin`/`addDriftScore`（H4 起带 combo）、`refreshDriftTop` 调 `loadDriftTop`（H4 渲染连击倍率）；M10 P3 `refreshBestSummary` 调 `formatTime`；M11 F2 `refreshMatchTop` 调 `loadMatchTop`；注意 game→ui 为运行级调用，ui→game 为类型/re-export 级，形成受限的双向依赖环，均无循环初始化问题）。
+  - `src/engine/scenery.ts` —— 间接依赖：`mulberry32`（确定性种子）经 sprites/traffic 生效，保证赛道世界构建可复现。
 
 ## Files
 
 | File | Responsibility |
 |------|----------------|
-| `state.ts` | 定义 `RaceState` 接口，提供 `createRaceState` 创建与 `resetRaceState` 原地重置（保留 `phase`） |
-| `input.ts` | `createInputManager` 工厂：键盘事件监听 + P1/P2 键位映射 → `CarInput`，提供 `destroy` 清理 |
-| `collision.ts` | `applyTrafficCollision` 单玩家-车流碰撞（冷却+惩罚）与 `updateCollisions` 完整调度（P1/P2 车流 + 互碰） |
+| `game-loop.ts` | `GameLoop` 主循环类（约 1043 行；DOM/初始化/每帧更新渲染编排/阶段流转/赛道切换/音频/调试钩子/单屏·分屏·热座·挑战四模式，含 `hotseatPlayer`/`prevP1Time` 热座字段与交棒逻辑、热座车流/碰撞回合条件、M9 胜场统计与漂移 TOP10 记录及 `refreshDriftTop`、M10 P3 `refreshBestSummary` 各赛道 BEST 汇总、P6 主音量 `volume`/`loadVolume`/`setVolume`/`masterGain` 与暂停菜单 KeyR/音量 slider/重开按钮交互、M11 `refreshMatchTop` 对局榜、`rainSound`/`collisionSound`/`lastCollisionCount` 环境音效、`viewFor` night 透传、触屏暂停 `pauseBtn`/`pauseResume`、M12 `challengeMode`/`challengeTimer` 挑战模式与限时收束、`updateBoostCharge`/`boostBar` BOOST 氮气、`musicGain`/`sfxGain`/`musicVolume`/`sfxVolume` 音量分级、wet 雨天物理透传、M13 H1 `challengeMult` 挑战计分加成、H2 `boostSound`/`boostActive`/`boostParticles` BOOST 音效与尾焰粒子（边沿检测 + `viewFor` 透传 renderer）、H4 `addDriftScore` combo 连击入榜与榜单倍率渲染、H5 `updatePlayerFrame` 直返 lastLap 单行赋值、H6 `collisionSound.play(impact)` 碰撞音强度）；导出 `updatePlayerFrame` 双玩家纯函数（H5 返回新 lastLap；第 6 尾参 wet、第 7 尾参 scoreMultiplier）、`updateBoostCharge`（G4 蓄力/消耗）、`PREVIEW_CAMERA_SPEED`、`advancePreviewCameraZ`、`initialPreviewCameraZ`、`initGame` 入口（`LastLapRef` 已随 H5 移除） |
+| `state.ts` | `RaceState` 接口（双玩家状态/双世界/碰撞计数/圈速记录/phase/finishShown）与 `createRaceState`/`resetRaceState`（保留 phase、不重建 tracks；reset 同步清 finishShown） |
+| `player-state.ts` | `PlayerState` 接口（carState/driftState/cameraZ/raceTime/collisionCooldown/M12 `boostCharge`——BOOST 蓄力 0-1）与 `createPlayerState`/`resetPlayerState` |
+| `track-context.ts` | `TrackContext` 双世界上下文接口（def/segments/lapLength/totalLaps/预计算/traffic）与 `createTrackContext`/`refreshTraffic`（车流密度取 `def.trafficCount ?? TRAFFIC_DEFAULT_COUNT`） |
+| `track-manager.ts` | `TrackManager` 类（`getContext`/`getLapLength`/`getTotalLaps`/`getTrackId`/`selectTrack`/`updateTrackSelect`）与 `TrackManagerDeps` 依赖注入接口 |
+| `collision.ts` | `applyTrafficCollision`（单玩家-车流碰撞，冷却+速度惩罚）与 `updateCollisions`（P1/分屏 P2 双世界调度，写回 RaceState） |
+| `phase.ts` | 阶段常量 `PHASE_MENU`/`PHASE_RACING`/`PHASE_FINISHED`/`PHASE_PAUSED` 与 `Phase` 联合类型 |
+| `phase-logic.ts` | 阶段转移纯函数 `nextPhase(phase, lap, totalLaps)` 与 `togglePause(phase)` |
+| `lap.ts` | `lapFromZ(cameraZ, lapLength)` 行进距离 → 1 基圈数（主循环/HUD 共用） |
+| `constants.ts` | 游戏参数唯一真源（17 常量）：`DRIFT_*`（漂移阈值/损耗/得分上限）、`CHALLENGE_SECONDS`（挑战限时 60s，M12 G1）、`BOOST_*`（加速倍率 0.6/速度上限倍率 1.15/蓄力 0.3/消耗 0.5，M12 G4）、`COLLISION_*`（惩罚因子 0.5/冷却 1s）、`RENDER_*`（视距/地平线/深度比）、`ROAD_HALF_WIDTH`/`EDGE_WIDTH`、`TRAFFIC_DEFAULT_COUNT`（车流默认密度 8，赛道可覆盖） |
+| `input.ts` | `createInputManager(window)` 工厂：键盘监听闭包 + P1/P2 键位映射 → `CarInput`，返回 `{ pressed, getP1Input, getP2Input, destroy }` |
+| `debug-hook.ts` | `installDebugHook(sources)` 安装 `window.__gameDebug`（19 个 getter：含 M8 新增 `hotseatPlayer`/`player2CameraZ`、M9 新增 `p2TrafficZ`——P2 世界首车 z、M10 新增 `volume`——主音量、M11 新增 `rainPlaying`——雨声播放状态、M12 新增 `challengeTimeLeft`——挑战剩余秒数与 `boostCharge`——P1 BOOST 蓄力值）供自动化验证读取；`DebugHookSources` 注入接口与全局类型声明 |

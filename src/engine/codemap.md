@@ -2,60 +2,83 @@
 
 ## Responsibility
 
-该目录是游戏的**伪 3D 渲染引擎核心**（Canvas 2D，非 WebGL）。职责包括：
+该目录是游戏的**伪 3D 渲染引擎层**（Canvas 2D，非 WebGL）。职责包括：
 
-- **投影数学**：提供相机模型与透视投影纯函数，将世界坐标（赛道平面 y=0，相机朝 +z）映射为屏幕坐标与缩放。
-- **赛道数据层**：定义分段路点数据结构（`Segment`），提供赛道生成（直道/分组曲线/平滑插值）、环形索引与曲率统计。
-- **场景渲染**：天空、视差远山、草地等背景的分层绘制（远山采用离屏预渲染 + 视差平铺）。
-- **动态对象渲染**：曲线路面分段四边形、路边景物（树/路灯）、车流、漂移烟雾的投影与绘制。
-- **环境状态**：昼夜光照循环配色；确定性风景/车流数据生成。
-- 对外暴露一个**渲染门面**（`Renderer` 类），供游戏主循环直接调用。
+- **投影数学**：提供相机模型与透视投影纯函数（`project`），将世界坐标（地面平面 y=0，相机朝 +z）映射为屏幕坐标与缩放；相机后方/平齐的点返回 null。
+- **赛道定义与生成**：定义分段路点数据结构（`Segment`）与生成器（分组曲线 / 控制点平滑插值 / 直线），提供环形 O(1) 分段定位（`trackIndexForCameraZ`）与总曲率统计（`totalCurve`）；`tracks.ts` 维护赛道定义注册表（`TrackDef` / `TRACK_DEFS`，M9 起 9 条赛道且 `TrackDef.difficulty: 1|2|3` 星级必选，`TrackDef.trafficCount?` 可覆盖默认车流密度，M11 起可选 `TrackDef.timeOfDay?: 'day' | 'night'` 夜晚赛道标记——canyon 峡谷疾驰与 alpine 山岳险道设 `'night'`，缺省视为白天）。
+- **路面几何**：分段四边形的投影（`projectSegmentQuad`）、路面/路缘按段号奇偶配色、中心线虚线绘制判定。
+- **景物系统**：确定性 PRNG（`mulberry32`）、视差远山轮廓生成；路边树/路灯的确定性成对生成、环形可见窗口查询、曲率前缀和（O(1) 累计偏移）与按段分组的空间索引。
+- **车流系统**：确定性车流生成/推进/玩家碰撞（数据层，P4 起玩家逼近时避让变道 AI），以及车流投影渲染（过滤 + 远→近排序）。
+- **漂移烟雾渲染**：烟雾粒子投影（近大远小、透明度随存活衰减）。
+- **环境光照**：昼夜循环配色（120s 周期四段 HSL 插值）+ 天气循环（晴/阴/雨三态各 45s 循环，`WEATHER_CYCLE_SECONDS`，阴/雨天整体降饱和压暗）+ 赛道级夜晚模式（M11：night 锁定深暗蓝紫/暗绿色板，不随时段插值）。
+- **渲染门面**：`Renderer` 类组合全部子模块，对外暴露 `render` / `renderRegion`（分屏） / `drawDivider`（分屏分隔线） / `setViewport` / `setTrack` / `setTraffic` / `setCameraX`；`RenderView` 提供多视图参数化渲染（分屏双世界各持一份，避免每帧重建）；H2 起支持 BOOST 尾焰粒子投影（`BoostParticle` 纯数据接口，game 层维护生命周期、渲染层投影绘制）。
 
 ## Design
 
-- **纯函数分层**：`projection.ts`、`road-geometry.ts`、`traffic-render.ts`、`smoke-render.ts`、`lighting.ts` 均为无副作用纯函数（输入世界坐标/时间，输出投影或颜色），不接触 DOM，易于单测。
-- **门面模式（Facade）**：`renderer.ts` 的 `Renderer` 类组合所有子模块，对外只暴露 `render` / `renderRegion` / `setViewport` / `setTrack` / `setTraffic` 等粗粒度 API；`main.ts` 仅依赖 `Renderer` 与若干数据生成函数。
-- **数据结构驱动**：赛道以环形 `Segment[]` 表达，通过 `trackIndexForCameraZ` 做 O(1) 环形分段定位；曲率用 `Float64Array` 前缀和（`buildCurvePrefixSum` / `curveOffsetAtZ`）实现 O(1) 累计偏移查询，避免逐段累加。
-- **确定性生成**：`scenery.ts` 的 `mulberry32` PRNG 是唯一随机源，远山轮廓、路边景物、车流均由种子生成，结果可复现（利于 bot 校验与存档）。
-- **离屏缓存**：远山轮廓先渲染为 offscreen canvas，再按视差偏移平铺 `drawImage`，避免每帧重绘路径。
-- **画家算法分层**：渲染顺序固定为 天空 → 远山 → 草地 → 路面分段（远→近）→ 景物（远→近）→ 车流（远→近）→ 烟雾，靠绘制顺序保证遮挡正确。
-- **常量集中与 re-export**：`SEGMENT_LENGTH`、`ROAD_HALF_WIDTH`、`EDGE_WIDTH`、`DRAW_DISTANCE` 定义在 `track.ts` / `road-geometry.ts`，并由 `renderer.ts` re-export 供外部统一引用。
+- **纯函数分层**：`projection.ts`、`road-geometry.ts`、`sprites.ts`、`scenery.ts`、`traffic.ts`、`traffic-render.ts`、`smoke-render.ts`、`lighting.ts`、`track.ts`、`tracks.ts` 均为无副作用纯函数/数据模块（输入世界坐标/时间/种子，输出投影或颜色或数据），不接触 DOM，易于单测；仅 `renderer.ts` 触达 Canvas 2D。
+- **门面模式（Facade）**：`renderer.ts` 的 `Renderer` 类组合所有子模块，对外只暴露 `render` / `renderRegion` / `drawDivider` / `setViewport` / `setTrack` / `setTraffic` / `setCameraX` 等粗粒度 API；`src/game/game-loop.ts` 仅依赖 `Renderer` 与少量数据生成函数。
+- **RenderView 视图参数化**：`render(cameraZ, smoke?, timeSec?, view?)` 与 `renderRegion(cameraZ, viewX, viewW, smoke?, timeSec?, view?)` 的尾参 `view?: RenderView`（`track` / `curvePrefixSum` / `spriteIndex` / `traffic` 四件套 + M11 可选 `night?: boolean` 夜晚赛道标记 + H2 可选 `boostParticles?: BoostParticle[]` BOOST 尾焰粒子）——分屏 P1/P2 各传自己的 `TrackContext` 视图，单次渲染零重建（预计算在 `createTrackContext` 时完成）；缺省时在 `renderWithOpts` 内部回退构造为 Renderer 自身字段（`setTrack` / `setTraffic` 设置的默认视图）。实施注记：原案 `view ?? this` 因 `track` / `curvePrefixSum` 等为 private 字段无法做结构兼容赋值，改为类内显式对象构造（语义一致，见计划 Task B2 实施偏差）。
+- **renderRegion 分屏裁剪 + 整数像素对齐**：`renderRegion` 先按 `buildOpts(viewW, height)` 重建投影参数，`Math.round(viewX)` / `Math.round(viewW)` 做整数像素对齐（窗口宽为奇数时 w/2 是 x.5，半像素 translate/clip 会导致交界处 1px 级重叠/缝隙、近处路缘石斜边交错成"三角形重叠/撕裂"），再 `ctx.save / translate / clip` 限定绘制区域，`restore` 复位。
+- **drawDivider 分屏分隔线**：全高深色竖线（默认 2px），覆盖两区域近处路缘石交错瑕疵；必须在 `renderRegion` 的 `ctx.restore()` 之后调用（transform 已复位，用全屏坐标，x 以全屏原点计）。
+- **环形赛道曲率前缀和**：`buildCurvePrefixSum` 预计算 `Float64Array`（`prefix[i+1] = prefix[i] + track[i].curve`），`curveOffsetAtZ` 以 `trackIndexForCameraZ` 定位段 + 段内线性插值实现 O(1) 累计中心线偏移查询；路面分段绘制时另以 `curveSum` 逐段累加。
+- **buildSpriteIndex 空间索引**：景物按 `floor(z / SEGMENT_LENGTH)` 分组为 `Map<number, Sprite[]>`；`spritesInRangeIndexed` 仅遍历相机前方 `floor(viewDistance / SEGMENT_LENGTH) + 2` 个候选段（不超过总段数，视距 ≥ 环长时退化全环），逐精灵过滤语义与线性版 `spritesInRange` 完全一致（环形回绕 + 绝对 z 化 + relZ ≤ viewDistance）。
+- **确定性生成**：`scenery.ts` 的 `mulberry32` PRNG 是唯一随机源；远山轮廓（种子 2024 / 77）、路边景物（seed=1234，70% 树 30% 灯，间距 800）、车流（seed=777，8 辆）、雨滴（seed=2026，80 条，renderer 构造时生成）均由种子生成，结果可复现（利于 bot 校验与存档）。
+- **离屏缓存**：远山两层轮廓先经 `renderMountainOffscreen` 渲染为 offscreen canvas，再按 `parallaxOffset` 视差偏移平铺 `drawImage`（双份平铺覆盖滚动窗口），避免每帧重绘路径。
+- **天气循环（晴/阴/雨三态，P5）**：`renderWithOpts` 以 `phase = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3` 判定天气（0 晴 / 1 阴 / 2 雨，各 45s 循环）并传入 `updateLighting(timeSec, overcast, raining, night)`（`overcast = phase === 1`、`raining = phase === 2`、`night = view?.night ?? false`）；阴/雨天时所有 HSL 输出经 `overcastHsl` 降饱和（s×0.4）压暗（l×0.8，色相不变，四舍五入取整；雨天复用阴天配色仅语义区分），4 段昼夜插值逻辑共用同一配色管线，晴天输出与旧版逐字节一致。
+- **夜晚模式（赛道级，M11 F1）**：`updateLighting` 第 4 参 `night` 为 true 时在昼夜插值前锁定深暗色板——`skyTop hsl(220,55%,12%)`/`skyBottom hsl(210,50%,8%)`/`grass hsl(120,30%,12%)`/`mountainFar hsl(220,30%,10%)`/`mountainNear hsl(220,35%,8%)`（不随 timeSec 时段变化，night=false 输出逐字节不变）；`Renderer` 构造/`setViewport` 时按 `buildMountains(width, colorFar, colorNear)` 参数化构建 day/night 两套远山离屏缓存（`mountains` 默认 `#27425e`/`#1f3046`、`mountainsNight` 深色 `#101a2a`/`#0a1220`），`renderWithOpts` 按 `view?.night` 选择（分屏 P1 day + P2 night 双世界正确）；`drawTraffic` 加 night 参数，night 时每辆可见车先画红色尾灯双灯（`#ff3b30`：`cx ± width*0.3`、宽 `width*0.2`、从 `top.y + height*0.7` 起高 `height*0.25`，车头朝画面上方故尾灯在车身下部），再经私有 `drawHeadlight` 画车头双弧光晕（外层 `rgba(255,235,180,0.35)` 半径 ×1.6 + 核心 `#ffe08a`，中心在车身上部、半径随 scale），night=false 零新增绘制；**M12 G2 车灯随变道转向**——`drawHeadlight(cx, topY, width, height, steerDir)` 第 5 参 `steerDir: -1|0|1` 取 `car.car.shiftDir`（投影对象嵌套原始车数据），核心灯 `cx + steerDir*width*0.35`、外层光晕 `cx + steerDir*width*0.18`（光晕扩散方向与核心一致、幅度更小；steerDir=0 与旧版逐字节一致）。
+- **车流避让 AI（P4）**：`updateTraffic` 可选尾参 `player?: { z: number; x: number }`——车在玩家前方环形距离 `d = (car.z - player.z + lapLength) % lapLength ∈ (0, 350)` 且 `|car.offset - player.x| < 1.2`（同/近车道）时，向远离玩家的一侧渐变变道（步进 `AVOID_STEP = 0.8`/s、clamp `|offset| ≤ 0.85`）；d === 0 或车在玩家后方（d 接近 lapLength）天然不触发。变道永久（无恢复逻辑，车流本就随机车道）；不传 player 时行为与旧版完全一致（既有调用零改动）。**M12 G2 变道方向记录**——`TrafficCar` 加必填 `shiftDir: -1 | 0 | 1`（createTraffic 初始化 0；避让分支 `shiftDir = player.x > 0 ? -1 : 1`、远离/不触发恢复 0），渲染层车灯随其转向（见夜晚模式条目）。
+- **雨滴 overlay + 离屏缓存（P5 / M11 F5）**：`renderWithOpts` 末尾（烟雾层之后、最上层特效，忽略投影）`if (raining) this.drawRain(timeSec, opts)`——`RAIN_DROPS = 80` 条雨丝由 `mulberry32(2026)` 在构造时确定性生成（`RainDrop { x, y0, len }`，x 为宽度归一化 0-1 乘当前宽度，`setViewport` 改尺寸不重算）；F5 起雨丝预渲染到离屏 `rainCanvas`（`buildRainCanvas(opts)`：宽 = opts.width、高 = opts.height + 20，`strokeStyle = 'rgba(180, 200, 220, 0.35)'`、`lineWidth = 1` 预绘制全部雨丝后一次性 stroke；构造器与 `setViewport` 均重建），帧内 `drawRain` 改为双幅 `drawImage(rainCanvas, 0, yOffset - h)` + `drawImage(rainCanvas, 0, yOffset)`（`yOffset = ((timeSec * 600) % h) - 10`，h = opts.height + 20，600px/s 下落环形回绕无缝、保留 -10 上移视觉语义），替代原每帧 80 段线段逐段绘制（性能优化）。
+- **BOOST 尾焰粒子（H2）**：`BoostParticle` 接口定义于 `renderer.ts`（纯数据 `{ x, z, t }`——x 横向偏移 / z 世界位置 / t 存活时间；与渲染相关故定义于此，game 层维护、audio 层不依赖）；`RenderView` 可选 `boostParticles?: BoostParticle[]`（缺省无粒子，菜单预览不传）；`renderWithOpts` 在烟雾层之后、雨层之前 `if (v.boostParticles?.length)` 逐粒投影（仿 smoke）：`project` 求屏幕位置、半径 `max(scale * opts.height * 0.15, 2)`、透明度随存活衰减 `max(1 - t / 0.6, 0)`、填充 `rgba(255, 180, 80, alpha)` 橙色圆、圆心在 `proj.y - radius * 0.5`（车身后上方）；game 层（`game-loop.ts`）P1 boost 激活期间每帧至多 push 1 粒（`z = cameraZ + 2` 保证投影非 null），帧末推进 t、超 0.6s 移除。
+- **白天天空恒蓝（M9 绿天空修复）**：M8 时代白天段 skyTop 色相从蓝 210 线性插值到橙黄 25，中途经过 hue≈117 绿色导致正午天空变绿（阴天降饱和后为绿灰）。M9 修复：白天段（phase 0.25-0.5）`skyTop` 色相恒 210 / `skyBottom` 恒 200（仅明度随 t 变化）；黄昏段（phase 0.5-0.75）`skyTop` 从 210 过渡到 220（蓝→紫，不再经过绿/橙黄）；黎明段（210/200 恒蓝）与夜晚段（220→210）不变。「亮青竖条纹」经浏览器实测确认为山脊谷底透出天空的正常山形剪影（非渲染伪影），无需修渲染。
+- **画家算法分层**：渲染顺序固定为 天空 → 远山 → 草地 → 路面分段（远→近）→ 景物（远→近）→ 车流（远→近）→ 烟雾 → BOOST 尾焰 → 雨，靠绘制顺序保证遮挡正确。
+- **常量真源集中**：渲染常量真源在 `src/game/constants.ts`（`RENDER_DRAW_DISTANCE = 120`、`RENDER_HORIZON_RATIO = 0.35`、`RENDER_DEPTH_RATIO = 0.84`、`ROAD_HALF_WIDTH = 1`、`EDGE_WIDTH = 0.15`）；`road-geometry.ts` re-export `EDGE_WIDTH` / `ROAD_HALF_WIDTH` 并提供兼容导出 `DRAW_DISTANCE`（= `RENDER_DRAW_DISTANCE`，消费方建议迁移至常量），`renderer.ts` 再 re-export 三者供外部统一引用。
 
 ## Flow
 
-1. **初始化**：`main.ts` 从 `tracks.ts`（`TRACK_DEFS` + `createTrackFromDef`）生成 `Segment[]`，用 `createRoadsideSprites`、`createTraffic` 生成景物与车流，构造 `Renderer(canvas, track, w, h, dpr, sprites, traffic)`；构造时预构建远山离屏位图与曲率前缀和。
-2. **每帧驱动**（60fps）：外部更新相机位置（z 由车辆前进推进，x 由 `setCameraX` 设置），调用 `render(cameraZ, smoke, timeSec)`（分屏时用 `renderRegion`）。
-3. **背景层**：`updateLighting(timeSec)` 求昼夜配色 → 填充天空 → 按 `parallaxOffset` 平铺远山离屏图 → 填充草地。
-4. **路面层**：`trackIndexForCameraZ` 定位起点分段，自相机处向前迭代 `DRAW_DISTANCE`(120) 段；每段 `projectSegmentQuad` 求当前/下一段四边形的投影，绘制路面 + 两侧路缘，按段号奇偶交替配色，每两段画一次中心线虚线；`curveSum` 逐段累加作为后续分段的中心线横向偏移。
-5. **景物层**：`spritesInRange` 求环形可见窗口，`curveOffsetAtZ`（前缀和 O(1)）求中心线偏移，`project` 投影后按远→近绘制树（树干+双层树冠）或路灯（灯杆+发光灯头）。
-6. **车流层**：`projectTraffic` 过滤后方/超距车辆并远→近排序，投影为车身矩形，`renderer` 再叠加车窗，按 `colorIndex` 取色。
-7. **烟雾层**：`projectSmoke` 过滤相机后方粒子，半径随 `scale` 缩放、透明度随存活时间衰减，绘制半透明圆。
-8. **分屏**：`renderRegion` 用 `ctx.save/translate/clip` 将渲染限定到 `[viewX, viewX+viewW)` 区域，内部按区域宽度重建投影参数。
+1. **初始化**：`game/track-context.ts` 的 `createTrackContext(def)` 从 `createTrackFromDef(def)` 生成 `Segment[]`，预计算曲率前缀和（`buildCurvePrefixSum`）与景物段索引（`buildSpriteIndex`），并生成车流（`createTraffic`）；`game-loop.ts` 构造 `Renderer(canvas, segments, w, h, dpr, sprites, traffic)`（构造时构建 day/night 两套远山离屏位图 + 曲率前缀和 + 景物索引 + 雨滴数据与离屏雨丝 canvas），分屏/预览渲染时经 `viewFor(ctx, boostParticles?)` 组装 `RenderView`（含 `night: ctx.def.timeOfDay === 'night'` 与 H2 可选 `boostParticles`——比赛渲染传 game 层维护的尾焰粒子数组，菜单预览不传）。
+2. **每帧驱动**（60fps）：外部更新相机（`cameraZ` 由车辆前进推进，`setCameraX` 设置横向偏移），调用 `render(cameraZ, smoke, timeSec, view?)`；分屏时左右半屏各一次 `renderRegion(cameraZ, viewX, viewW, smoke, timeSec, view?)` 后调用 `drawDivider(w / 2)`。
+3. **renderWithOpts 核心管线**（`render` / `renderRegion` 共用）：
+   - 视图解析：显式 `view` 优先，缺省回退到 this 字段构造的 `RenderView`。
+   - 背景层：`updateLighting(timeSec, overcast, raining, night)` 求昼夜 + 天气 + 夜晚配色（`phase = floor(timeSec / WEATHER_CYCLE_SECONDS) % 3`，0 晴 / 1 阴 / 2 雨各 45s 循环，`overcast = phase === 1`、`raining = phase === 2`、`night = view?.night ?? false`）→ 填充天空（skyTop，至 horizon）→ 逐层 `drawMountainLayerCached` 视差平铺远山（night 用 `mountainsNight` 深色缓存）→ 填充草地（grass）。
+   - 路面层：`trackIndexForCameraZ` 定位起点分段，自相机处向前迭代 `DRAW_DISTANCE`(120) 段；每段 `projectSegmentQuad` 求当前/下一段四边形投影（`curveSum` 为当前中心线偏移、`curveSum + segment.curve` 为下一段），绘制路面 + 两侧路缘（`roadColors` 按段号奇偶交替）；`shouldDrawCenterLine` 每两段绘制一次中心线虚线（`#e8e8e8`，宽 = 路面投影宽 × 0.06，中心投影点取自 `project`）；最后 `curveSum += segment.curve`。
+   - 景物层：`spritesInRangeIndexed` 按索引查环形可见窗口（视距 `DRAW_DISTANCE * SEGMENT_LENGTH`），`curveOffsetAtZ`（前缀和 O(1)）求中心线偏移，`project` 投影后按远→近绘制树（`drawTree`：树干 + 双层三角树冠）或路灯（`drawLamp`：灯杆 + 双层发光灯头）。
+   - 车流层：`projectTraffic` 过滤后方/超距车辆并远→近排序，投影为车身矩形 + 车窗（`#1b2430`），按 `colorIndex` 取 `TRAFFIC_COLORS`；night 时每辆先画红色尾灯双灯（`#ff3b30`，车身下部）再经 `drawHeadlight` 画车头双弧光晕。
+   - 烟雾层：`projectSmoke` 过滤相机后方粒子，半径随 `scale` 缩放（`max(scale * height * 0.06, 2)`）、透明度随存活时间衰减（`max(1 - t / 0.6, 0) * 0.4`），绘制半透明圆 `rgba(200, 200, 210, alpha)`。
+   - BOOST 尾焰层（H2）：view 带 `boostParticles` 时逐粒投影绘制橙色尾焰圆（`rgba(255, 180, 80, alpha)`，透明度随存活 t/0.6 衰减，仿 smoke），位于烟雾层之后。
+   - 雨层（P5 + F5）：`raining` 时 `drawRain` 在烟雾层/尾焰层之后平铺离屏雨丝 canvas（最上层特效，忽略投影；双幅 drawImage 按 timeSec 以 600px/s 下落并环形回绕，帧内零逐段绘制）。
+4. **renderRegion 裁剪流程**：`buildOpts(viewW, opts.height)` 重建区域投影参数 → `Math.round` 整数对齐 `viewX` / `viewW` → `ctx.save` → `translate(ox, 0)` → `rect(0, 0, ow, height)` 裁剪 → `renderWithOpts` → `ctx.restore`。
+5. **分屏收尾**：`drawDivider(x, width = 2)` 在 `restore` 后用全屏坐标绘制全高黑色竖线（`fillRect(Math.round(x - width / 2), 0, width, height)`），覆盖交界瑕疵。
 
 ## Integration
 
 - Consumed by:
-  - `src/main.ts`：游戏主循环——构造 `Renderer`、`SEGMENT_LENGTH`、`createRoadsideSprites`、`TRACK_DEFS` / `createTrackFromDef`、`createTraffic` / `updateTraffic`。
-  - `src/game/state.ts`：使用 `TrafficCar` 类型维护车流状态。
-  - `src/game/collision.ts`：调用 `collideWithPlayer` 做玩家与车流碰撞检测。
-  - `src/ai/bot.ts`、`src/ai/simulate.ts`：消费 `Segment`、`SEGMENT_LENGTH`、`trackIndexForCameraZ` 用于 bot 导航与跑圈模拟。
+  - `src/game/game-loop.ts`：主循环/流程编排——`Renderer`、`RenderView`、`BoostParticle`（H2：`viewFor(ctx, boostParticles?)` 组装——M11 起含 `night: ctx.def.timeOfDay === 'night'`，H2 起比赛渲染传尾焰粒子数组 `boostParticles`、菜单预览不传；game 层维护粒子生命周期：P1 boost 激活期间每帧至多 push 1 粒、帧末推进 t、超 0.6s 移除）、`createRoadsideSprites`、`TRACK_DEFS`（9 条赛道，菜单赛道选项按 `TRACK_DEFS.length` 动态构建并渲染难度星级）、`getTrackDef`（M9 漂移 TOP10 榜单赛道名查询）、`updateTraffic`（P4 起两处调用传玩家位置 `{ z: cameraZ, x: carState.position }` 触发避让变道）；分屏模式每帧两次 `renderRegion` + `drawDivider(w / 2)`，赛道预览用 `render` / `renderRegion`（尾参 `viewFor` 各传各的 `TrackContext`），`initialPreviewCameraZ` 按圈长等分取预览起点。
+  - `src/game/track-context.ts`：`SEGMENT_LENGTH`、`Segment`、`buildCurvePrefixSum`、`buildSpriteIndex`、`createRoadsideSprites`、`Sprite`、`createTrackFromDef`、`TrackDef`（含必选 `difficulty`、可选 `trafficCount?` 与 M11 可选 `timeOfDay?`）、`createTraffic`（count 传 `def.trafficCount ?? TRAFFIC_DEFAULT_COUNT`，后者来自 game/constants）、`TrafficCar`——`TrackContext` 持有渲染预计算（前缀和/景物索引/景物列表）与运行时车流，分屏双世界各持一份。
+  - `src/game/track-manager.ts`：`TRACK_DEFS`（赛道切换时重建 `TrackContext`）。
+  - `src/game/state.ts`：`TRACK_DEFS`（初始对局状态）。
+  - `src/game/collision.ts`：`collideWithPlayer`、`TrafficCar`（玩家与车流碰撞检测）。
+  - `src/ai/bot.ts`：`Segment`、`trackIndexForCameraZ`（bot 导航）。
+  - `src/ai/simulate.ts`：`Segment`、`SEGMENT_LENGTH`（跑圈模拟）。
+  - `tests/`：unit 单测覆盖 projection、track、tracks、road-geometry、sprites、scenery、traffic、traffic-render、smoke-render、lighting、renderer-state（`Renderer` / `RenderView`，含 night 每车 2 次尾灯 fillRect 增量断言与 H2 boost 粒子 arc 增量断言）、game-loop、track-context、track-manager、bot、simulate、collision、hud、constants（`DRAW_DISTANCE` 一致性）；`tests/bot/run-bot.ts` 消费 `createDefaultTrack`。
+  - `src/main.ts`：仅引导入口（`import { initGame } from './game/game-loop'`），不直接消费 engine。
 - Depends on:
-  - `src/physics/drift`：仅类型依赖（`SmokeParticle`，被 `renderer.ts` 与 `smoke-render.ts` 引用）。
-  - 浏览器 Canvas 2D 运行时（`HTMLCanvasElement` / `CanvasRenderingContext2D`）。
-- 依赖方向单向：engine 处于系统底层，不反向依赖 game / ai / ui / audio 业务模块。
+  - `src/game/constants`：渲染与车流常量真源——`renderer.ts` 导入 `RENDER_DEPTH_RATIO` / `RENDER_HORIZON_RATIO`（投影参数），`road-geometry.ts` 导入 `EDGE_WIDTH` / `RENDER_DRAW_DISTANCE` / `ROAD_HALF_WIDTH`（路面几何与视距）；`TRAFFIC_DEFAULT_COUNT`（车流默认密度 8，经 game/track-context 消费，赛道 `trafficCount` 可覆盖）。engine 对 game 的唯一依赖即此常量层（非业务模块）。
+  - `src/physics/drift`：仅类型依赖——`SmokeParticle`（`renderer.ts` 与 `smoke-render.ts` 引用）。
+  - 浏览器 Canvas 2D 运行时（`HTMLCanvasElement` / `CanvasRenderingContext2D`，仅 `renderer.ts`）。
+- 依赖方向：engine 处于系统底层，不反向依赖 game / ai / ui / audio 的业务模块（仅依赖 game/constants 常量与 physics 类型）。
 
 ## Files
 
 | File | Responsibility |
 |------|----------------|
-| projection.ts | 伪 3D 透视投影纯函数与类型（`ProjectionOptions`、`Camera3D`、`Point3D`、`project`）：世界坐标→屏幕坐标/缩放，相机后方点返回 null |
-| track.ts | 赛道分段数据结构（`Segment`、`SEGMENT_LENGTH=200`）；生成器（`createTrack` / `createSmoothTrack` / `createStraightTrack` / `createDefaultTrack`）；环形索引 `trackIndexForCameraZ`、总曲率统计 `totalCurve` |
-| tracks.ts | 赛道定义注册表：`TrackDef`（id/名称/控制点/圈数）、`TRACK_DEFS`（classic、highway、s-curve）；`createTrackFromDef`、`getTrackDef` |
-| road-geometry.ts | 路面几何常量（`ROAD_HALF_WIDTH`、`EDGE_WIDTH`、`DRAW_DISTANCE`）；分段四边形投影 `projectSegmentQuad`；路面/路缘配色 `roadColors`；中心线绘制判定 `shouldDrawCenterLine` |
-| scenery.ts | 确定性 PRNG `mulberry32`；远山轮廓 `generateMountainProfile`（多层正弦叠加）；视差偏移 `parallaxOffset` |
-| sprites.ts | 路边景物（`tree`/`lamp`）确定性成对生成 `createRoadsideSprites`；环形可见窗口 `spritesInRange`；曲率前缀和 `buildCurvePrefixSum` 与 O(1) 曲率偏移查询 `curveOffsetAtZ` |
-| lighting.ts | 昼夜光照循环 `updateLighting`：按 120s 周期分段 HSL 插值，输出天空/草地/远山配色（`LightingColors`） |
-| traffic.ts | 车流数据（`TrafficCar`）与常量（`TRAFFIC_Z_TOL`/`X_TOL`/`CRUISE_SPEED`）；确定性生成 `createTraffic`、推进 `updateTraffic`、玩家碰撞 `collideWithPlayer` |
-| traffic-render.ts | 车流渲染投影 `projectTraffic`：可见性过滤、远→近排序、车身/车窗投影与配色表 `TRAFFIC_COLORS` |
-| smoke-render.ts | 漂移烟雾投影 `projectSmoke`：过滤不可见粒子，半径随 scale 缩放、透明度随存活时间衰减 |
-| renderer.ts | 渲染门面 `Renderer` 类：组合天空/远山/草地/路面/景物/车流/烟雾的分层绘制，支持分屏 `renderRegion`、视口/赛道/车流切换与相机横向偏移 |
+| projection.ts | 伪 3D 透视投影纯函数与类型（`ProjectionOptions`、`Camera3D`、`Point3D`、`Projected`、`project`）：世界坐标→屏幕坐标/缩放；相机后方或平齐的点返回 null |
+| track.ts | 赛道分段数据结构与生成（`Segment`、`CurveGroup`、`CurveControlPoint`、`SEGMENT_LENGTH=200`）；`createTrack` / `createSmoothTrack`（控制点线性插值）/ `createStraightTrack` / `createDefaultTrack`（`DEFAULT_CONTROL_POINTS` 直道+左右弯交替、总曲率回环 0、460 段）；环形 O(1) 索引 `trackIndexForCameraZ`、总曲率 `totalCurve` |
+| tracks.ts | 赛道定义注册表：`TrackDef`（id/名称/必选难度星级 `difficulty: 1|2|3`/控制点/圈数/`trafficCount?` 车流密度/可选 `timeOfDay?: 'day' \| 'night'` 夜晚标记）、`TRACK_DEFS`（M9 起 9 条：classic 经典赛道 1★3 圈·密度 8、highway 高速公路 2★3 圈·12、s-curve S 弯挑战 2★2 圈·6、island 环岛巡回 2★3 圈·10、canyon 峡谷疾驰 3★2 圈·8·**night**、desert 沙漠疾驰 1★3 圈·10、forest 森林穿梭 2★2 圈·8、coast 海岸公路 2★3 圈·12、alpine 山岳险道 3★2 圈·6·**night**）；`createTrackFromDef`、`getTrackDef` |
+| road-geometry.ts | 路面几何：re-export `EDGE_WIDTH` / `ROAD_HALF_WIDTH`、兼容导出 `DRAW_DISTANCE`（= `RENDER_DRAW_DISTANCE`，真源在 game/constants）；`Quad`、分段四边形投影 `projectSegmentQuad`、奇偶配色 `roadColors`（路面 `#4a4a4a`/`#3c3c3c`、路缘 `#d03030`/`#e8e8e8`）、中心线判定 `shouldDrawCenterLine`（每两段） |
+| scenery.ts | 确定性 PRNG `mulberry32`；远山轮廓 `generateMountainProfile`（多层正弦叠加 + 伪随机相位，值域 0..1）；视差偏移 `parallaxOffset`（factor 缩放取模） |
+| sprites.ts | 路边景物（`Sprite`，`SpriteKind` = 'tree' / 'lamp'）：`TREE_HEIGHT=1.2`、`LAMP_HEIGHT=0.8`、`ROAD_SIDE_OFFSET=1.4`；确定性成对生成 `createRoadsideSprites`（seed=1234、spacing=800）；环形可见窗口 `spritesInRange`（线性版）与 `spritesInRangeIndexed`（`buildSpriteIndex` 按段分组索引的 O(候选段数) 查询版）；曲率前缀和 `buildCurvePrefixSum` 与 O(1) 偏移查询 `curveOffsetAtZ` |
+| lighting.ts | 昼夜 + 天气 + 夜晚光照循环 `updateLighting(timeSec, overcast = false, raining = false, night = false)`：120s 周期四段 HSL 插值 + `WEATHER_CYCLE_SECONDS = 45` 晴/阴/雨三态（阴/雨天经 `overcastHsl` 降饱和 s×0.4、压暗 l×0.8，雨天复用阴天配色仅语义区分）+ M11 night 锁定深暗色板（skyTop hsl(220,55%,12%)/skyBottom hsl(210,50%,8%)/grass hsl(120,30%,12%)/mountainFar hsl(220,30%,10%)/mountainNear hsl(220,35%,8%)，不随时段插值，night=false 逐字节不变），输出天空/草地/远山配色（`LightingColors`）；M9 修复：白天段 skyTop/skyBottom 色相恒蓝（210/200）仅明度变化，黄昏段 210→220 蓝→紫过渡（消除绿天空，见 Design） |
+| traffic.ts | 车流数据（`TrafficCar`，含 M12 必填 `shiftDir: -1\|0\|1` 变道方向）与常量（`TRAFFIC_Z_TOL=80`、`TRAFFIC_X_TOL=0.9`、`TRAFFIC_CRUISE_SPEED=2400`）；确定性生成 `createTraffic(lapLength, seed = 777, count = 8)`（count 由赛道 `trafficCount` 覆盖，缺省 8；shiftDir 初始 0）、推进 `updateTraffic(traffic, dt, lapLength, player?)`（in-place 环形回绕 + P4 可选 player 尾参的避让变道：`AVOID_Z_DIST=350`/`AVOID_X_TOL=1.2`/`AVOID_STEP=0.8`/`AVOID_LANE_EDGE=0.85`，向远离玩家侧渐变 offset 并记录 shiftDir ±1、远离恢复 0，永久变道）、玩家碰撞 `collideWithPlayer` |
+| traffic-render.ts | 车流渲染投影 `projectTraffic`：可见性过滤（cameraZ < z ≤ cameraZ + DRAW_DISTANCE×SEGMENT_LENGTH）、远→近排序、车身/车窗投影（`CAR_WORLD_WIDTH=0.5`、`CAR_WORLD_HEIGHT=0.4`，像素尺寸 = 世界尺寸 × scale × 视口半宽/半高）与配色表 `TRAFFIC_COLORS`（4 色按 colorIndex 循环） |
+| smoke-render.ts | 漂移烟雾投影 `projectSmoke`：过滤相机后方粒子，半径随 scale 缩放、透明度随存活时间衰减（t/0.6），输出 `SmokeProjection` |
+| renderer.ts | 渲染门面 `Renderer` 类 + `RenderView` 视图参数化（M11 可选 `night?: boolean` + H2 可选 `boostParticles?: BoostParticle[]`）+ `BoostParticle` 接口（H2 尾焰粒子纯数据 `{ x, z, t }`，game 层维护、渲染层投影）：组合天空/远山（day/night 双套离屏缓存 + 视差平铺）/草地/路面/景物/车流/烟雾/BOOST 尾焰/雨丝的分层绘制；`render` / `renderRegion`（整数像素对齐 + translate/clip 裁剪）/ `drawDivider`（分屏分隔线，restore 后调用）；`renderWithOpts` 内按 `timeSec / WEATHER_CYCLE_SECONDS` 取模 3 判定晴/阴/雨三态（`phase === 1` 阴、`phase === 2` 雨）并传入 `updateLighting(timeSec, overcast, raining, night)`（`night = view?.night ?? false`，night 选 `mountainsNight` 深色远山并触发车灯/尾灯）；雨态末尾 `drawRain` 双幅 drawImage 平铺离屏 `rainCanvas`（`buildRainCanvas` 预绘制 80 条雨丝，构造/setViewport 重建，600px/s 下落环形回绕）；night 时 `drawTraffic` 每辆先画红色尾灯双灯（`#ff3b30`：cx ± width*0.3、宽 width*0.2、车身下部 top.y + height*0.7 起高 height*0.25）再画车头双弧光晕（`drawHeadlight(cx, topY, width, height, steerDir)`：`rgba(255,235,180,0.35)` 外层 ×1.6 + `#ffe08a` 核心，半径随 scale；M12 G2 核心灯/光晕随 `car.car.shiftDir` 横向偏移 ×0.35/×0.18 模拟光束朝向变道侧）；`drawBoostParticles` 在烟雾层之后投影 BOOST 橙色尾焰（半径 `max(scale × opts.height × 0.15, 2)`、透明度随存活 t/0.6 衰减、`rgba(255,180,80,alpha)`、圆心 `proj.y - radius*0.5`）；`setViewport` / `setTrack` / `setTraffic` / `setCameraX`；re-export `DRAW_DISTANCE` / `EDGE_WIDTH` / `ROAD_HALF_WIDTH`；树/路灯/车流/烟雾/雨滴/车灯/尾焰的绘制细节（`drawTree` / `drawLamp` / `drawTraffic` / `drawSmoke` / `drawRain` / `drawHeadlight` / `drawSprites` / `drawBoostParticles`） |

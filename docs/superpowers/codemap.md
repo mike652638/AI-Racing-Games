@@ -12,7 +12,7 @@ superpowers 长程开发计划的父目录。集中存放 AI 辅助开发过程�
 
 ## Flow
 
-1. 项目启动 / 新里程碑设计时，在 `plans/` 下创建新的计划文档。
+1. 项目启动 / 新里程碑设计时，在 `plans/` 下创建新的计划文档（命名 `YYYY-MM-DD-<slug>.md`，里程碑编号从 M4 一路演进，最新为 M13）。
 2. 计划文档按 Goal / Architecture / Tech Stack / Global Constraints / Tasks 结构展开，每个 Task 用 checkbox 跟踪状态。
 3. 执行阶段按 Task 顺序开发，每完成一组改动即跑通验证命令。
 4. 收尾阶段通过复盘文档（如 `2026-08-02-optimize.md`）沉淀经验与待办。
@@ -29,4 +29,4 @@ superpowers 长程开发计划的父目录。集中存放 AI 辅助开发过程�
 |------|----------------|
 | `codemap.md` | 本目录索引（本文件） |
 | `plans/codemap.md` | 子目录索引 |
-| `plans/*.md` | 具体里程碑 / 扩展 / 优化计划 |
+| `plans/*.md` | 具体里程碑 / 扩展 / 优化计划（M4-M13，完整清单见 `plans/codemap.md`） |

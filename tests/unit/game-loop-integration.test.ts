@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GameLoop } from '../../src/game/game-loop'
+import { GameLoop, resolvePerformanceConfig, viewFor } from '../../src/game/game-loop'
+import { createTrackContext } from '../../src/game/track-context'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/game/phase'
+import { Renderer } from '../../src/engine/renderer'
+import { buildRoadStrips } from '../../src/engine/road-strip'
+import { createRoadsideSprites, spritesInRangeIndexed, type Sprite } from '../../src/engine/sprites'
+import { createStraightTrack } from '../../src/engine/track'
+import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { DRIFT_TOP_KEY } from '../../src/ui/save'
-import { TRACK_DEFS } from '../../src/engine/tracks'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
 /** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
@@ -246,6 +251,24 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
     fireElementEvent,
+  }
+}
+
+/** node 测试环境无 OffscreenCanvas：roadStripCache 预渲染（renderRoadStripToCanvas 内部 new OffscreenCanvas）所需最小 mock */
+class MockOffscreenCanvas {
+  width: number
+  height: number
+
+  constructor(width: number, height: number) {
+    this.width = width
+    this.height = height
+  }
+
+  getContext() {
+    return {
+      fillStyle: '',
+      fillRect: vi.fn(),
+    }
   }
 }
 
@@ -813,5 +836,125 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.debugValue('rainPlaying')).toBe(true)
     env.driveFrames(1000) // raceTime ≈ 150s → phase 0（晴）
     expect(env.debugValue('rainPlaying')).toBe(false)
+  })
+})
+
+/**
+ * Task 10 集成测试：验证性能优化（Tasks 1-9）协同工作。
+ * 各优化已在各自测试文件（sprites/game-loop/renderer-state.test.ts）有独立单测，
+ * 此处以集成视角验证真实数据流（TrackContext 预计算、Renderer 实例、GameLoop 导出纯函数）
+ * 下各项优化契约成立——对象复用（viewFor/spritesInRangeIndexed out 参数）、字符串缓存
+ * （getFillStyle）、离屏缓存（roadStripCache 预热）与降级配置（resolvePerformanceConfig）。
+ */
+describe('性能优化集成验证（Task 10）', () => {
+  let env: Environment
+
+  beforeEach(() => {
+    // stubEnvironment 提供 document.createElement（Renderer 构造离屏山形缓存需要）
+    env = stubEnvironment()
+    // 与 renderer-state.test.ts 同模式：道路段离屏缓存用 new OffscreenCanvas（node 无此全局，此处 stub）
+    vi.stubGlobal('OffscreenCanvas', MockOffscreenCanvas)
+  })
+
+  it('resolvePerformanceConfig 四模式返回正确配置且性能档共享只读实例', () => {
+    // 默认全效档：120 段 + 渲染全部特效
+    expect(resolvePerformanceConfig(false, false)).toEqual({
+      drawDistance: 120,
+      skipSmoke: false,
+      skipBoostParticles: false,
+      skipRain: false,
+    })
+    // 分屏档：80 段 + 跳过全部特效
+    expect(resolvePerformanceConfig(true, false)).toEqual({
+      drawDistance: 80,
+      skipSmoke: true,
+      skipBoostParticles: true,
+      skipRain: true,
+    })
+    // 性能档：60 段 + 跳过全部特效（最激进降级）
+    const low = resolvePerformanceConfig(false, true)
+    expect(low).toEqual({
+      drawDistance: 60,
+      skipSmoke: true,
+      skipBoostParticles: true,
+      skipRain: true,
+    })
+    // 分屏与性能共存时性能档优先，且连续调用返回同一共享实例（仿 _viewCache 复用，无每帧分配）
+    expect(resolvePerformanceConfig(true, true)).toBe(low)
+  })
+
+  it('spritesInRangeIndexed out 参数：复用同一引用、返回数量与填充一致（真实 TrackContext 数据）', () => {
+    const ctx = createTrackContext(TRACK_DEFS[0])
+    const out: Sprite[] = []
+    // 传 out：返回匹配数量，数组内容与数量一致
+    const count1 = spritesInRangeIndexed(ctx.spriteIndex, ctx.segments, 1500, 900, out)
+    expect(count1).toBeGreaterThan(0)
+    expect(out).toHaveLength(count1)
+    // 二次调用：同一引用（未新建数组）、数量稳定
+    const ref = out
+    const count2 = spritesInRangeIndexed(ctx.spriteIndex, ctx.segments, 1500, 900, out)
+    expect(out).toBe(ref)
+    expect(count2).toBe(count1)
+    expect(out).toHaveLength(count2)
+    // 不传 out：返回新数组（向后兼容路径），内容与复用版一致
+    const fresh = spritesInRangeIndexed(ctx.spriteIndex, ctx.segments, 1500, 900)
+    expect(fresh).not.toBe(out)
+    expect(fresh).toEqual(out)
+  })
+
+  it('viewFor 返回同一引用且字段随 TrackContext 覆盖更新（分屏双世界复用零分配）', () => {
+    const ctxA = createTrackContext(TRACK_DEFS[0])
+    const ctxB = createTrackContext(TRACK_DEFS[1])
+    const v1 = viewFor(ctxA)
+    // 同一 context 连续调用：同一引用
+    expect(viewFor(ctxA)).toBe(v1)
+    expect(v1.track).toBe(ctxA.segments)
+    // 切换 context（分屏 P1/P2 渲染依次消费）：同一引用、字段覆盖为 ctxB
+    const v2 = viewFor(ctxB)
+    expect(v2).toBe(v1)
+    expect(v1.track).toBe(ctxB.segments)
+    expect(v1.curvePrefixSum).toBe(ctxB.curvePrefixSum)
+    expect(v1.spriteIndex).toBe(ctxB.spriteIndex)
+    expect(v1.traffic).toBe(ctxB.traffic)
+    expect(v1.night).toBe(ctxB.def.timeOfDay === 'night')
+  })
+
+  it('getFillStyle 缓存：同 rgba 归一化键命中同一字符串、命中不新增项', () => {
+    const renderer = new Renderer(env.getCanvas(), createStraightTrack(10), 800, 600)
+    const r = renderer as unknown as {
+      getFillStyle: (r: number, g: number, b: number, a: number) => string
+      _fillStyleCache: Map<string, string>
+    }
+    // 连续浮点 alpha 经 toFixed(3) 归一化到同一键 → 同一字符串实例（烟雾/尾焰粒子每帧不重建模板字符串）
+    const first = r.getFillStyle(200, 200, 210, 0.4721)
+    const second = r.getFillStyle(200, 200, 210, 0.4724)
+    expect(second).toBe(first)
+    expect(first).toBe('rgba(200, 200, 210, 0.472)')
+    expect(r._fillStyleCache.size).toBe(1)
+    // 命中路径不新增缓存项（相同参数再次调用返回同一实例）
+    expect(r.getFillStyle(200, 200, 210, 0.4721)).toBe(first)
+    expect(r._fillStyleCache.size).toBe(1)
+    // 不同归一化键（0.4726 → toFixed(3) 进位为 0.473）→ 新键新串
+    const other = r.getFillStyle(200, 200, 210, 0.4726)
+    expect(other).toBe('rgba(200, 200, 210, 0.473)')
+    expect(r._fillStyleCache.size).toBe(2)
+  })
+
+  it('roadStripCache：setTrack 传 roadStrips 时按条数预渲染填充，不传时不触碰', () => {
+    const renderer = new Renderer(env.getCanvas(), createStraightTrack(10), 800, 600)
+    const trackB = createTrackFromDef(TRACK_DEFS[0]) // classic
+    const roadStrips = buildRoadStrips(trackB)
+    renderer.setTrack(trackB, createRoadsideSprites(trackB), roadStrips)
+    const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> }).roadStripCache
+    // 缓存条目数 = 曲率分段数，每项为预渲染的离屏 canvas（node 环境为 MockOffscreenCanvas）
+    expect(cache.size).toBe(roadStrips.length)
+    for (const c of cache.values()) {
+      expect(c).toBeInstanceOf(OffscreenCanvas)
+      expect(c).toHaveProperty('width')
+      expect(c).toHaveProperty('height')
+    }
+    // 不传 roadStrips 的 setTrack 不清空既有缓存（渐进式集成：渲染路径零回归，缓存仅预热）
+    renderer.setTrack(createStraightTrack(10), [])
+    expect(cache.size).toBe(roadStrips.length)
   })
 })
