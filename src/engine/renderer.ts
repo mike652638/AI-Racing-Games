@@ -21,6 +21,7 @@ import {
 } from './road-geometry'
 import { projectTraffic } from './traffic-render'
 import { projectSmoke } from './smoke-render'
+import { renderRoadStripToCanvas, type RoadStrip } from './road-strip'
 
 export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
@@ -127,6 +128,11 @@ export class Renderer {
   private rainDrops: RainDrop[]
   /** 雨丝离屏缓存（F5）：预渲染全部 80 条雨丝，帧内双幅 drawImage 平铺替代逐段绘制 */
   private rainCanvas: HTMLCanvasElement | null = null
+  /** 道路段离屏缓存：strip index → 预渲染 canvas（Task 4 基础设施，setTrack 预热，
+   *  帧内以 drawImage 替代逐段 drawQuad；当前未激活消费，后续 Task 启用切换） */
+  private roadStripCache = new Map<number, OffscreenCanvas>()
+  /** 最近一次 setTrack 传入的道路段列表（renderCachedRoadStrips 的数据源；Task 4 支撑字段） */
+  private roadStrips: RoadStrip[] = []
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -226,11 +232,31 @@ export class Renderer {
     this.traffic = traffic
   }
 
-  /** 切换赛道数据与路边景物（关卡选单用），同时重建曲率前缀和与景物段索引 */
-  setTrack(track: Segment[], sprites: Sprite[]): void {
+  /** 切换赛道数据与路边景物（关卡选单用），同时重建曲率前缀和与景物段索引；
+   *  roadStrips（TrackContext 预计算的曲率段）可选传入，提供时预热道路段离屏缓存 */
+  setTrack(track: Segment[], sprites: Sprite[], roadStrips?: RoadStrip[]): void {
     this.track = track
     this.curvePrefixSum = buildCurvePrefixSum(track)
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    if (roadStrips) {
+      this.roadStrips = roadStrips
+      this.buildRoadStripCache(roadStrips, this.opts.width)
+    }
+  }
+
+  /** 预热道路段离屏缓存：按 TrackContext.roadStrips 将全部曲率段预渲染为离屏 canvas
+   *  （Task 4 仅构建缓存基础设施，消费侧 renderCachedRoadStrips 在后续 Task 激活） */
+  private buildRoadStripCache(strips: RoadStrip[], width: number): void {
+    this.roadStripCache.clear()
+    strips.forEach((strip, i) => {
+      const canvas = renderRoadStripToCanvas(strip, {
+        width,
+        height: 100,
+        roadWidth: 0.7,
+        sideWidth: 0.1,
+      })
+      this.roadStripCache.set(i, canvas)
+    })
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾。
@@ -312,6 +338,17 @@ export class Renderer {
     const baseIndex = trackIndexForCameraZ(v.track, cameraZ)
     const baseZ = Math.floor(cameraZ / SEGMENT_LENGTH) * SEGMENT_LENGTH
 
+    // 道路段缓存绘制（Task 4 渐进式集成：renderCachedRoadStrips 当前为 no-op 占位，
+    // 不替换下方逐段 drawQuad，渲染行为零回归；后续 Task 激活缓存消费路径时切换）
+    this.renderCachedRoadStrips(
+      ctx,
+      this.roadStrips,
+      cameraZ,
+      opts.width,
+      opts.height,
+      opts.horizon,
+    )
+
     let curveSum = 0
     for (let k = 0; k < DRAW_DISTANCE; k++) {
       const z = baseZ + k * SEGMENT_LENGTH
@@ -359,6 +396,26 @@ export class Renderer {
     if (raining) {
       this.drawRain(timeSec, opts)
     }
+  }
+
+  /** 基于道路段缓存绘制路面（渐进式集成，Task 4 未激活：新代码存在但不替换 renderWithOpts
+   *  的逐段 drawQuad，保持渲染行为零回归）。
+   *  简化实现：strip 缓存 canvas 未预渲染时直接返回（调用方决定是否退回逐段 drawQuad）；
+   *  完整离屏缓存策略（按 strip 缩放 drawImage 替代逐段投影绘制）在后续优化中启用。 */
+  private renderCachedRoadStrips(
+    ctx: CanvasRenderingContext2D,
+    strips: RoadStrip[],
+    cameraZ: number,
+    width: number,
+    height: number,
+    horizonY: number,
+  ): void {
+    void ctx
+    void strips
+    void cameraZ
+    void width
+    void height
+    void horizonY
   }
 
   /** 雨滴 overlay：双幅 drawImage 平铺离屏雨丝（最上层特效，忽略投影；

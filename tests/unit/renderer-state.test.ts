@@ -3,6 +3,7 @@ import { Renderer, type RenderView } from '../../src/engine/renderer'
 import { SEGMENT_LENGTH, createStraightTrack } from '../../src/engine/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { createTraffic } from '../../src/engine/traffic'
+import { buildRoadStrips } from '../../src/engine/road-strip'
 import {
   buildCurvePrefixSum,
   buildSpriteIndex,
@@ -23,6 +24,24 @@ function stubDocument(): void {
   vi.stubGlobal('document', {
     createElement: (): MockCanvas => createMockCanvas(),
   })
+}
+
+/** node 测试环境无 OffscreenCanvas，提供最小 mock（renderRoadStripToCanvas 内部 new OffscreenCanvas） */
+class MockOffscreenCanvas {
+  width: number
+  height: number
+
+  constructor(width: number, height: number) {
+    this.width = width
+    this.height = height
+  }
+
+  getContext() {
+    return {
+      fillStyle: '',
+      fillRect: vi.fn(),
+    }
+  }
 }
 
 /** 构造真实赛道与 Renderer，返回画布引用供调用计数断言 */
@@ -69,6 +88,7 @@ function drawingArgs(ctx: MockCanvasRenderingContext2D): Record<string, unknown[
 describe('Renderer 状态切换', () => {
   beforeEach(() => {
     stubDocument()
+    vi.stubGlobal('OffscreenCanvas', MockOffscreenCanvas)
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -368,5 +388,35 @@ describe('Renderer 状态切换', () => {
     const actual = drawingArgs(canvasB.__ctx)
     actual.beginPath = actual.beginPath.slice(1)
     expect(actual).toEqual(drawingArgs(canvasA.__ctx))
+  })
+
+  describe('roadStripCache（Task 4：道路段离屏缓存基础设施）', () => {
+    it('should build cache when track has roadStrips', () => {
+      const { renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0]) // classic
+      const spritesB = createRoadsideSprites(trackB)
+      const roadStrips = buildRoadStrips(trackB)
+      renderer.setTrack(trackB, spritesB, roadStrips)
+      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> })
+        .roadStripCache
+      // setTrack 传 roadStrips 后按 strip 数构建离屏缓存
+      expect(cache.size).toBe(roadStrips.length)
+      // 每项缓存均为预渲染的离屏 canvas（node 环境为 MockOffscreenCanvas，带 width/height）
+      for (const canvas of cache.values()) {
+        expect(canvas).toBeInstanceOf(OffscreenCanvas)
+        expect(canvas).toHaveProperty('width')
+        expect(canvas).toHaveProperty('height')
+      }
+    })
+
+    it('setTrack 不带 roadStrips 时缓存保持为空（渐进式集成零回归）', () => {
+      const { renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0])
+      const spritesB = createRoadsideSprites(trackB)
+      renderer.setTrack(trackB, spritesB)
+      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> })
+        .roadStripCache
+      expect(cache.size).toBe(0)
+    })
   })
 })
