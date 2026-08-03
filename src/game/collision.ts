@@ -9,27 +9,28 @@ const COLLISION_COOLDOWN = 1
 
 /**
  * 单个玩家与车流的碰撞检测 + 惩罚。
- * cooldown 为可变包装对象（{ value }）：冷却随时间衰减，命中后重置并施加速度惩罚。
- * @returns 是否发生碰撞
+ * cooldown 为数字字段（调用方持有的 PlayerState.collisionCooldown）：每帧随 dt 衰减，
+ * 命中后重置为 COLLISION_COOLDOWN 并施加速度惩罚；冷却期内不再重复触发。
+ * @returns 是否发生碰撞（hit）与衰减/重置后的冷却值（cooldown，由调用方写回）
  */
 export function applyTrafficCollision(
   carState: CarState,
   cameraZ: number,
   traffic: TrafficCar[],
-  cooldown: { value: number },
+  cooldown: number,
   dt: number,
-): boolean {
-  cooldown.value = Math.max(cooldown.value - dt, 0)
-  if (cooldown.value > 0) {
-    return false
+): { hit: boolean; cooldown: number } {
+  cooldown = Math.max(cooldown - dt, 0)
+  if (cooldown > 0) {
+    return { hit: false, cooldown }
   }
-  const hit = collideWithPlayer(traffic, cameraZ, carState.position)
-  if (hit) {
+  const collision = collideWithPlayer(traffic, cameraZ, carState.position)
+  if (collision) {
     carState.speed *= COLLISION_SPEED_FACTOR
-    cooldown.value = COLLISION_COOLDOWN
-    return true
+    cooldown = COLLISION_COOLDOWN
+    return { hit: true, cooldown }
   }
-  return false
+  return { hit: false, cooldown }
 }
 
 /**
@@ -42,18 +43,30 @@ export function applyTrafficCollision(
  * 双方冷却，因此互碰后 1 秒内车流碰撞与互碰均不重复罚速。
  */
 export function updateCollisions(race: RaceState, dt: number, splitMode: boolean): void {
-  const cooldown1 = { value: race.player1.collisionCooldown }
-  if (applyTrafficCollision(race.player1.carState, race.player1.cameraZ, race.traffic, cooldown1, dt)) {
+  const r1 = applyTrafficCollision(
+    race.player1.carState,
+    race.player1.cameraZ,
+    race.traffic,
+    race.player1.collisionCooldown,
+    dt,
+  )
+  race.player1.collisionCooldown = r1.cooldown
+  if (r1.hit) {
     race.collisionCount++
   }
-  race.player1.collisionCooldown = cooldown1.value
 
   if (splitMode) {
-    const cooldown2 = { value: race.player2.collisionCooldown }
-    if (applyTrafficCollision(race.player2.carState, race.player2.cameraZ, race.traffic, cooldown2, dt)) {
+    const r2 = applyTrafficCollision(
+      race.player2.carState,
+      race.player2.cameraZ,
+      race.traffic,
+      race.player2.collisionCooldown,
+      dt,
+    )
+    race.player2.collisionCooldown = r2.cooldown
+    if (r2.hit) {
       race.collisionCount++
     }
-    race.player2.collisionCooldown = cooldown2.value
 
     // P1-P2 互碰：任一方处于冷却期（含车流碰撞冷却）则不检测、不罚速，
     // 避免重叠期间每帧重复罚速（速度指数衰减）。冷却在车流检测中已随 dt 衰减。

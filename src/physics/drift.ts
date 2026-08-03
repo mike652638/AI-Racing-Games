@@ -39,7 +39,10 @@ const DRIFT_TURN_MULTIPLIER = 1.5
 /** 漂移激活时的每帧速度损耗因子 */
 const DRIFT_SPEED_FACTOR = 0.985
 
-/** 更新漂移状态（in-place 修改并返回） */
+/**
+ * 更新漂移状态（纯函数：不修改入参 drift/carState/config，基于它们计算并返回新对象）。
+ * 注意 smoke 数组与粒子均以复制方式推进，原对象（含粒子 t）保持不变。
+ */
 export function updateDrift(
   dt: number,
   input: CarInput,
@@ -48,38 +51,38 @@ export function updateDrift(
   drift: DriftState,
   cameraZ: number,
 ): DriftState {
+  const next: DriftState = { ...drift, smoke: [...drift.smoke] }
   const charging =
     Math.abs(input.steer) > STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
 
-  drift.charge = charging
-    ? Math.min(drift.charge + dt, 1)
-    : Math.max(drift.charge - dt * CHARGE_DECAY, 0)
-  drift.active = drift.charge > CHARGE_THRESHOLD
+  next.charge = charging
+    ? Math.min(next.charge + dt, 1)
+    : Math.max(next.charge - dt * CHARGE_DECAY, 0)
+  next.active = next.charge > CHARGE_THRESHOLD
 
-  if (drift.active) {
-    drift.score += state.speed * dt * DRIFT_SCORE_RATE
+  if (next.active) {
+    next.score += state.speed * dt * DRIFT_SCORE_RATE
   }
 
-  drift.lastSmoke += dt
-  if (drift.active && drift.lastSmoke >= SMOKE_INTERVAL) {
-    drift.smoke.push({
+  next.lastSmoke += dt
+  if (next.active && next.lastSmoke >= SMOKE_INTERVAL) {
+    next.smoke.push({
       x: state.position - Math.sign(input.steer) * 0.3,
       z: cameraZ,
       t: 0,
     })
-    drift.lastSmoke = 0
+    next.lastSmoke = 0
   }
 
   const alive: SmokeParticle[] = []
-  for (const particle of drift.smoke) {
-    particle.t += dt
-    if (particle.t <= SMOKE_LIFETIME) {
-      alive.push(particle)
+  for (const particle of next.smoke) {
+    if (particle.t + dt <= SMOKE_LIFETIME) {
+      alive.push({ ...particle, t: particle.t + dt })
     }
   }
-  drift.smoke = alive
+  next.smoke = alive
 
-  return drift
+  return next
 }
 
 /** 漂移时的有效转向率 */

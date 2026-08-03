@@ -113,29 +113,53 @@ describe('漂移得分', () => {
 
   test('漂移中按速度累计得分', () => {
     const drift = scored()
-    updateDrift(1, steerInput, state, cfg, drift, 0)
-    expect(drift.active).toBe(true)
-    expect(drift.score).toBeGreaterThan(0)
+    const next = updateDrift(1, steerInput, state, cfg, drift, 0)
+    expect(next.active).toBe(true)
+    expect(next.score).toBeGreaterThan(0)
   })
 
   test('得分与速度成正比（1.5 倍速度 1.5 倍得分）', () => {
     const a = scored()
     const b = scored()
-    updateDrift(1, steerInput, state, cfg, a, 0)
-    updateDrift(1, steerInput, { position: 0.5, speed: 4000 }, cfg, b, 0)
-    expect(a.score).toBeCloseTo(b.score * 1.5, 6)
+    const na = updateDrift(1, steerInput, state, cfg, a, 0)
+    const nb = updateDrift(1, steerInput, { position: 0.5, speed: 4000 }, cfg, b, 0)
+    expect(na.score).toBeCloseTo(nb.score * 1.5, 6)
   })
 
   test('不漂移不计分', () => {
     const drift = scored()
-    updateDrift(1, idleInput, state, cfg, drift, 0)
-    expect(drift.score).toBe(0)
+    const next = updateDrift(1, idleInput, state, cfg, drift, 0)
+    expect(next.score).toBe(0)
   })
 
   test('charge 不足（未激活）不计分', () => {
     const drift = scored()
     drift.charge = 0
-    updateDrift(DT, steerInput, state, cfg, drift, 0)
-    expect(drift.score).toBe(0)
+    const next = updateDrift(DT, steerInput, state, cfg, drift, 0)
+    expect(next.score).toBe(0)
+  })
+})
+
+describe('updateDrift 纯函数性', () => {
+  test('不修改传入的 drift 对象，返回新对象', () => {
+    const cfg = createCarConfig()
+    const state = { position: 0.5, speed: cfg.maxSpeed * 0.8 }
+    const input = { throttle: 1, brake: false, steer: 1 }
+    const drift: DriftState = {
+      charge: 0.5,
+      active: false,
+      lastSmoke: 0.9,
+      smoke: [{ x: 0.3, z: 100, t: 0.2 }],
+      score: 10,
+    }
+    const before = JSON.parse(JSON.stringify(drift)) as DriftState
+    const next = updateDrift(0.1, input, state, cfg, drift, 100)
+    // 原对象（含烟雾粒子与数组）完全不变
+    expect(drift).toEqual(before)
+    // 返回全新对象，且状态正确推进（粒子 t 老化）
+    expect(next).not.toBe(drift)
+    expect(next.charge).toBeGreaterThan(drift.charge)
+    expect(next.active).toBe(true)
+    expect(next.smoke[0].t).toBeCloseTo(0.3, 10)
   })
 })

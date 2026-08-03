@@ -806,7 +806,7 @@ git commit -m "refactor(main): split game loop, track manager, debug hook and mo
 - Consumes: `DriftState`, `CarInput`, `CarState`, `CarConfig`, `cameraZ`
 - Produces: `updateDrift` 明确为纯函数返回新 `DriftState`；`applyTrafficCollision` 直接接受 `number` 冷却字段
 
-- [ ] **Step 1: 修改 updateDrift 为纯函数**
+- [x] **Step 1: 修改 updateDrift 为纯函数**
 
 ```typescript
 // src/physics/drift.ts
@@ -825,7 +825,7 @@ export function updateDrift(
 }
 ```
 
-- [ ] **Step 2: 简化碰撞冷却**
+- [x] **Step 2: 简化碰撞冷却**
 
 ```typescript
 // src/game/collision.ts
@@ -849,13 +849,13 @@ export function applyTrafficCollision(
 }
 ```
 
-- [ ] **Step 3: 更新调用方并跑测试**
+- [x] **Step 3: 更新调用方并跑测试**
 
 ```bash
 npx vitest run tests/unit/drift.test.ts tests/unit/collision.test.ts
 ```
 
-- [ ] **Step 4: 全量验证与提交**
+- [x] **Step 4: 全量验证与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -865,6 +865,14 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/physics/drift.ts src/game/collision.ts src/main.ts tests/unit/drift.test.ts tests/unit/collision.test.ts
 git commit -m "refactor(physics): make updateDrift pure and simplify collision cooldown"
 ```
+
+#### 实施偏差（Task 6 实际落地与设计的差异）
+
+1. **updateDrift 纯函数实现需深复制 smoke**：文档仅示例 `const next = { ...drift }`。由于 `smoke` 是数组（粒子对象可变），浅拷贝会让 `push` 与粒子 `t` 老化污染原对象。实际实现为 `{ ...drift, smoke: [...drift.smoke] }`，且老化阶段以 `{ ...particle, t: particle.t + dt }` 复制粒子，保证原对象（含数组与粒子）完全不变（有测试断言原对象 `toEqual` 不变）。
+2. **调用方位置变更**：文档 Files 提到 `src/main.ts`，实际 main.ts 已在 Task 5 拆分，唯一调用方是 `src/game/game-loop.ts` 的 `updatePlayerFrame`（已是 `player.driftState = updateDrift(...)` 赋值模式），本任务未改任何调用方。
+3. **applyTrafficCollision 需将命中结果转布尔**：`collideWithPlayer` 返回 `TrafficCar | null`（truthy 判断），而新返回值类型为 `{ hit: boolean; cooldown: number }`，因此用 `const collision = collideWithPlayer(...)` + `if (collision)` 转布尔后返回。
+4. **冷却字段合并已由 Task 4 完成**：`updateCollisions` 在 Task 4 已使用 `PlayerState.collisionCooldown` 单一字段（车流与互碰共用）。本任务仅消除 `applyTrafficCollision` 残留的 `{ value }` 包装对象，改为数字冷却 + `{ hit, cooldown }` 返回值，互碰/车流共用冷却语义保持不变（互碰命中双设冷却，冷却期内两者均不罚速）。
+5. **测试更新**：drift.test.ts 中 4 个"不接收返回值"的得分用例改为断言返回值（原 in-place 语义用例）；新增 1 例纯函数性用例（原对象不变 + 粒子 t 正确老化）。collision.test.ts 的 7 个 `applyTrafficCollision` 用例全部改为数字 cooldown + `{ hit, cooldown }` 断言，保留"冷却期内不重复罚速"与"冷却归零后恢复"核心断言。
 
 ---
 

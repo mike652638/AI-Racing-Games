@@ -71,60 +71,67 @@ describe('createRaceState / resetRaceState', () => {
 describe('applyTrafficCollision', () => {
   it('无车流时不碰撞', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 1000, [], cooldown, 0.016)).toBe(false)
+    const r = applyTrafficCollision(s, 1000, [], 0, 0.016)
+    expect(r.hit).toBe(false)
+    expect(r.cooldown).toBe(0)
     expect(s.speed).toBe(100)
   })
 
   it('纵向横向均接近时碰撞并减速一半', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040)], cooldown, 0.016)).toBe(true)
+    const r = applyTrafficCollision(s, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(r.hit).toBe(true)
+    expect(r.cooldown).toBeGreaterThan(0)
     expect(s.speed).toBe(50)
   })
 
   it('横向错开不碰撞', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040, -0.5)], cooldown, 0.016)).toBe(false)
+    const r = applyTrafficCollision(s, 1000, [trafficCar(1040, -0.5)], 0, 0.016)
+    expect(r.hit).toBe(false)
+    expect(r.cooldown).toBe(0)
     expect(s.speed).toBe(100)
   })
 
   it('纵向错过不碰撞', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 2000, [trafficCar(1040)], cooldown, 0.016)).toBe(false)
+    const r = applyTrafficCollision(s, 2000, [trafficCar(1040)], 0, 0.016)
+    expect(r.hit).toBe(false)
+    expect(r.cooldown).toBe(0)
     expect(s.speed).toBe(100)
   })
 
   it('碰撞后进入冷却，冷却期内不再重复命中', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040)], cooldown, 0.016)).toBe(true)
-    expect(cooldown.value).toBeGreaterThan(0)
+    const first = applyTrafficCollision(s, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(first.hit).toBe(true)
+    expect(first.cooldown).toBeGreaterThan(0)
     // 冷却期内仍与车流重叠，但不再次惩罚
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040)], cooldown, 0.016)).toBe(false)
+    const second = applyTrafficCollision(s, 1000, [trafficCar(1040)], first.cooldown, 0.016)
+    expect(second.hit).toBe(false)
+    expect(second.cooldown).toBeLessThan(first.cooldown)
     expect(s.speed).toBe(50)
   })
 
   it('冷却随时间衰减，衰减结束后可再次碰撞', () => {
     const s = car(0.5, 100)
-    const cooldown = { value: 0 }
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040)], cooldown, 0.016)).toBe(true)
+    const first = applyTrafficCollision(s, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(first.hit).toBe(true)
     expect(s.speed).toBe(50)
     // dt=1 使冷却归零，本帧立即恢复检测并命中
-    expect(applyTrafficCollision(s, 1000, [trafficCar(1040)], cooldown, 1)).toBe(true)
+    const second = applyTrafficCollision(s, 1000, [trafficCar(1040)], first.cooldown, 1)
+    expect(second.hit).toBe(true)
     expect(s.speed).toBe(25)
-    expect(cooldown.value).toBeGreaterThan(0)
+    expect(second.cooldown).toBeGreaterThan(0)
   })
 
-  it('不同 cooldown 包装对象互不影响（独立冷却）', () => {
+  it('不同冷却值互不影响（独立冷却）', () => {
     const a = car(0.5, 100)
     const b = car(0.5, 100)
-    const cooldownA = { value: 0 }
-    const cooldownB = { value: 0 }
-    expect(applyTrafficCollision(a, 1000, [trafficCar(1040)], cooldownA, 0.016)).toBe(true)
-    expect(applyTrafficCollision(b, 1000, [trafficCar(1040)], cooldownB, 0.016)).toBe(true)
+    const ra = applyTrafficCollision(a, 1000, [trafficCar(1040)], 0, 0.016)
+    const rb = applyTrafficCollision(b, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(ra.hit).toBe(true)
+    expect(rb.hit).toBe(true)
     expect(a.speed).toBe(50)
     expect(b.speed).toBe(50)
   })
