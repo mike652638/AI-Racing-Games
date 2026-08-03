@@ -71,3 +71,55 @@ export function buildRoadStrips(
 
   return strips
 }
+
+export interface RoadStripRenderOptions {
+  /** 离屏 canvas 宽度 */
+  width: number
+  /** 离屏 canvas 高度 */
+  height: number
+  /** 路面宽度比例 (0-1) */
+  roadWidth: number
+  /** 路肩宽度比例 (0-1) */
+  sideWidth: number
+}
+
+/**
+ * 将道路段预渲染到离屏 Canvas。
+ * 包含路面、车道线、路肩。
+ */
+export function renderRoadStripToCanvas(
+  strip: RoadStrip,
+  options: RoadStripRenderOptions,
+): OffscreenCanvas {
+  const { width, height, roadWidth, sideWidth } = options
+  // strip 预留给按段信息（曲率等）差异化渲染，当前实现为整段统一绘制
+  void strip
+  const canvas = new OffscreenCanvas(width, height)
+  const ctx = canvas.getContext('2d')!
+
+  const centerX = width / 2
+  const roadHalf = (width * roadWidth) / 2
+  const sideHalf = (width * sideWidth) / 2
+
+  // 路肩（左侧）
+  ctx.fillStyle = '#4a7c4a'
+  ctx.fillRect(0, 0, centerX - roadHalf - sideHalf, height)
+
+  // 路肩（右侧）
+  ctx.fillRect(centerX + roadHalf + sideHalf, 0, width, height)
+
+  // 路面
+  ctx.fillStyle = '#555555'
+  ctx.fillRect(centerX - roadHalf, 0, roadHalf * 2, height)
+
+  // 车道线（中心虚线）
+  ctx.fillStyle = '#ffffff'
+  const lineWidth = 2
+  const dashHeight = 10
+  const gapHeight = 10
+  for (let y = 0; y < height; y += dashHeight + gapHeight) {
+    ctx.fillRect(centerX - lineWidth / 2, y, lineWidth, dashHeight)
+  }
+
+  return canvas
+}

@@ -1,5 +1,31 @@
-import { describe, it, expect } from 'vitest'
-import { buildRoadStrips } from '../../src/engine/road-strip'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import {
+  buildRoadStrips,
+  renderRoadStripToCanvas,
+  type RoadStrip,
+} from '../../src/engine/road-strip'
+
+// node 测试环境无 OffscreenCanvas，提供最小 mock
+class MockOffscreenCanvas {
+  width: number
+  height: number
+
+  constructor(width: number, height: number) {
+    this.width = width
+    this.height = height
+  }
+
+  getContext() {
+    return {
+      fillStyle: '',
+      fillRect: vi.fn(),
+    }
+  }
+}
+
+beforeEach(() => {
+  vi.stubGlobal('OffscreenCanvas', MockOffscreenCanvas)
+})
 
 describe('buildRoadStrips', () => {
   it('should merge segments with similar curvature', () => {
@@ -25,5 +51,28 @@ describe('buildRoadStrips', () => {
     const segments = Array.from({ length: 100 }, () => ({ curve: 0 }))
     const strips = buildRoadStrips(segments, { maxSegments: 30 })
     expect(strips.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('renderRoadStripToCanvas', () => {
+  it('should create offscreen canvas with road content', () => {
+    const strip: RoadStrip = {
+      startSeg: 0,
+      endSeg: 10,
+      startZ: 0,
+      endZ: 10 * 200, // SEGMENT_LENGTH = 200
+      curveAvg: 0,
+    }
+
+    const canvas = renderRoadStripToCanvas(strip, {
+      width: 200,
+      height: 100,
+      roadWidth: 0.7,
+      sideWidth: 0.1,
+    })
+
+    expect(canvas).toBeInstanceOf(OffscreenCanvas)
+    expect(canvas.width).toBe(200)
+    expect(canvas.height).toBe(100)
   })
 })
