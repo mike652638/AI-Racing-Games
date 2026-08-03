@@ -11,7 +11,7 @@ function car(position = 0, speed = 100): CarState {
 
 /** 构造测试车流车辆（默认与玩家同车道） */
 function trafficCar(z: number, offset = 0.5, speed = 2400): TrafficCar {
-  return { z, offset, speed, colorIndex: 0 }
+  return { z, offset, speed, colorIndex: 0, shiftDir: 0 }
 }
 
 describe('createRaceState / resetRaceState', () => {

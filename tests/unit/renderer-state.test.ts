@@ -260,6 +260,36 @@ describe('Renderer 状态切换', () => {
     expect(nightIncrement).toBeGreaterThan(baseIncrement)
   })
 
+  it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[4])
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: createTraffic(2000),
+    }
+    const nightView: RenderView = { ...baseView, night: true }
+    const shiftView: RenderView = {
+      ...baseView,
+      traffic: baseView.traffic.map((c) => ({ ...c, shiftDir: 1 })),
+      night: true,
+    }
+    // 两帧 shiftDir=0 渲染取 arc x 增量序列（__args 为累计记录，须按索引切片取增量）
+    renderer.render(0, [], 0, nightView)
+    const before0 = (canvas.__ctx.__args.arc ?? []).length
+    renderer.render(0, [], 0, nightView)
+    const after0 = (canvas.__ctx.__args.arc ?? []).length
+    const arcs0 = (canvas.__ctx.__args.arc ?? []).slice(before0, after0).map((a) => a[0] as number)
+    // shiftDir=1 渲染
+    renderer.render(0, [], 0, shiftView)
+    const after1 = (canvas.__ctx.__args.arc ?? []).length
+    const arcs1 = (canvas.__ctx.__args.arc ?? []).slice(after0, after1).map((a) => a[0] as number)
+    // 两帧 arc 数量一致（每辆可见车 2 次：外层光晕 + 核心灯），但核心灯 x 随 steerDir 偏移 → 序列不同
+    expect(arcs1.length).toBe(arcs0.length)
+    expect(arcs1).not.toEqual(arcs0)
+  })
+
   it('带 view 的 renderRegion 与 setTrack 后默认路径的绘制调用序列一致', () => {
     // 默认路径：renderer 持有 trackB（setTrack 切换），render(0) 用 this 字段渲染
     const canvasA = createMockCanvas(800, 600)

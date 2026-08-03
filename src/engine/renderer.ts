@@ -380,25 +380,35 @@ export class Renderer {
         car.height * 0.4,
       )
       if (night) {
-        this.drawHeadlight(car.bottom.x, car.top.y, car.width, car.height)
+        // car 为 TrafficProjection（含原始车数据字段 car.car），shiftDir 取自车数据
+        this.drawHeadlight(car.bottom.x, car.top.y, car.width, car.height, car.car.shiftDir)
       }
     }
   }
 
-  /** 车前灯光晕（night 专用）：参考 drawLamp 双弧模式——外层半透明光晕 + 核心灯，位置在车头（画面上方） */
-  private drawHeadlight(cx: number, topY: number, width: number, height: number): void {
+  /** 车前灯光晕（night 专用）：参考 drawLamp 双弧模式——外层半透明光晕 + 核心灯，位置在车头（画面上方）；
+   *  steerDir 为车流避让变道方向（-1/0/1），核心灯与光晕随其横向偏移（模拟光束朝向变道侧，0 时与旧版逐字节一致） */
+  private drawHeadlight(
+    cx: number,
+    topY: number,
+    width: number,
+    height: number,
+    steerDir: -1 | 0 | 1,
+  ): void {
     const { ctx } = this
     // 车头 = 车身上部（行驶方向朝画面上方），半径随投影宽（scale）缩放
-    const hx = cx
     const hy = topY + height * 0.25
     const r = Math.max(width * 0.5, 2.5)
+    // 核心灯偏移幅 0.35、外层光晕偏移幅 0.18（光晕扩散方向与核心一致、幅度更小）
+    const coreX = cx + steerDir * width * 0.35
+    const haloX = cx + steerDir * width * 0.18
     ctx.fillStyle = 'rgba(255, 235, 180, 0.35)'
     ctx.beginPath()
-    ctx.arc(hx, hy, r * 1.6, 0, Math.PI * 2)
+    ctx.arc(haloX, hy, r * 1.6, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = '#ffe08a'
     ctx.beginPath()
-    ctx.arc(hx, hy, r, 0, Math.PI * 2)
+    ctx.arc(coreX, hy, r, 0, Math.PI * 2)
     ctx.fill()
   }
 

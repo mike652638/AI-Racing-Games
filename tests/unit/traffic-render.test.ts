@@ -10,7 +10,7 @@ const camera = { x: 0, y: 1, z: 0 }
 const cameraX = 0
 
 function car(z: number, offset = 0, colorIndex = 0): TrafficCar {
-  return { z, offset, speed: 2400, colorIndex }
+  return { z, offset, speed: 2400, colorIndex, shiftDir: 0 }
 }
 
 describe('projectTraffic 车流投影', () => {

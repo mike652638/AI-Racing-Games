@@ -35,12 +35,12 @@ describe('createTraffic', () => {
 
 describe('updateTraffic', () => {
   test('按速度推进 z', () => {
-    const car: TrafficCar = { z: 100, offset: 0.7, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 100, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0 }
     updateTraffic([car], 0.5, 20000)
     expect(car.z).toBeCloseTo(700, 6)
   })
   test('超过 lapLength 环形回绕', () => {
-    const car: TrafficCar = { z: 19800, offset: 0.7, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 19800, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0 }
     updateTraffic([car], 1, 20000)
     expect(car.z).toBeCloseTo(1000, 6)
   })
@@ -48,15 +48,15 @@ describe('updateTraffic', () => {
 
 describe('collideWithPlayer', () => {
   test('纵向横向均接近时命中', () => {
-    const car: TrafficCar = { z: 1000, offset: 0.7, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 1000, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0 }
     expect(collideWithPlayer([car], 1050, 0.7)).toBe(car)
   })
   test('横向错开（offset 差 > xTol）不命中', () => {
-    const car: TrafficCar = { z: 1000, offset: -0.7, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 1000, offset: -0.7, speed: 1200, colorIndex: 0, shiftDir: 0 }
     expect(collideWithPlayer([car], 1050, 0.7)).toBeNull()
   })
   test('纵向错过（|dz| > zTol）不命中', () => {
-    const car: TrafficCar = { z: 1000, offset: 0.7, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 1000, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0 }
     expect(collideWithPlayer([car], 2000, 0.7)).toBeNull()
   })
   test('无车不命中', () => {
@@ -69,7 +69,7 @@ describe('车流避让', () => {
   const DT = 0.05
 
   /** 构造单辆静止车流（speed=0 让 z 不随帧推进，d 保持恒定便于断言） */
-  const stillCar = (z: number, offset: number): TrafficCar => ({ z, offset, speed: 0, colorIndex: 0 })
+  const stillCar = (z: number, offset: number): TrafficCar => ({ z, offset, speed: 0, colorIndex: 0, shiftDir: 0 })
 
   test('玩家逼近同车道车流时 offset 朝远离侧渐变（player.x>0 → 负方向）', () => {
     const car = stillCar(100, 0.6)
@@ -100,9 +100,23 @@ describe('车流避让', () => {
   })
 
   test('不带 player 参数时行为与旧版一致（offset 恒等、z 正常推进）', () => {
-    const car: TrafficCar = { z: 100, offset: 0.6, speed: 1200, colorIndex: 0 }
+    const car: TrafficCar = { z: 100, offset: 0.6, speed: 1200, colorIndex: 0, shiftDir: 0 }
     updateTraffic([car], 0.5, 20000)
     expect(car.z).toBeCloseTo(700, 6)
     expect(car.offset).toBe(0.6)
+  })
+
+  test('玩家逼近同车道时 shiftDir 记录远离侧（player.x>0 → -1）', () => {
+    const car = stillCar(100, 0.6)
+    const player = { z: 0, x: 0.5 }
+    updateTraffic([car], DT, 20000, player)
+    expect(car.shiftDir).toBe(-1)
+  })
+
+  test('车远离（d=2000）时 shiftDir 保持 0（车灯回中）', () => {
+    const car = stillCar(2000, 0.6)
+    const player = { z: 0, x: 0.5 }
+    updateTraffic([car], DT, 20000, player)
+    expect(car.shiftDir).toBe(0)
   })
 })

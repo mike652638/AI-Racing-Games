@@ -9,6 +9,8 @@ export interface TrafficCar {
   speed: number
   /** 车身配色索引 */
   colorIndex: number
+  /** 最近一次避让变道方向（-1 左 / 1 右 / 0 未在变道），渲染层车灯随其转向；createTraffic 初始化 0 */
+  shiftDir: -1 | 0 | 1
 }
 
 /** 碰撞纵向容差（世界单位） */
@@ -41,6 +43,7 @@ export function createTraffic(
       offset: (rnd() < 0.5 ? -1 : 1) * (0.4 + rnd() * 0.4),
       speed: TRAFFIC_CRUISE_SPEED * (0.8 + rnd() * 0.4),
       colorIndex: Math.floor(rnd() * 4),
+      shiftDir: 0,
     })
   }
   return cars
@@ -76,6 +79,11 @@ export function updateTraffic(
           : Math.max(-step, target - car.offset)
       car.offset += delta
       car.offset = Math.max(-AVOID_LANE_EDGE, Math.min(AVOID_LANE_EDGE, car.offset))
+      // 记录避让方向（车灯随变道转向）：目标侧为负 → -1，为正 → 1
+      car.shiftDir = player.x > 0 ? -1 : 1
+    } else {
+      // 远离 / 不触发：车灯回中
+      car.shiftDir = 0
     }
   }
 }
