@@ -11,6 +11,7 @@ declare global {
       readonly split: boolean
       readonly hotseatPlayer: 1 | 2
       readonly player2CameraZ: number
+      readonly p2TrafficZ: number
       readonly bestTime: number | null
       readonly bestTime2: number | null
       readonly trafficCount: number
@@ -31,6 +32,7 @@ export interface DebugHookSources {
   split: boolean
   hotseatPlayer: () => 1 | 2
   player2CameraZ: () => number
+  p2TrafficZ: () => number
   bestTime: () => number | null
   bestTime2: () => number | null
   trafficCount: () => number
@@ -63,6 +65,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get player2CameraZ() {
       return sources.player2CameraZ()
+    },
+    get p2TrafficZ() {
+      return sources.p2TrafficZ()
     },
     get bestTime() {
       return sources.bestTime()

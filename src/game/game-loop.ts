@@ -220,6 +220,7 @@ export class GameLoop {
       split: this.splitMode,
       hotseatPlayer: () => this.hotseatPlayer,
       player2CameraZ: () => this.race.player2.cameraZ,
+      p2TrafficZ: () => this.race.tracks[1].traffic[0]?.z ?? -1,
       bestTime: () => this.bestTime,
       bestTime2: () => this.bestTime2,
       trafficCount: () => this.race.tracks[0].traffic.length,
@@ -383,9 +384,10 @@ export class GameLoop {
     this.last = now
 
     if (this.phase === PHASE_RACING) {
-      // 双世界车流独立推进：P1 用 tracks[0]，分屏时 P2 用 tracks[1]（圈长各自取用）
+      // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
+      // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
       updateTraffic(this.race.tracks[0].traffic, dt, this.race.tracks[0].lapLength)
-      if (this.splitMode) {
+      if (this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2)) {
         updateTraffic(this.race.tracks[1].traffic, dt, this.race.tracks[1].lapLength)
       }
       const input1 = this.joystick.isActive() ? this.joystick.getInput() : this.input.getP1Input()
@@ -450,7 +452,13 @@ export class GameLoop {
         this.race.lastLap2 = lapRef2.value
       }
 
-      updateCollisions(this.race, dt, this.splitMode)
+      // 碰撞检测：分屏双人全检；热座仅当前回合玩家参与——P2 回合检 player2 与 P2 世界车流，
+      // P1 回合 player2 静止不参与（保持 M8 热座语义，避免起点车流误撞静止 P2）
+      updateCollisions(
+        this.race,
+        dt,
+        this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2),
+      )
 
       // 完赛判定：P1/P2 各自按本世界圈长/总圈数计算（分屏与热座 P2 回合独立判定）
       const finishedP1 =

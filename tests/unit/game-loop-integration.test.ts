@@ -485,4 +485,28 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       hotEnv.getElement('finish-hint').textContent,
     )
   })
+
+  it('热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进', () => {
+    const hotEnv = stubEnvironment('?hotseat=1')
+    new GameLoop()
+    // Enter 开始 P1 回合；预热 10 帧（50ms/帧）后快照 P2 世界首车 z
+    hotEnv.fireKey('Enter')
+    hotEnv.driveFrames(10)
+    const v0 = hotEnv.debugValue('p2TrafficZ')
+    // P1 回合：tracks[1] 车流不推进（车流更新仅分屏分支），10 帧后 z 保持不变
+    hotEnv.driveFrames(10)
+    expect(hotEnv.debugValue('p2TrafficZ')).toBe(v0)
+
+    // P1 跑完 3 圈进入结算后回车交棒（交棒仅 FINISHED 且 hotseatPlayer===1 生效）
+    hotEnv.fireKey('KeyW')
+    hotEnv.driveFrames(2500)
+    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+    hotEnv.fireKey('Enter')
+    expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
+
+    // P2 回合：tracks[1] 车流随帧环形推进（refreshTraffic 确定性重建后起点与 v0 相同，
+    // 10 帧推进量 = speed*dt 累计 960-1440 单位，远小于圈长无回绕），z 必然变化
+    hotEnv.driveFrames(10)
+    expect(hotEnv.debugValue('p2TrafficZ')).not.toBe(v0)
+  })
 })
