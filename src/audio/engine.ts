@@ -167,3 +167,37 @@ export class CollisionSound {
     source.start(0)
   }
 }
+
+/** BOOST 氮气音效：sawtooth 200→600Hz 线性扫频 0.25s + gain 0.15 包络（每次 play 重建节点，无防刷屏） */
+export class BoostSound {
+  private ctx: AudioContext
+  private output: AudioNode
+  private playCount = 0
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.output = output
+  }
+
+  /** 已触发播放次数（测试/冒烟断言用） */
+  get count(): number {
+    return this.playCount
+  }
+
+  /** 触发 BOOST 音：200→600Hz 线性扫频（0.25s）+ attack 0.02s / decay 0.25s 增益包络 */
+  play(): void {
+    const t = this.ctx.currentTime
+    this.playCount++
+    const osc = this.ctx.createOscillator()
+    const gain = this.ctx.createGain()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(200, t)
+    osc.frequency.linearRampToValueAtTime(600, t + 0.25)
+    gain.gain.setValueAtTime(0, t)
+    gain.gain.linearRampToValueAtTime(0.15, t + 0.02)
+    gain.gain.linearRampToValueAtTime(0, t + 0.25)
+    osc.connect(gain).connect(this.output)
+    osc.start(t)
+    osc.stop(t + 0.26)
+  }
+}

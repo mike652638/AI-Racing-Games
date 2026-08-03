@@ -1,10 +1,10 @@
-import { Renderer, type RenderView } from '../engine/renderer'
+import { Renderer, type BoostParticle, type RenderView } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
 import { TRACK_DEFS, getTrackDef } from '../engine/tracks'
 import { updateTraffic } from '../engine/traffic'
 import { createCarConfig, updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
-import { CollisionSound, EngineSound, RainSound } from '../audio/engine'
+import { BoostSound, CollisionSound, EngineSound, RainSound } from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
 import { WEATHER_CYCLE_SECONDS } from '../engine/lighting'
 import { updateHud, type HudElements } from '../ui/hud'
@@ -82,13 +82,15 @@ export function initialPreviewCameraZ(index: number, lapLength: number): number 
  * 分屏双世界各持一份 TrackContext，渲染时用各自 view（单次渲染零重建，
  * 预计算在 TrackContext 创建时完成）。
  */
-function viewFor(ctx: TrackContext): RenderView {
+function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): RenderView {
   return {
     track: ctx.segments,
     curvePrefixSum: ctx.curvePrefixSum,
     spriteIndex: ctx.spriteIndex,
     traffic: ctx.traffic,
     night: ctx.def.timeOfDay === 'night',
+    // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
+    boostParticles,
   }
 }
 
@@ -161,6 +163,12 @@ export class GameLoop {
   private rainSound: RainSound | null = null
   /** 碰撞冲击音（音频惰性创建时实例化，collisionCount 增长时 play） */
   private collisionSound: CollisionSound | null = null
+  /** BOOST 氮气音效（音频惰性创建时实例化，boost 激活边沿触发 play） */
+  private boostSound: BoostSound | null = null
+  /** 上一帧 boost 是否激活（边沿检测：本帧激活且上帧未激活 → boostSound.play()） */
+  private boostActive = false
+  /** BOOST 尾焰粒子（H2：P1 激活期间每帧至多 1 粒，存活 0.6s；经 viewFor 传入 renderer 投影） */
+  private boostParticles: BoostParticle[] = []
   /** 上次碰撞计数快照（帧循环对比，增长即触发碰撞音） */
   private lastCollisionCount = 0
   /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
@@ -731,6 +739,8 @@ export class GameLoop {
       // F4（F4）：雨声环境音与碰撞冲击音同样走音效分轨（随 sfxVolume 与主音量调节）
       this.rainSound = new RainSound(ctx, sfxGain)
       this.collisionSound = new CollisionSound(ctx, sfxGain)
+      // H2（H2）：BOOST 氮气音效（走音效分轨）
+      this.boostSound = new BoostSound(ctx, sfxGain)
     }
     this.applyPhase(
       nextPhase(
@@ -830,6 +840,27 @@ export class GameLoop {
       if (this.boostBar) {
         this.boostBar.hidden = this.phase !== PHASE_RACING
         this.boostBar.style.width = `${Math.round(this.race.player1.boostCharge * 200)}px`
+      }
+
+      // H2（H2）：BOOST 音效与尾焰粒子——任一玩家 boost 激活且上一帧未激活时触发音效（边沿检测）；
+      // P1 激活期间每帧至多 1 粒尾焰粒子（z 取相机前方 +2 保证投影非 null，t 随帧推进、超 0.6s 移除）
+      const boostOn = effInput1.boost === true || effInput2.boost === true
+      if (boostOn && !this.boostActive) {
+        this.boostSound?.play()
+      }
+      this.boostActive = boostOn
+      if (effInput1.boost === true) {
+        this.boostParticles.push({
+          x: this.race.player1.carState.position,
+          z: this.race.player1.cameraZ + 2,
+          t: 0,
+        })
+      }
+      for (let i = this.boostParticles.length - 1; i >= 0; i--) {
+        this.boostParticles[i].t += dt
+        if (this.boostParticles[i].t > 0.6) {
+          this.boostParticles.splice(i, 1)
+        }
       }
 
       if (this.hotseatMode) {
@@ -960,7 +991,7 @@ export class GameLoop {
         w / 2,
         this.race.player1.driftState.smoke,
         this.race.player1.raceTime,
-        viewFor(this.race.tracks[0]),
+        viewFor(this.race.tracks[0], this.boostParticles),
       )
       this.renderer.setCameraX(this.race.player2.carState.position)
       this.renderer.renderRegion(
@@ -969,7 +1000,7 @@ export class GameLoop {
         w / 2,
         this.race.player2.driftState.smoke,
         this.race.player2.raceTime,
-        viewFor(this.race.tracks[1]),
+        viewFor(this.race.tracks[1], this.boostParticles),
       )
       // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
       // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
@@ -981,7 +1012,7 @@ export class GameLoop {
         this.race.player1.cameraZ,
         this.race.player1.driftState.smoke,
         this.race.player1.raceTime,
-        viewFor(this.race.tracks[0]),
+        viewFor(this.race.tracks[0], this.boostParticles),
       )
     }
 

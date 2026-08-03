@@ -24,6 +24,14 @@ import { projectSmoke } from './smoke-render'
 
 export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
+/** BOOST 尾焰粒子（纯数据：x 横向偏移 / z 世界位置 / t 存活时间，game 层维护、renderer 投影绘制；
+ *  与渲染相关故定义于此，audio 层不依赖） */
+export interface BoostParticle {
+  x: number
+  z: number
+  t: number
+}
+
 /** 一次渲染所需的完整赛道数据（分屏双世界各持一份，避免每帧重建）。
  *  不传 view 时回退到 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。 */
 export interface RenderView {
@@ -33,6 +41,8 @@ export interface RenderView {
   traffic: TrafficCar[]
   /** 夜晚模式（赛道级，F1）：切换夜晚色板 / 深色远山 / 车灯光晕 */
   night?: boolean
+  /** BOOST 尾焰粒子（H2：game 层维护、渲染层投影，缺省无粒子） */
+  boostParticles?: BoostParticle[]
 }
 
 interface MountainLayer {
@@ -343,6 +353,9 @@ export class Renderer {
     this.drawSprites(cameraZ, opts, v)
     this.drawTraffic(cameraZ, opts, v, night)
     this.drawSmoke(smoke, cameraZ, opts)
+    if (v.boostParticles?.length) {
+      this.drawBoostParticles(v.boostParticles, cameraZ, opts)
+    }
     if (raining) {
       this.drawRain(timeSec, opts)
     }
@@ -434,6 +447,27 @@ export class Renderer {
       ctx.fillStyle = `rgba(200, 200, 210, ${p.alpha.toFixed(3)})`
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  /** 绘制 BOOST 尾焰粒子（橙色系，透明度随存活 t/0.6 衰减；仿 smoke 投影，忽略横向偏移的相机对齐细节） */
+  private drawBoostParticles(particles: BoostParticle[], cameraZ: number, opts: ProjectionOptions): void {
+    const { ctx } = this
+    for (const p of particles) {
+      const dz = p.z - cameraZ
+      if (dz <= 0) {
+        continue
+      }
+      const proj = project(opts, this.camera, { x: p.x - this.camera.x, y: 0, z: p.z })
+      if (!proj) {
+        continue
+      }
+      const radius = Math.max(proj.scale * opts.height * 0.15, 2)
+      const alpha = Math.max(1 - p.t / 0.6, 0)
+      ctx.fillStyle = `rgba(255, 180, 80, ${alpha.toFixed(3)})`
+      ctx.beginPath()
+      ctx.arc(proj.x, proj.y - radius * 0.5, radius, 0, Math.PI * 2)
       ctx.fill()
     }
   }

@@ -284,6 +284,35 @@ describe('Renderer 状态切换', () => {
     expect(nightIncrement).toBeGreaterThan(baseIncrement)
   })
 
+  it('boost 粒子渲染：带 boostParticles 的 view arc 增量高于无粒子', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[0]) // classic
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+    }
+    const boostView: RenderView = {
+      ...baseView,
+      boostParticles: [
+        { x: 0.5, z: 500, t: 0 },
+        { x: 0.3, z: 700, t: 0.3 },
+      ],
+    }
+    // 预热一帧后，分别统计无粒子 / 带粒子渲染各自新增的 arc 次数（callCount 为累计值，须取增量）
+    renderer.render(0, [], 0, baseView)
+    const before = callCount(canvas.__ctx.__calls, 'arc')
+    renderer.render(0, [], 0, boostView)
+    const afterBoost = callCount(canvas.__ctx.__calls, 'arc')
+    renderer.render(0, [], 0, baseView)
+    const afterBase = callCount(canvas.__ctx.__calls, 'arc')
+    const boostIncr = afterBoost - before
+    const baseIncr = afterBase - afterBoost
+    // 每粒可见粒子 1 次 arc（橙色尾焰圆），带粒子渲染增量应高于无粒子
+    expect(boostIncr).toBeGreaterThan(baseIncr)
+  })
+
   it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4])
