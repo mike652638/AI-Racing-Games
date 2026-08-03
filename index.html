@@ -18,6 +18,8 @@
       <div id="drift-indicator" hidden>DRIFT! +<span id="drift-score-value">0</span></div>
       <div id="drift-combo" hidden>COMBO x1.00</div>
       <div id="challenge-timer" hidden></div>
+      <div id="challenge-score" hidden></div>
+      <canvas id="hud-minimap" width="110" height="110" hidden></canvas>
       <div id="boost-bar" hidden><span>BOOST</span></div>
       <button id="pause-btn" type="button" hidden>⏸</button>
     </div>
@@ -31,23 +33,24 @@
     <div id="start-screen">
       <h1>OUTRUN 伪 3D</h1>
       <div id="track-select">
-        <div class="track-option selected" id="track-option-0">1 经典赛道</div>
-        <div class="track-option" id="track-option-1">2 高速公路</div>
-        <div class="track-option" id="track-option-2">3 S 弯挑战</div>
-        <div class="track-option" id="track-option-3">4 环岛巡回</div>
-        <div class="track-option" id="track-option-4">5 峡谷疾驰</div>
-        <div class="track-option" id="track-option-5">6 沙漠疾驰</div>
-        <div class="track-option" id="track-option-6">7 森林穿梭</div>
-        <div class="track-option" id="track-option-7">8 海岸公路</div>
-        <div class="track-option" id="track-option-8">9 山岳险道</div>
+        <div class="track-option selected" id="track-option-0">1 经典赛道 ★☆☆</div>
+        <div class="track-option" id="track-option-1">2 高速公路 ★☆☆</div>
+        <div class="track-option" id="track-option-2">3 S 弯挑战 ★★☆</div>
+        <div class="track-option" id="track-option-3">4 环岛巡回 ★★☆</div>
+        <div class="track-option" id="track-option-4">5 峡谷疾驰 ★★☆</div>
+        <div class="track-option" id="track-option-5">6 沙漠疾驰 ★★☆</div>
+        <div class="track-option" id="track-option-6">7 森林穿梭 ★★★</div>
+        <div class="track-option" id="track-option-7">8 海岸公路 ★★★</div>
+        <div class="track-option" id="track-option-8">9 山岳险道 ★★★</div>
       </div>
       <p id="track-name">经典赛道</p>
       <p id="p2-track-name" hidden>经典赛道</p>
-      <p>WASD / 方向键 驾驶</p>
+      <p id="keyboard-hint">WASD / 方向键 驾驶</p>
       <p id="touch-hint">触屏：左上刹车 · 右上油门 · 左下左转 · 右下右转</p>
       <div id="best-summary">暂无最佳成绩</div>
       <div id="drift-top">暂无漂移记录</div>
       <div id="match-top">暂无对局记录</div>
+      <button id="start-btn" type="button" style="margin-top:20px;padding:10px 32px;border:2px solid #ffd75e;border-radius:10px;background:rgba(255,215,94,0.15);color:#ffd75e;font-family:var(--font-mono);font-size:clamp(16px,4vw,22px);cursor:pointer;transition:background 0.15s ease;">开始游戏</button>
       <p class="hint" id="menu-hint">按任意键开始 · 1-9 切换赛道</p>
     </div>
     <div id="finish-screen" hidden>
@@ -68,7 +71,7 @@
       <p class="hint">按 R 重新开始</p>
     </div>
     <div id="pause-screen" hidden>
-      <h1>PAUSED</h1>
+      <h1 id="pause-title">PAUSED</h1>
       <p class="hint">按 ESC 继续</p>
       <div id="pause-controls">
         <button id="pause-resume" type="button">继续</button>

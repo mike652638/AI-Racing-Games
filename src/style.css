@@ -48,6 +48,9 @@ canvas {
   font-size: var(--speed-fs);
   font-weight: 700;
   line-height: 1;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 1);
 }
 
 #hud-speed-unit {
@@ -60,6 +63,9 @@ canvas {
 #hud-time {
   font-size: var(--hud-fs);
   opacity: 0.9;
+  text-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.8),
+    0 0 2px rgba(0, 0, 0, 0.9);
 }
 
 /* 分屏模式：P1 位于左半区域，HUD 从右上移到左上（左右对称） */
@@ -113,6 +119,9 @@ canvas {
   color: #ff8c1a;
   letter-spacing: 2px;
   animation: pulse 0.3s ease-in-out infinite alternate;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.9),
+    0 0 4px rgba(255, 140, 26, 0.5);
 }
 
 /* 漂移连击倍率（#drift-combo：active 且 combo≥1 时由 updateHud 显示；黄绿加粗随漂移指示） */
@@ -133,6 +142,28 @@ canvas {
   color: #ff8c1a;
   letter-spacing: 1px;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 挑战模式实时得分（#challenge-score：challenge 模式竞赛中显示当前漂移得分，与 challenge-timer 同风格） */
+#challenge-score {
+  margin-top: 4px;
+  font-size: clamp(16px, 3.5vw, 22px);
+  font-weight: 700;
+  color: #fde047;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 小地图 / 赛道进度指示器（#hud-minimap：Batch 6 单屏比赛阶段显示；canvas 像素内容由 src/ui/minimap.ts 每帧绘制。
+   必须显式覆盖全局 canvas 规则的 width/height——否则 100vw/100vh 会把小地图撑满整个视口） */
+#hud-minimap {
+  display: block;
+  width: 110px;
+  height: 110px;
+  margin-top: 8px;
+  border-radius: 10px;
+  opacity: 0.9;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* BOOST 氮气条（#boost-bar：G4 帧块按 P1 charge 百分比设置宽度；底部固定横条，黄→橙渐变填充） */
@@ -219,10 +250,12 @@ canvas {
   margin: 12px auto 0;
   max-width: 320px;
   font-size: var(--hint-fs);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1.6;
   text-align: center;
   white-space: pre-line;
+  /* 深色背景对比度增强：提高不透明度 + 阴影衬底 */
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* 各赛道 BEST 汇总（#best-summary：菜单静态元素，GameLoop refreshBestSummary 遍历 TRACK_DEFS 刷新；
@@ -233,10 +266,12 @@ canvas {
   max-height: 168px;
   overflow-y: auto;
   font-size: var(--hint-fs);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1.6;
   text-align: center;
   white-space: pre-line;
+  /* 深色背景对比度增强：提高不透明度 + 阴影衬底 */
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* 分屏漂移对局 TOP10（#match-top：菜单静态元素，GameLoop refreshMatchTop 刷新最近 10 局；
@@ -247,10 +282,12 @@ canvas {
   max-height: 132px;
   overflow-y: auto;
   font-size: var(--hint-fs);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1.6;
   text-align: center;
   white-space: pre-line;
+  /* 深色背景对比度增强：提高不透明度 + 阴影衬底 */
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 #start-screen,
@@ -273,6 +310,8 @@ canvas {
 #start-screen h1,
 #finish-screen h1,
 #pause-screen h1 {
+  /* 标题字体显式统一为 --font-mono（与项目其他 UI 元素一致，不依赖父级继承） */
+  font-family: var(--font-mono);
   font-size: var(--title-fs);
   margin: 0 0 16px;
   letter-spacing: 6px;
@@ -302,9 +341,16 @@ canvas {
 #finish-screen .hint,
 #pause-screen .hint {
   margin-top: 32px;
-  font-size: var(--hint-fs);
-  opacity: 0.6;
+  font-size: var(--subtitle-fs);
+  opacity: 0.75;
   animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* 开始游戏按钮：金色描边 + 半透明底，hover/active 加深高亮（对应 index.html #start-btn） */
+#start-btn:hover,
+#start-btn:active {
+  background: rgba(255, 215, 94, 0.3);
+  border-color: #fff;
 }
 
 /* P6（P6）：暂停菜单控件（音量 slider + 重开按钮），随 #pause-screen 面板显隐 */
@@ -342,7 +388,9 @@ canvas {
   font-family: var(--font-mono);
   font-size: var(--hint-fs);
   cursor: pointer;
-  transition: opacity 0.15s ease, border-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease;
 }
 
 #pause-restart:hover,
@@ -380,12 +428,12 @@ canvas {
 
 #track-select {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   justify-content: center;
   margin: 12px auto 8px;
   flex-wrap: wrap;
-  /* 9 赛道按钮限宽：超宽时 flex-wrap 均匀换行，避免单行 8+1 贴边裁切 */
-  max-width: 900px;
+  /* 9 赛道按钮限宽：超宽时 flex-wrap 均匀换行，避免单行 8+1 贴边裁切；750px 下呈现 5+4 布局 */
+  max-width: 750px;
 }
 
 .track-option {
@@ -400,7 +448,19 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+  /* 均匀尺寸：min-width/flex/max-width 组合保证各按钮等宽、行内均匀分布 */
+  min-width: 120px;
+  flex: 1 1 120px;
+  max-width: 160px;
+  /* 半透明深色底 + 相对定位 + z-index：防止赛道背景精灵遮挡按钮文字 */
+  background: rgba(10, 10, 30, 0.7);
+  position: relative;
+  z-index: 1;
 }
 
 .track-option:hover,
@@ -472,6 +532,20 @@ canvas {
   box-sizing: border-box;
 }
 
+/* 触屏设备常驻摇杆：JS 检测触屏后给 base 加 touch-visible，右下角半透明提示可操作，按下时 active 高亮 */
+.joystick-base.touch-visible {
+  display: block;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.joystick-base.touch-visible.active {
+  opacity: 1;
+}
+
 .joystick-knob {
   position: absolute;
   width: 36%;
@@ -489,6 +563,17 @@ canvas {
     display: block;
     font-size: var(--hint-fs);
     opacity: 0.7;
+  }
+
+  /* 触屏设备无键盘：隐藏键盘操作提示（#keyboard-hint 对应 index.html 的 WASD 驾驶说明） */
+  #keyboard-hint {
+    display: none;
+  }
+
+  /* 触屏友好：赛道按钮增大点击热区（覆盖 .track-option 基础 44px / 6px 12px） */
+  .track-option {
+    min-height: 48px;
+    padding: 8px 14px;
   }
 }
 
@@ -518,6 +603,12 @@ canvas {
 
 /* 横屏手机（高度受限）：压缩标题与屏幕间距 */
 @media (max-height: 480px) {
+  /* 开始屏专属背景：比 finish/pause 更深的渐变遮罩，降低赛道背景对菜单可读性的干扰
+   （共享的 var(--bg-overlay) 规则保留给 #finish-screen 与 #pause-screen） */
+  #start-screen {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.7) 40%, rgba(0, 0, 0, 0.85) 100%);
+  }
+
   #start-screen h1,
   #finish-screen h1,
   #pause-screen h1 {

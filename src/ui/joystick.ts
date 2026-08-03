@@ -14,11 +14,7 @@ export interface JoystickInput {
 const DEADZONE = 0.15
 const RADIUS = 60
 
-export function offsetToInput(
-  dx: number,
-  dy: number,
-  radius: number,
-): JoystickInput {
+export function offsetToInput(dx: number, dy: number, radius: number): JoystickInput {
   const dist = Math.sqrt(dx * dx + dy * dy)
   if (dist < DEADZONE * radius) {
     return { steer: 0, throttle: 0, brake: false }
@@ -41,10 +37,18 @@ export class JoystickUI {
   private startX = 0
   private startY = 0
   private input: JoystickInput = { steer: 0, throttle: 0, brake: false }
+  /** 触屏设备：摇杆常驻右下角（touch-visible 类 + fixed 定位），非触屏保持按下才显示 */
+  private readonly isTouchDevice: boolean
 
   constructor() {
+    this.isTouchDevice =
+      typeof navigator !== 'undefined' &&
+      (navigator.maxTouchPoints > 0 || (typeof window !== 'undefined' && 'ontouchstart' in window))
     this.base = document.createElement('div')
     this.base.className = 'joystick-base'
+    if (this.isTouchDevice) {
+      this.base.classList.add('touch-visible')
+    }
     this.knob = document.createElement('div')
     this.knob.className = 'joystick-knob'
     this.base.appendChild(this.knob)
@@ -63,6 +67,7 @@ export class JoystickUI {
       this.base.style.left = `${e.clientX - baseSize / 2}px`
       this.base.style.top = `${e.clientY - baseSize / 2}px`
       this.base.style.display = 'block'
+      this.base.classList.add('active')
       canvas.setPointerCapture(e.pointerId)
     })
 
@@ -80,7 +85,14 @@ export class JoystickUI {
       if (e.pointerType !== 'touch' || e.pointerId !== this.activeId) return
       this.activeId = null
       this.input = { steer: 0, throttle: 0, brake: false }
-      this.base.style.display = 'none'
+      this.base.classList.remove('active')
+      if (this.isTouchDevice) {
+        // 触屏设备常驻：清除内联定位，摇杆回到 CSS fixed 右下角（不再 display:none）
+        this.base.style.left = ''
+        this.base.style.top = ''
+      } else {
+        this.base.style.display = 'none'
+      }
     }
     canvas.addEventListener('pointerup', endTouch)
     canvas.addEventListener('pointercancel', endTouch)
@@ -98,6 +110,13 @@ export class JoystickUI {
   reset(): void {
     this.activeId = null
     this.input = { steer: 0, throttle: 0, brake: false }
-    this.base.style.display = 'none'
+    this.base.classList.remove('active')
+    if (this.isTouchDevice) {
+      // 触屏设备常驻：清除内联定位回到右下角，不隐藏摇杆
+      this.base.style.left = ''
+      this.base.style.top = ''
+    } else {
+      this.base.style.display = 'none'
+    }
   }
 }

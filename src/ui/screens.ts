@@ -13,13 +13,7 @@ import {
   saveBestTimeFor,
   type WinStats,
 } from './save'
-import {
-  PHASE_FINISHED,
-  PHASE_MENU,
-  PHASE_PAUSED,
-  PHASE_RACING,
-  type Phase,
-} from './gamestate'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
 
 /** 屏幕 DOM 引用：启动/结算/暂停面板及结算文本（P2 行仅分屏时存在） */
 export interface ScreenElements {
@@ -52,6 +46,8 @@ export interface ScreenElements {
   pauseMusicVolume?: HTMLInputElement
   /** 暂停菜单音效分轨音量 slider（#pause-sfx-volume，input range 0-100；G7） */
   pauseSfxVolume?: HTMLInputElement
+  /** 暂停面板标题（#pause-title，Batch 3：带 ID 便于分屏时动态标注暂停玩家） */
+  pauseTitle?: HTMLHeadingElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
@@ -86,16 +82,13 @@ export function applyPhaseToScreens(
     elements.startScreen.hidden = false
     elements.finishScreen.hidden = true
     elements.pauseScreen.hidden = true
-  }
-  else if (phase === PHASE_RACING) {
+  } else if (phase === PHASE_RACING) {
     elements.startScreen.hidden = true
     elements.finishScreen.hidden = true
     elements.pauseScreen.hidden = true
-  }
-  else if (phase === PHASE_PAUSED) {
+  } else if (phase === PHASE_PAUSED) {
     elements.pauseScreen.hidden = false
-  }
-  else if (phase === PHASE_FINISHED) {
+  } else if (phase === PHASE_FINISHED) {
     elements.finishScreen.hidden = false
     fillFinishPanel(elements, race, carConfig, opts)
   }
@@ -129,8 +122,7 @@ function fillFinishPanel(
       const bestDriftScore = loadBestDriftScore(trackId0)
       if (isDriftRecord) {
         elements.finishScore.textContent += ' NEW DRIFT RECORD!'
-      }
-      else if (bestDriftScore !== null) {
+      } else if (bestDriftScore !== null) {
         elements.finishScore.textContent += ` (最高 ${bestDriftScore})`
       }
     }
@@ -160,17 +152,14 @@ function fillFinishPanel(
       const bestDriftScore = loadBestDriftScore(trackId0)
       if (isDriftRecord) {
         elements.finishScore.textContent += ' NEW DRIFT RECORD!'
-      }
-      else if (bestDriftScore !== null) {
+      } else if (bestDriftScore !== null) {
         elements.finishScore.textContent += ` (最高 ${bestDriftScore})`
       }
     }
 
     // P1：分屏时 P1 圈速行加 'P1 ' 前缀（与 P2 圈速行对称）；单屏不加
-    elements.finishLaps.textContent =
-      `${opts.splitMode ? 'P1 ' : ''}${formatLapTimes(race.lapTimes).join('  ')}`
-  }
-  else {
+    elements.finishLaps.textContent = `${opts.splitMode ? 'P1 ' : ''}${formatLapTimes(race.lapTimes).join('  ')}`
+  } else {
     // P1 未完赛：清空其余行，仅显示"未完赛"（分屏加 P1 前缀与 P2 行对称）
     elements.finishTime.textContent = opts.splitMode ? 'P1 未完赛' : '未完赛'
     elements.finishSpeed.textContent = ''
@@ -212,8 +201,7 @@ function fillFinishPanel(
           const bestDriftScore2 = loadBestDriftScoreFor(1, trackId1)
           if (isDriftRecord2) {
             elements.finishScore2.textContent += ' NEW DRIFT RECORD!'
-          }
-          else if (bestDriftScore2 !== null) {
+          } else if (bestDriftScore2 !== null) {
             elements.finishScore2.textContent += ` (最高 ${bestDriftScore2})`
           }
         }
@@ -223,8 +211,7 @@ function fillFinishPanel(
         // P1（P1）：P2 圈速行只在双人场景（分屏/热座 round 2）出现，恒加 'P2 ' 前缀
         elements.finishLaps2.textContent = `P2 ${formatLapTimes(race.lapTimes2).join('  ')}`
       }
-    }
-    else {
+    } else {
       // P2 未完赛：仅显示"P2 未完赛"一行，其余行隐藏
       elements.finishTime2.hidden = false
       elements.finishTime2.textContent = 'P2 未完赛'
@@ -274,8 +261,7 @@ function fillFinishPanel(
       elements.finishWins.hidden = false
       const { p1, p2, streak, streakPlayer } = opts.winStats
       elements.finishWins.textContent =
-        `胜场统计 · P1 ${p1} : ${p2} P2` +
-        (streakPlayer ? ` · ${streakPlayer} 连胜 ${streak}` : '')
+        `胜场统计 · P1 ${p1} : ${p2} P2` + (streakPlayer ? ` · ${streakPlayer} 连胜 ${streak}` : '')
     } else {
       elements.finishWins.hidden = true
     }
