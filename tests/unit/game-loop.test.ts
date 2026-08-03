@@ -167,9 +167,10 @@ describe('菜单预览相机', () => {
 
   test('initialPreviewCameraZ 按圈长等分起点', () => {
     const lapLength = 90000
+    const count = TRACK_DEFS.length
     expect(initialPreviewCameraZ(0, lapLength)).toBe(0)
-    expect(initialPreviewCameraZ(1, lapLength)).toBe(Math.floor(90000 / 3))
-    expect(initialPreviewCameraZ(2, lapLength)).toBe(Math.floor(180000 / 3))
+    expect(initialPreviewCameraZ(1, lapLength)).toBe(Math.floor(lapLength / count))
+    expect(initialPreviewCameraZ(2, lapLength)).toBe(Math.floor((2 * lapLength) / count))
   })
 
   test('三条赛道真实圈长下预览起点互不相同', () => {

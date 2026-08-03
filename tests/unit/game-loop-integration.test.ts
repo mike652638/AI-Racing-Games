@@ -67,7 +67,7 @@ function createAudioNode(): {
 }
 
 interface Environment {
-  fireKey: (code: string) => void
+  fireKey: (code: string, shiftKey?: boolean) => void
   driveFrames: (count: number) => void
   phase: () => Phase | undefined
   debugValue: (key: string) => unknown
@@ -87,7 +87,7 @@ interface Environment {
  */
 function stubEnvironment(search: string | boolean = ''): Environment {
   const query = typeof search === 'boolean' ? (search ? '?split=1' : '') : search
-  const listeners = new Map<string, Array<(e: { code: string }) => void>>()
+  const listeners = new Map<string, Array<(e: { code: string; shiftKey: boolean }) => void>>()
   const elements = new Map<string, StubElement>()
   const rafCallbacks: FrameRequestCallback[] = []
   let gameCanvas: MockCanvas | null = null
@@ -98,12 +98,12 @@ function stubEnvironment(search: string | boolean = ''): Environment {
     innerWidth: 800,
     innerHeight: 600,
     devicePixelRatio: 1,
-    addEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+    addEventListener: (type: string, cb: (e: { code: string; shiftKey: boolean }) => void): void => {
       const arr = listeners.get(type) ?? []
       arr.push(cb)
       listeners.set(type, arr)
     },
-    removeEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+    removeEventListener: (type: string, cb: (e: { code: string; shiftKey: boolean }) => void): void => {
       const arr = listeners.get(type)
       if (arr) {
         const idx = arr.indexOf(cb)
@@ -152,8 +152,9 @@ function stubEnvironment(search: string | boolean = ''): Environment {
   vi.stubGlobal('cancelAnimationFrame', (): void => undefined)
   vi.stubGlobal('AudioContext', FakeAudioContext as unknown as typeof AudioContext)
 
-  const fireKey = (code: string): void => {
-    for (const cb of listeners.get('keydown') ?? []) cb({ code })
+  /** 触发键盘事件；shiftKey 供分屏 P2 键位（Shift+1-5）测试，默认 false 兼容既有用例 */
+  const fireKey = (code: string, shiftKey = false): void => {
+    for (const cb of listeners.get('keydown') ?? []) cb({ code, shiftKey })
   }
   /** 驱动 GameLoop 帧回调：固定 50ms/帧（dt=0.05），与真实帧节奏一致 */
   const driveFrames = (count: number): void => {
@@ -261,7 +262,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.phase()).toBe(PHASE_RACING)
   })
 
-  it('分屏模式：P1/P2 独立按键选择各自赛道（Digit2→highway、Digit8→highway、Digit9→s-curve）', () => {
+  it('分屏模式：P1/P2 独立按键选择各自赛道（Digit2→highway、Shift+Digit3→s-curve）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
@@ -271,12 +272,12 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
     expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
 
-    // P2 键位与 P1 对称：Digit7→index0(classic)、Digit8→index1(highway)、Digit9→index2(s-curve)
-    splitEnv.fireKey('Digit8')
+    // P2 键位为 Shift+1-5（原 7/8/9 废弃）：Shift+Digit1→index0(classic)、Shift+Digit2→index1(highway)、Shift+Digit3→index2(s-curve)
+    splitEnv.fireKey('Digit2', true)
     expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
     expect(splitEnv.debugValue('selectedTrack2')).toBe('highway')
 
-    splitEnv.fireKey('Digit9')
+    splitEnv.fireKey('Digit3', true)
     expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
 
     // 选赛道不退出菜单（返回后仍在 PHASE_MENU）
@@ -298,12 +299,41 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.phase()).toBe(PHASE_RACING)
   })
 
-  it('分屏模式：p2-track-name 菜单可见，Digit9 后文本更新为 S 弯挑战', () => {
+  it('单人模式：Digit4/Digit5 选择新赛道（island/canyon）且不退出菜单', () => {
+    new GameLoop()
+    env.fireKey('Digit4')
+    expect(env.debugValue('selectedTrack')).toBe('island')
+    expect(env.getElement('track-name').textContent).toBe('环岛巡回')
+    env.fireKey('Digit5')
+    expect(env.debugValue('selectedTrack')).toBe('canyon')
+    expect(env.getElement('track-name').textContent).toBe('峡谷疾驰')
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
+  it('分屏模式：Shift+1-5 选择 P2 赛道且不影响 P1（Shift+Digit3 → s-curve）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    splitEnv.fireKey('Digit3', true)
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
+    expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
+    expect(splitEnv.getElement('p2-track-name').textContent).toBe('S 弯挑战')
+    expect(splitEnv.phase()).toBe(PHASE_MENU)
+  })
+
+  it('分屏模式：Shift+无效数字被吞掉（菜单阶段不触发开始、不切 P2 赛道）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    splitEnv.fireKey('Digit6', true)
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
+    expect(splitEnv.phase()).toBe(PHASE_MENU)
+  })
+
+  it('分屏模式：p2-track-name 菜单可见，Shift+Digit3 后文本更新为 S 弯挑战', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     // 缺陷②回归：分屏构造后 P2 赛道名元素应可见
     expect(splitEnv.getElement('p2-track-name').hidden).toBe(false)
-    splitEnv.fireKey('Digit9')
+    splitEnv.fireKey('Digit3', true)
     expect(splitEnv.getElement('p2-track-name').textContent).toBe('S 弯挑战')
   })
 

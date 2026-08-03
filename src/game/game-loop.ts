@@ -41,10 +41,9 @@ export function advancePreviewCameraZ(current: number, dt: number, lapLength: nu
 }
 
 /**
- * 切换赛道时的预览起点：按赛道序号等分圈长。
- * 三条赛道起点附近都是直道（经典 12000 / 高速 15000 / S 弯 5000 前无曲率），
- * index*5000 无法区分经典与高速；按圈长 1/3 等分后经典落在直道、高速落在右弯、
- * S 弯落在左弯，预览画面差异明显。
+ * 切换赛道时的预览起点：按赛道序号等分圈长（等分数 = TRACK_DEFS.length）。
+ * 各赛道起点附近（z < 8000）都是直道，index*5000 无法区分不同赛道；
+ * 按圈长 1/N 等分后落在不同曲率区段，预览画面差异明显。
  */
 export function initialPreviewCameraZ(index: number, lapLength: number): number {
   const count = TRACK_DEFS.length
@@ -134,10 +133,10 @@ export class GameLoop {
     // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
     if (this.splitMode) {
       const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1: 1/2/3 选赛道 · P2: 7/8/9 选赛道 · 按任意键开始'
+      if (menuHint) menuHint.textContent = 'P1: 1-5 选赛道 · P2: Shift+1-5 选赛道 · 按任意键开始'
     } else if (this.hotseatMode) {
       const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1/2/3 选赛道'
+      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-5 选赛道'
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -182,11 +181,11 @@ export class GameLoop {
       finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
     }
     const trackName = $('track-name') as HTMLSpanElement
-    const trackOptions = [
-      $('track-option-0') as HTMLDivElement,
-      $('track-option-1') as HTMLDivElement,
-      $('track-option-2') as HTMLDivElement,
-    ]
+    // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
+    const trackOptions = Array.from(
+      { length: TRACK_DEFS.length },
+      (_, i) => $(`track-option-${i}`) as HTMLDivElement,
+    )
 
     // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用；P2 赛道名元素 B4 控制显隐）
     this.trackManager = new TrackManager({
@@ -290,10 +289,16 @@ export class GameLoop {
       this.applyPhase(togglePause(this.phase))
       return
     }
-    // 菜单选赛道：P1 用 1/2/3（左侧），分屏时 P2 用 7/8/9（右侧）
+    // 菜单选赛道：P1 用 1-5（左侧），分屏时 P2 用 Shift+1-5（右侧；原 7/8/9 键位废弃）
     if (this.phase === PHASE_MENU && e.code.startsWith('Digit')) {
       const digit = Number(e.code.slice(5))
-      if (digit >= 1 && digit <= 3) {
+      // 分屏 P2 键位优先：Shift+数字键一律在此分支处理并 return——
+      // 无效数字（超出 1-5）也在此吞掉，防止落进 P1 分支或"任意键开始"逻辑
+      if (this.splitMode && e.shiftKey) {
+        if (digit >= 1 && digit <= TRACK_DEFS.length) this.selectTrackFor(1, digit - 1)
+        return
+      }
+      if (digit >= 1 && digit <= TRACK_DEFS.length) {
         this.selectTrackFor(0, digit - 1)
         if (this.hotseatMode) {
           // 热座双人同一赛道：P1 选赛道后同步 P2 世界（TrackContext 与预览起点）
@@ -304,10 +309,6 @@ export class GameLoop {
             this.race.tracks[1].lapLength,
           )
         }
-        return
-      }
-      if (this.splitMode && digit >= 7 && digit <= 9) {
-        this.selectTrackFor(1, digit - 7)
         return
       }
       // 缺陷①修复：菜单阶段所有数字键一律吞掉，无效数字键静默忽略，不触发"任意键开始"

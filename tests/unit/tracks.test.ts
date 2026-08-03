@@ -3,10 +3,10 @@ import { createDefaultTrack, totalCurve, type CurveControlPoint } from '../../sr
 import { createTrackFromDef, getTrackDef, TRACK_DEFS } from '../../src/engine/tracks'
 
 describe('TRACK_DEFS 关卡配置', () => {
-  it('提供 3 条赛道且 id 唯一', () => {
-    expect(TRACK_DEFS).toHaveLength(3)
+  it('提供 5 条赛道且 id 唯一', () => {
+    expect(TRACK_DEFS).toHaveLength(5)
     const ids = new Set(TRACK_DEFS.map((def) => def.id))
-    expect(ids.size).toBe(3)
+    expect(ids.size).toBe(5)
   })
 
   it('每条赛道首尾控制点曲率为 0 且圈数大于 0', () => {
@@ -19,9 +19,9 @@ describe('TRACK_DEFS 关卡配置', () => {
     }
   })
 
-  it('三条赛道控制点互不相同', () => {
+  it('各赛道控制点互不相同', () => {
     const json = TRACK_DEFS.map((def) => JSON.stringify(def.controlPoints))
-    expect(new Set(json).size).toBe(3)
+    expect(new Set(json).size).toBe(TRACK_DEFS.length)
   })
 })
 
