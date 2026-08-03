@@ -475,9 +475,16 @@ export class GameLoop {
     if (this.phase === PHASE_RACING) {
       // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
       // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
-      updateTraffic(this.race.tracks[0].traffic, dt, this.race.tracks[0].lapLength)
+      // P4（P4）：传玩家位置启用车流避让 AI（逼近同车道车流时让道）
+      updateTraffic(this.race.tracks[0].traffic, dt, this.race.tracks[0].lapLength, {
+        z: this.race.player1.cameraZ,
+        x: this.race.player1.carState.position,
+      })
       if (this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2)) {
-        updateTraffic(this.race.tracks[1].traffic, dt, this.race.tracks[1].lapLength)
+        updateTraffic(this.race.tracks[1].traffic, dt, this.race.tracks[1].lapLength, {
+          z: this.race.player2.cameraZ,
+          x: this.race.player2.carState.position,
+        })
       }
       const input1 = this.joystick.isActive() ? this.joystick.getInput() : this.input.getP1Input()
       const input2 = this.splitMode
