@@ -9,6 +9,8 @@ export interface TrackManagerDeps {
   trackName: HTMLSpanElement
   /** P2 赛道名显示元素（分屏时显示；可选，未传则跳过） */
   p2TrackName?: HTMLSpanElement
+  /** 分屏模式标志：单屏（false）时不应用 P2 的 selected-p2 高亮，避免 P2 选择残留绿色边框 */
+  splitMode: boolean
   /** 赛道选项元素（P1 用 selected 类、P2 用 selected-p2 类分别高亮） */
   trackOptions: HTMLDivElement[]
 }
@@ -68,7 +70,7 @@ export class TrackManager {
     if (this.deps.p2TrackName) this.deps.p2TrackName.textContent = this.contexts[1].def.name
     this.deps.trackOptions.forEach((option, i) => {
       option.classList.toggle('selected', i === this.selectedIndexes[0])
-      option.classList.toggle('selected-p2', i === this.selectedIndexes[1])
+      option.classList.toggle('selected-p2', this.deps.splitMode && i === this.selectedIndexes[1])
     })
   }
 }

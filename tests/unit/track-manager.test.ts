@@ -3,7 +3,7 @@ import { TrackManager } from '../../src/game/track-manager'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 
 /** 构造 TrackManager 依赖 mock：重置回调与选单 DOM（双玩家双类高亮、双赛道名） */
-function createHarness(includeP2 = true) {
+function createHarness(includeP2 = true, splitMode = true) {
   const resetRace = vi.fn()
   const trackName = { textContent: '' }
   const p2TrackName = { textContent: '' }
@@ -14,6 +14,7 @@ function createHarness(includeP2 = true) {
     resetRace,
     trackName: trackName as unknown as HTMLSpanElement,
     ...(includeP2 ? { p2TrackName: p2TrackName as unknown as HTMLSpanElement } : {}),
+    splitMode,
     trackOptions: trackOptions as unknown as HTMLDivElement[],
   })
   return { manager, resetRace, trackName, p2TrackName, trackOptions }
@@ -75,6 +76,14 @@ describe('TrackManager 选单双类高亮与回调', () => {
     expect(resetRace).toHaveBeenCalledTimes(1)
     manager.selectTrack(1, 2)
     expect(resetRace).toHaveBeenCalledTimes(2)
+  })
+
+  it('单屏模式（splitMode=false）不应用 P2 的 selected-p2 高亮', () => {
+    const { manager, trackOptions } = createHarness(true, false)
+    // 构造时 P2 虽默认选中 classic（index0），单屏下不得加绿色边框
+    expect(trackOptions[0].classList.toggle).toHaveBeenCalledWith('selected-p2', false)
+    manager.selectTrack(1, 2)
+    expect(trackOptions[2].classList.toggle).toHaveBeenCalledWith('selected-p2', false)
   })
 
   it('P1/P2 赛道名随各自选择更新；未传 p2TrackName 时不抛错', () => {

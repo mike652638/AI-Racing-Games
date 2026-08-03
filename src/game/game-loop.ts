@@ -171,6 +171,7 @@ export class GameLoop {
       resetRace: () => this.resetRace(),
       trackName,
       p2TrackName,
+      splitMode: this.splitMode,
       trackOptions,
     })
     this.carConfig = createCarConfig()
