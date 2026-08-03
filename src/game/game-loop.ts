@@ -314,6 +314,15 @@ export class GameLoop {
       // 缺陷①修复：菜单阶段所有数字键一律吞掉，无效数字键静默忽略，不触发"任意键开始"
       return
     }
+    // 缺陷修复：菜单阶段修饰键单独按下（如 P2 选赛道先按 Shift）不触发"任意键开始"
+    if (
+      this.phase === PHASE_MENU &&
+      (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ControlLeft' ||
+        e.code === 'ControlRight' || e.code === 'AltLeft' || e.code === 'AltRight' ||
+        e.code === 'MetaLeft' || e.code === 'MetaRight')
+    ) {
+      return
+    }
     // 热座交棒：P1 回合完赛后回车/R 交棒 P2（绕过 nextPhase 直接赋值 RACING，Phase 保持四态）。
     // 位置在"任意键回菜单"之前：hotseatPlayer===2 或非 Enter/R 键时走既有 FINISHED→MENU 逻辑
     if (

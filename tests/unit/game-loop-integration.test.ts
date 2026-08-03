@@ -328,6 +328,29 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.phase()).toBe(PHASE_MENU)
   })
 
+  it('菜单阶段：修饰键单独按下不触发开始（ShiftLeft 吞掉，回归缺陷）', () => {
+    new GameLoop()
+    // 缺陷回归：P2 选赛道（Shift+1-5）先按 Shift，Shift 键自身不能触发"任意键开始"
+    env.fireKey('ShiftLeft')
+    expect(env.phase()).toBe(PHASE_MENU)
+    env.fireKey('ControlLeft')
+    expect(env.phase()).toBe(PHASE_MENU)
+    // 非修饰键仍可开始
+    env.fireKey('KeyW')
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('分屏模式：ShiftLeft + Shift+Digit3 完整按键序列选 P2 赛道（Shift 本身不开始）', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    splitEnv.fireKey('ShiftLeft')
+    expect(splitEnv.phase()).toBe(PHASE_MENU)
+    splitEnv.fireKey('Digit3', true)
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
+    expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
+    expect(splitEnv.phase()).toBe(PHASE_MENU)
+  })
+
   it('分屏模式：p2-track-name 菜单可见，Shift+Digit3 后文本更新为 S 弯挑战', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
