@@ -24,10 +24,7 @@ import { nextPhase, togglePause } from './phase-logic'
 import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE, CHALLENGE_SECONDS } from './constants'
 import type { PlayerState } from './player-state'
 
-/** 圈数记录包装：updatePlayerFrame 内推进，调用方与 RaceState.lastLap 桥接 */
-export interface LastLapRef {
-  value: number
-}
+/** 圈数记录包装已移除（H5）：updatePlayerFrame 现返回新 lastLap，调用方直接赋值 race.lastLap */
 
 /**
  * BOOST 蓄力/消耗（G4，纯函数）：漂移激活期间按 BOOST_CHARGE_RATE 蓄力（封顶 1）；
@@ -97,8 +94,10 @@ function viewFor(ctx: TrackContext): RenderView {
 
 /**
  * 单玩家一帧更新：漂移 → 速度修正 → 车辆运动学 → 相机推进 → 个人计时 → 圈数记录。
- * 纯函数式收敛 P1/P2 的重复更新逻辑；lapTimes/lastLapRef 可选传入——
+ * 纯函数式收敛 P1/P2 的重复更新逻辑；lapTimes 可选传入——
  * 分屏 P2 不参与圈速记录（保持原 main.ts 行为：仅 P1 记录 lapTimes）。
+ * H5：返回「新 lastLap」——传入 lapTimes 时返回当前圈数（currentLap，过圈时已 push raceTime），
+ * 未传 lapTimes 返回 1；wet（雨天物理，G3）上移为第 6 尾参。
  */
 export function updatePlayerFrame(
   dt: number,
@@ -107,22 +106,23 @@ export function updatePlayerFrame(
   carConfig: CarConfig,
   lapLength: number,
   lapTimes?: number[],
-  lastLapRef?: LastLapRef,
   wet = false,
-): void {
+): number {
   player.driftState = updateDrift(dt, input, player.carState, carConfig, player.driftState, player.cameraZ)
   player.carState.speed *= driftSpeedFactor(player.driftState)
   updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState), wet)
   player.cameraZ += player.carState.speed * dt
   player.raceTime += dt
 
-  if (lapTimes !== undefined && lastLapRef !== undefined) {
+  if (lapTimes !== undefined) {
     const currentLap = lapFromZ(player.cameraZ, lapLength)
-    if (currentLap > lastLapRef.value) {
+    // lastLap 由 lapTimes 已有记录数推断（每次过圈 push 一条，圈数 = 条数 + 1），消除外部 { value } 桥接
+    if (currentLap > lapTimes.length + 1) {
       lapTimes.push(player.raceTime)
-      lastLapRef.value = currentLap
     }
+    return currentLap
   }
+  return 1
 }
 
 /**
@@ -161,14 +161,6 @@ export class GameLoop {
   private collisionSound: CollisionSound | null = null
   /** 上次碰撞计数快照（帧循环对比，增长即触发碰撞音） */
   private lastCollisionCount = 0
-  /**
-   * 圈数桥接包装对象（G5：每帧复用避免分配，构造一次）。
-   * updatePlayerFrame 可选尾参 lastLapRef 用 { value } 可变包装把过圈事件桥接回 race.lastLap；
-   * 调用前写回当前值、调用后读回（热座/非热座各分支不同帧执行，无并发）。
-   */
-  private lapRef = { value: 1 }
-  /** P2 圈数桥接包装（对应 race.lastLap2，分屏/热座 P2 回合用） */
-  private lapRef2 = { value: 1 }
   /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
   private masterGain: GainNode | null = null
   /** 音乐分轨增益（G7：MusicPlayer 注入此节点，各连 masterGain，独立于音效调节） */
@@ -831,60 +823,48 @@ export class GameLoop {
         // P1 回合圈速记录传 lapTimes/lastLap，P2 回合传 lapTimes2/lastLap2（与分屏 P2 同语义）；
         // 另一玩家本回合不更新、不推进相机/计时
         if (this.hotseatPlayer === 1) {
-          this.lapRef.value = this.race.lastLap
-          updatePlayerFrame(
+          this.race.lastLap = updatePlayerFrame(
             dt,
             effInput1,
             this.race.player1,
             this.carConfig,
             this.trackManager.getLapLength(0),
             this.race.lapTimes,
-            this.lapRef,
             wet,
           )
-          this.race.lastLap = this.lapRef.value
         } else {
-          this.lapRef2.value = this.race.lastLap2
-          updatePlayerFrame(
+          this.race.lastLap2 = updatePlayerFrame(
             dt,
             effInput1,
             this.race.player2,
             this.carConfig,
             this.trackManager.getLapLength(1),
             this.race.lapTimes2,
-            this.lapRef2,
             wet,
           )
-          this.race.lastLap2 = this.lapRef2.value
         }
       } else {
-        // P1 独立更新（车辆/漂移/相机/计时/圈速），圈数记录桥接到 race.lastLap
-        this.lapRef.value = this.race.lastLap
-        updatePlayerFrame(
+        // P1 独立更新（车辆/漂移/相机/计时/圈速），H5：返回新 lastLap 单行赋值
+        this.race.lastLap = updatePlayerFrame(
           dt,
           effInput1,
           this.race.player1,
           this.carConfig,
           this.trackManager.getLapLength(0),
           this.race.lapTimes,
-          this.lapRef,
           wet,
         )
-        this.race.lastLap = this.lapRef.value
 
         // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；圈速记录到 lapTimes2）
-        this.lapRef2.value = this.race.lastLap2
-        updatePlayerFrame(
+        this.race.lastLap2 = updatePlayerFrame(
           dt,
           effInput2,
           this.race.player2,
           this.carConfig,
           this.trackManager.getLapLength(1),
           this.race.lapTimes2,
-          this.lapRef2,
           wet,
         )
-        this.race.lastLap2 = this.lapRef2.value
       }
 
       // 碰撞检测：分屏双人全检；热座仅当前回合玩家参与——P2 回合检 player2 与 P2 世界车流，

@@ -20,15 +20,14 @@ describe('updatePlayerFrame 完整更新链路', () => {
     const player = createPlayerState()
     const config = createCarConfig()
     const lapTimes: number[] = []
-    const ref = { value: 1 }
 
-    updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes, ref)
+    updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes)
     // speed = 0 + 2400 * 1 = 2400（无漂移，速度因子 1）
     expect(player.carState.speed).toBe(2400)
     expect(player.cameraZ).toBe(2400)
     expect(player.raceTime).toBe(1)
 
-    updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes, ref)
+    updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes)
     expect(player.carState.speed).toBe(4800)
     expect(player.cameraZ).toBe(7200)
     expect(player.raceTime).toBe(2)
@@ -51,8 +50,9 @@ describe('updatePlayerFrame 完整更新链路', () => {
     updatePlayerFrame(1, THROTTLE, wet, config, LAP_LENGTH)
     const dryBase = dry.carState.position
     const wetBase = wet.carState.position
-    updatePlayerFrame(1, steer, dry, config, LAP_LENGTH, undefined, undefined, false)
-    updatePlayerFrame(1, steer, wet, config, LAP_LENGTH, undefined, undefined, true)
+    // H5：wet 上移为第 6 尾参（lapTimes 传 undefined 占位）
+    updatePlayerFrame(1, steer, dry, config, LAP_LENGTH, undefined, false)
+    updatePlayerFrame(1, steer, wet, config, LAP_LENGTH, undefined, true)
     expect(wet.carState.position - wetBase).toBeLessThan(dry.carState.position - dryBase)
   })
 })
@@ -87,35 +87,34 @@ describe('updatePlayerFrame 漂移链路', () => {
 })
 
 describe('updatePlayerFrame 圈数记录', () => {
-  test('过圈把当前 raceTime 压入 lapTimes 并推进 lastLapRef', () => {
+  test('过圈把当前 raceTime 压入 lapTimes 并返回当前圈数', () => {
     const player = createPlayerState()
     const config = createCarConfig()
     const lapTimes: number[] = []
-    const ref = { value: 1 }
+    let lastLap = 1
 
     for (let i = 0; i < 3; i++) {
-      updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes, ref)
+      lastLap = updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH, lapTimes)
     }
-    // 帧1 cameraZ=2400 → lap 3；帧2 7200 → lap 8；帧3 13200 → lap 14
+    // 帧1 cameraZ=2400 → lap 3；帧2 7200 → lap 8；帧3 13200 → lap 14（H5：返回值即当前圈数）
     expect(lapTimes).toEqual([1, 2, 3])
-    expect(ref.value).toBe(14)
+    expect(lastLap).toBe(14)
   })
 
   test('圈数未增加时不重复记录', () => {
     const player = createPlayerState()
     const config = createCarConfig()
     const lapTimes: number[] = []
-    const ref = { value: 1 }
 
-    updatePlayerFrame(0.1, THROTTLE, player, config, LAP_LENGTH, lapTimes, ref)
+    const lastLap = updatePlayerFrame(0.1, THROTTLE, player, config, LAP_LENGTH, lapTimes)
     expect(lapTimes).toEqual([])
-    expect(ref.value).toBe(1)
+    expect(lastLap).toBe(1)
   })
 
   test('不传圈数参数（P2 模式）只推进不记录圈速', () => {
     const player = createPlayerState()
     const config = createCarConfig()
-    // 未传 lapTimes/lastLapRef：物理与计时照常，但不参与圈速记录
+    // 未传 lapTimes：物理与计时照常，但不参与圈速记录
     updatePlayerFrame(1, THROTTLE, player, config, LAP_LENGTH)
     expect(player.cameraZ).toBe(2400)
     expect(player.raceTime).toBe(1)
@@ -129,12 +128,10 @@ describe('updatePlayerFrame P1/P2 互不影响', () => {
     const p2 = createPlayerState()
     const lapTimes1: number[] = []
     const lapTimes2: number[] = []
-    const ref1 = { value: 1 }
-    const ref2 = { value: 1 }
 
     // P1 推进两帧并记录圈速
-    updatePlayerFrame(1, THROTTLE, p1, config, LAP_LENGTH, lapTimes1, ref1)
-    updatePlayerFrame(1, THROTTLE, p1, config, LAP_LENGTH, lapTimes1, ref1)
+    updatePlayerFrame(1, THROTTLE, p1, config, LAP_LENGTH, lapTimes1)
+    updatePlayerFrame(1, THROTTLE, p1, config, LAP_LENGTH, lapTimes1)
 
     // P2 完全不受影响
     expect(p2.cameraZ).toBe(0)
@@ -142,13 +139,13 @@ describe('updatePlayerFrame P1/P2 互不影响', () => {
     expect(p2.carState.speed).toBe(0)
     expect(p2.driftState.active).toBe(false)
     expect(lapTimes2).toEqual([])
-    expect(ref2.value).toBe(1)
 
-    // P2 独立推进后拥有自己的圈速记录
-    updatePlayerFrame(1, THROTTLE, p2, config, LAP_LENGTH, lapTimes2, ref2)
+    // P2 独立推进后拥有自己的圈速记录（返回值 = 当前圈数）
+    const lastLap2 = updatePlayerFrame(1, THROTTLE, p2, config, LAP_LENGTH, lapTimes2)
     expect(p2.cameraZ).toBeGreaterThan(0)
     expect(lapTimes2).toEqual([1])
     expect(lapTimes1).toHaveLength(2)
+    expect(lastLap2).toBeGreaterThan(1)
   })
 
   test('P2 跨多圈独立记录到 lapTimes2（与 P1 数组完全隔离）', () => {
@@ -156,15 +153,15 @@ describe('updatePlayerFrame P1/P2 互不影响', () => {
     const p2 = createPlayerState()
     const lapTimes1: number[] = []
     const lapTimes2: number[] = []
-    const ref2 = { value: 1 }
+    let lastLap = 1
 
     // P2 全油门推进 3 帧（LAP_LENGTH=1000，每帧跨多圈，与 P1 用例同节奏）
     for (let i = 0; i < 3; i++) {
-      updatePlayerFrame(1, THROTTLE, p2, config, LAP_LENGTH, lapTimes2, ref2)
+      lastLap = updatePlayerFrame(1, THROTTLE, p2, config, LAP_LENGTH, lapTimes2)
     }
     expect(lapTimes2).toEqual([1, 2, 3])
     expect(lapTimes1).toEqual([])
-    expect(ref2.value).toBeGreaterThan(1)
+    expect(lastLap).toBeGreaterThan(1)
   })
 })
 
