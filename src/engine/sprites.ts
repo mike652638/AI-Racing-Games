@@ -14,8 +14,10 @@ export interface Sprite {
 }
 
 const ROAD_SIDE_OFFSET = 1.4
-const TREE_HEIGHT = 3
-const LAMP_HEIGHT = 2
+/** 树木世界高度（约 4m，道路全宽 2 单位 ≈ 7m 的合理比例） */
+const TREE_HEIGHT = 1.2
+/** 路灯世界高度（约 2.8m） */
+const LAMP_HEIGHT = 0.8
 
 /** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing） */
 export function createRoadsideSprites(
@@ -54,12 +56,24 @@ export function spritesInRange(
   return seen
 }
 
-/** sprite 所在 z 处的中心线累计曲率偏移（世界单位） */
-export function curveOffsetAtZ(track: Segment[], z: number): number {
+/** 预计算前缀和：prefixCurveSum[i] = sum(track[0..i-1].curve) */
+export function buildCurvePrefixSum(track: Segment[]): Float64Array {
+  const prefix = new Float64Array(track.length + 1)
+  for (let i = 0; i < track.length; i++) {
+    prefix[i + 1] = prefix[i] + track[i].curve
+  }
+  return prefix
+}
+
+/** sprite 所在 z 处的中心线累计曲率偏移（世界单位），O(1) 前缀和查询 */
+export function curveOffsetAtZ(
+  track: Segment[],
+  prefixSum: Float64Array,
+  z: number,
+): number {
   const index = trackIndexForCameraZ(track, z)
   const baseZ = index * SEGMENT_LENGTH
-  let curveSum = 0
-  for (let i = 0; i < index; i++) curveSum += track[i].curve
+  const curveSum = prefixSum[index] // O(1) 查询
   const frac = (z - baseZ) / SEGMENT_LENGTH
   return curveSum + track[index].curve * frac
 }
