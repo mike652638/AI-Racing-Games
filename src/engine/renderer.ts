@@ -33,6 +33,19 @@ export interface BoostParticle {
   t: number
 }
 
+/** 渲染降级选项（Task 9 性能优化）：调用方可按需跳过非关键渲染层（漂移烟雾 / BOOST 尾焰粒子 / 雨丝）
+ *  并覆盖默认 DRAW_DISTANCE。所有字段可选，缺省（undefined）时与既有渲染行为完全一致（零回归）。 */
+export interface RenderOptions {
+  /** 覆盖默认 DRAW_DISTANCE（可选）：控制可视道路段数（渲染深度），缺省 120 */
+  drawDistance?: number
+  /** 跳过漂移烟雾渲染 */
+  skipSmoke?: boolean
+  /** 跳过 BOOST 尾焰粒子渲染 */
+  skipBoostParticles?: boolean
+  /** 跳过雨丝渲染 */
+  skipRain?: boolean
+}
+
 /** 一次渲染所需的完整赛道数据（分屏双世界各持一份，避免每帧重建）。
  *  不传 view 时回退到 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。 */
 export interface RenderView {
@@ -265,15 +278,22 @@ export class Renderer {
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾。
-   *  view 可选：缺省用 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。 */
-  render(cameraZ: number, smoke: SmokeParticle[] = [], timeSec = 0, view?: RenderView): void {
-    this.renderWithOpts(cameraZ, this.opts, smoke, timeSec, view)
+   *  view 可选：缺省用 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。
+   *  renderOpts 可选（Task 9 渲染降级）：drawDistance 覆盖可视段数、skip* 跳过对应特效层，缺省全效。 */
+  render(
+    cameraZ: number,
+    smoke: SmokeParticle[] = [],
+    timeSec = 0,
+    view?: RenderView,
+    renderOpts?: RenderOptions,
+  ): void {
+    this.renderWithOpts(cameraZ, this.opts, smoke, timeSec, view, renderOpts)
   }
 
   /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移。
    *  viewX/viewW 先做整数像素对齐（Math.round）：窗口宽为奇数时 w/2 是 x.5，
    *  半像素 translate/clip 会导致交界处 1px 级重叠/缝隙，近处路缘石斜边交错成
-   *  "三角形重叠/撕裂"。view 可选，语义同 render。
+   *  "三角形重叠/撕裂"。view 可选，语义同 render；renderOpts 可选（Task 9 渲染降级）。
    */
   renderRegion(
     cameraZ: number,
@@ -282,6 +302,7 @@ export class Renderer {
     smoke: SmokeParticle[] = [],
     timeSec = 0,
     view?: RenderView,
+    renderOpts?: RenderOptions,
   ): void {
     const { ctx } = this
     const opts = this.buildOpts(viewW, this.opts.height)
@@ -292,7 +313,7 @@ export class Renderer {
     ctx.beginPath()
     ctx.rect(0, 0, ow, this.opts.height)
     ctx.clip()
-    this.renderWithOpts(cameraZ, opts, smoke, timeSec, view)
+    this.renderWithOpts(cameraZ, opts, smoke, timeSec, view, renderOpts)
     ctx.restore()
   }
 
@@ -311,8 +332,11 @@ export class Renderer {
     smoke: SmokeParticle[],
     timeSec: number,
     view?: RenderView,
+    renderOpts?: RenderOptions,
   ): void {
     const { ctx } = this
+    // 渲染降级（Task 9）：drawDistance 覆盖默认 DRAW_DISTANCE（undefined 回退常量，零回归）
+    const maxK = renderOpts?.drawDistance ?? DRAW_DISTANCE
     // 视图数据：显式传入的 RenderView 优先；缺省回退到 this 字段（setTrack/setTraffic 的默认视图）。
     // 注：计划原案 `view ?? this` 因 track/curvePrefixSum 等为 private 字段无法做结构兼容赋值，
     // 改为类内显式对象构造（语义完全一致，见计划 Task B2 实施偏差）。
@@ -355,7 +379,7 @@ export class Renderer {
     )
 
     let curveSum = 0
-    for (let k = 0; k < DRAW_DISTANCE; k++) {
+    for (let k = 0; k < maxK; k++) {
       const z = baseZ + k * SEGMENT_LENGTH
       if (z <= cameraZ) {
         continue
@@ -392,13 +416,15 @@ export class Renderer {
       }
       curveSum += segment.curve
     }
-    this.drawSprites(cameraZ, opts, v)
+    this.drawSprites(cameraZ, opts, v, maxK)
     this.drawTraffic(cameraZ, opts, v, night)
-    this.drawSmoke(smoke, cameraZ, opts)
-    if (v.boostParticles?.length) {
+    if (!renderOpts?.skipSmoke) {
+      this.drawSmoke(smoke, cameraZ, opts)
+    }
+    if (!renderOpts?.skipBoostParticles && v.boostParticles?.length) {
       this.drawBoostParticles(v.boostParticles, cameraZ, opts)
     }
-    if (raining) {
+    if (raining && !renderOpts?.skipRain) {
       this.drawRain(timeSec, opts)
     }
   }
@@ -552,13 +578,18 @@ export class Renderer {
     }
   }
 
-  /** 绘制路边景物（远→近）；数据取自视图 v */
-  private drawSprites(cameraZ: number, opts: ProjectionOptions, v: RenderView): void {
+  /** 绘制路边景物（远→近）；数据取自视图 v；maxK 为降级后的可视段数（Task 9，视距 = maxK × SEGMENT_LENGTH） */
+  private drawSprites(
+    cameraZ: number,
+    opts: ProjectionOptions,
+    v: RenderView,
+    maxK: number,
+  ): void {
     const count = spritesInRangeIndexed(
       v.spriteIndex,
       v.track,
       cameraZ,
-      DRAW_DISTANCE * SEGMENT_LENGTH,
+      maxK * SEGMENT_LENGTH,
       this.spriteScratch, // 复用数组：返回匹配数量，数组内容在下一次调用前有效
     )
     for (let i = count - 1; i >= 0; i--) {

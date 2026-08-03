@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Renderer, type RenderView } from '../../src/engine/renderer'
+import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest'
+import { Renderer, type BoostParticle, type RenderView } from '../../src/engine/renderer'
 import { SEGMENT_LENGTH, createStraightTrack } from '../../src/engine/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { createTraffic } from '../../src/engine/traffic'
@@ -9,6 +9,7 @@ import {
   buildSpriteIndex,
   createRoadsideSprites,
 } from '../../src/engine/sprites'
+import type { SmokeParticle } from '../../src/physics/drift'
 import {
   createMockCanvas,
   type MockCanvas,
@@ -462,6 +463,109 @@ describe('Renderer 状态切换', () => {
       expect(r._fillStyleCache.size).toBe(0)
       // 清空后仍可正常获取（重建缓存）
       expect(r.getFillStyle(5, 6, 7, 0.5)).toBe('rgba(5, 6, 7, 0.500)')
+    })
+  })
+
+  describe('RenderOptions 渲染降级（Task 9）', () => {
+    /** 经典赛道视图（可选带 boost 粒子） */
+    function buildClassicView(boostParticles?: BoostParticle[]): RenderView {
+      const trackB = createTrackFromDef(TRACK_DEFS[0]) // classic
+      return {
+        track: trackB,
+        curvePrefixSum: buildCurvePrefixSum(trackB),
+        spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+        traffic: [],
+        boostParticles,
+      }
+    }
+
+    test('不传 renderOpts 与传空对象 {} 的渲染序列一致（缺省全效零回归）', () => {
+      // 两个独立 harness 渲染同一雨天帧（timeSec=90 触发雨层）：
+      // 一个不传 renderOpts，一个传 {}，绘制调用序列必须逐调用一致
+      const canvasA = createMockCanvas(800, 600)
+      const rendererA = new Renderer(canvasA, createStraightTrack(10), 800, 600)
+      rendererA.render(0, [], 90)
+
+      const canvasB = createMockCanvas(800, 600)
+      const rendererB = new Renderer(canvasB, createStraightTrack(10), 800, 600)
+      rendererB.render(0, [], 90, undefined, {})
+
+      expect(drawingArgs(canvasB.__ctx)).toEqual(drawingArgs(canvasA.__ctx))
+    })
+
+    test('skipSmoke=true 时不调用 drawSmoke（arc 增量降为 0）', () => {
+      const { canvas, renderer } = createHarness()
+      const smoke: SmokeParticle[] = [
+        { x: 0, z: 500, t: 0.2 },
+        { x: 0.5, z: 900, t: 0.1 },
+      ]
+      // 直道 harness 无车流/景物/boost、timeSec=0 晴天：arc 仅来自烟雾层
+      renderer.render(0, [], 0)
+      const before = callCount(canvas.__ctx.__calls, 'arc')
+      renderer.render(0, smoke, 0)
+      const afterDefault = callCount(canvas.__ctx.__calls, 'arc')
+      renderer.render(0, smoke, 0, undefined, { skipSmoke: true })
+      const afterSkip = callCount(canvas.__ctx.__calls, 'arc')
+      const defaultIncr = afterDefault - before
+      const skipIncr = afterSkip - afterDefault
+      // 默认帧每粒可见烟雾 1 次 arc；skip 帧烟雾层被跳过 → arc 增量必须为 0
+      expect(defaultIncr).toBeGreaterThan(0)
+      expect(skipIncr).toBe(0)
+    })
+
+    test('skipBoostParticles=true 时不调用 drawBoostParticles（arc 增量与无粒子帧一致）', () => {
+      const { canvas, renderer } = createHarness()
+      const baseView = buildClassicView()
+      const boostView = buildClassicView([
+        { x: 0.5, z: 500, t: 0 },
+        { x: 0.3, z: 700, t: 0.3 },
+      ])
+      // 逐帧取 arc 增量：无粒子帧 / boost 帧 / skip boost 帧
+      renderer.render(0, [], 0, baseView)
+      const before = callCount(canvas.__ctx.__calls, 'arc')
+      renderer.render(0, [], 0, baseView)
+      const afterBase = callCount(canvas.__ctx.__calls, 'arc')
+      renderer.render(0, [], 0, boostView)
+      const afterBoost = callCount(canvas.__ctx.__calls, 'arc')
+      renderer.render(0, [], 0, boostView, { skipBoostParticles: true })
+      const afterSkip = callCount(canvas.__ctx.__calls, 'arc')
+      const baseIncr = afterBase - before
+      const boostIncr = afterBoost - afterBase
+      const skipIncr = afterSkip - afterBoost
+      // boost 帧比无粒子帧多出粒子 arc（每粒 1 次）；skip 帧与无粒子帧完全一致（粒子层被跳过）
+      expect(boostIncr).toBeGreaterThan(baseIncr)
+      expect(skipIncr).toBe(baseIncr)
+    })
+
+    test('skipRain=true（雨天）时不调用 drawRain（drawImage 增量与晴天一致）', () => {
+      const { canvas, renderer } = createHarness()
+      // 逐帧取 drawImage 增量：skip 雨帧 / 晴天帧（雨天未跳过时双幅 drawImage 平铺，见上方雨天测试）
+      renderer.render(0, [], 90)
+      const before = callCount(canvas.__ctx.__calls, 'drawImage')
+      renderer.render(0, [], 90, undefined, { skipRain: true })
+      const afterSkip = callCount(canvas.__ctx.__calls, 'drawImage')
+      renderer.render(0, [], 0)
+      const afterClear = callCount(canvas.__ctx.__calls, 'drawImage')
+      const skipIncr = afterSkip - before
+      const clearIncr = afterClear - afterSkip
+      // skip 帧（雨天 + skipRain）与晴天帧增量一致：雨层 2 次 drawImage 被跳过
+      expect(skipIncr).toBe(clearIncr)
+    })
+
+    test('drawDistance=60 时道路循环只渲染 60 段（fill 增量明显低于默认 120 段）', () => {
+      const { canvas, renderer } = createHarness()
+      renderer.render(0)
+      const before = callCount(canvas.__ctx.__calls, 'fill')
+      renderer.render(0)
+      const afterDefault = callCount(canvas.__ctx.__calls, 'fill')
+      renderer.render(0, [], 0, undefined, { drawDistance: 60 })
+      const after60 = callCount(canvas.__ctx.__calls, 'fill')
+      const defaultIncr = afterDefault - before
+      const incr60 = after60 - afterDefault
+      // 每段 3 个路面四边形（路面 + 双路缘）+ 中心虚线（每两段 1 次）：
+      // 60 段帧的 fill 增量低于默认 120 段帧，且差值 ≥ 60 段 × 3 个四边形
+      expect(incr60).toBeLessThan(defaultIncr)
+      expect(defaultIncr - incr60).toBeGreaterThan(60 * 3)
     })
   })
 })
