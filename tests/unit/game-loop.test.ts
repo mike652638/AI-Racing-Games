@@ -3,6 +3,7 @@ import {
   advancePreviewCameraZ,
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
+  resolvePerformanceConfig,
   updateBoostCharge,
   updatePlayerFrame,
   viewFor,
@@ -272,5 +273,41 @@ describe('updateBoostCharge（G4）', () => {
     const drain = updateBoostCharge(0.01, DT, true, false)
     expect(drain.charge).toBe(0)
     expect(drain.boost).toBe(true)
+  })
+})
+
+describe('PerformanceConfig（Task 8）', () => {
+  // GameLoop.getPerformanceConfig 委托此纯函数；GameLoop 构造函数依赖 DOM（document.getElementById
+  // 等）且启动 rAF，测试按现有模式直接覆盖解析逻辑（splitMode/perfMode 两布尔即方法全部输入）。
+  test('默认模式返回 drawDistance=120 且全部特效渲染', () => {
+    const cfg = resolvePerformanceConfig(false, false)
+    expect(cfg.drawDistance).toBe(120)
+    expect(cfg.skipSmoke).toBe(false)
+    expect(cfg.skipBoostParticles).toBe(false)
+    expect(cfg.skipRain).toBe(false)
+  })
+
+  test('分屏模式（splitMode=true）返回 drawDistance=80 且跳过全部特效', () => {
+    const cfg = resolvePerformanceConfig(true, false)
+    expect(cfg.drawDistance).toBe(80)
+    expect(cfg.skipSmoke).toBe(true)
+    expect(cfg.skipBoostParticles).toBe(true)
+    expect(cfg.skipRain).toBe(true)
+  })
+
+  test('性能模式（perf）返回 drawDistance=60 且跳过全部特效', () => {
+    const cfg = resolvePerformanceConfig(false, true)
+    expect(cfg.drawDistance).toBe(60)
+    expect(cfg.skipSmoke).toBe(true)
+    expect(cfg.skipBoostParticles).toBe(true)
+    expect(cfg.skipRain).toBe(true)
+  })
+
+  test('分屏与性能模式共存时性能档优先（drawDistance=60 最激进）', () => {
+    const cfg = resolvePerformanceConfig(true, true)
+    expect(cfg.drawDistance).toBe(60)
+    expect(cfg.skipSmoke).toBe(true)
+    expect(cfg.skipBoostParticles).toBe(true)
+    expect(cfg.skipRain).toBe(true)
   })
 })

@@ -27,6 +27,60 @@ import type { PlayerState } from './player-state'
 /** 圈数记录包装已移除（H5）：updatePlayerFrame 现返回新 lastLap，调用方直接赋值 race.lastLap */
 
 /**
+ * 渲染降级参数（Task 8 性能优化）：按模式（分屏/性能/默认）返回不同负载档位。
+ * drawDistance 控制可视道路段数（渲染深度），skip* 跳过对应粒子/特效渲染。
+ */
+export interface PerformanceConfig {
+  /** 可视道路段数（默认 120，分屏 80，性能模式 60） */
+  drawDistance: number
+  /** 是否跳过漂移烟雾渲染 */
+  skipSmoke: boolean
+  /** 是否跳过 BOOST 尾焰粒子渲染 */
+  skipBoostParticles: boolean
+  /** 是否跳过雨丝渲染 */
+  skipRain: boolean
+}
+
+/** 全效档（默认）：120 段 + 渲染全部特效 */
+const PERF_HIGH: PerformanceConfig = {
+  drawDistance: 120,
+  skipSmoke: false,
+  skipBoostParticles: false,
+  skipRain: false,
+}
+/** 分屏档：80 段 + 跳过全部特效（双区域渲染负载减半） */
+const PERF_MID: PerformanceConfig = {
+  drawDistance: 80,
+  skipSmoke: true,
+  skipBoostParticles: true,
+  skipRain: true,
+}
+/** 性能档：60 段 + 跳过全部特效（最激进降级） */
+const PERF_LOW: PerformanceConfig = {
+  drawDistance: 60,
+  skipSmoke: true,
+  skipBoostParticles: true,
+  skipRain: true,
+}
+
+/**
+ * 按模式解析降级参数（纯函数，Task 8）：
+ * - 性能模式（?perf）优先：最激进档位（60 段 + 全跳过）——用户显式请求降级，与分屏共存时也取该档
+ * - 分屏模式：80 段 + 全跳过
+ * - 默认：120 段 + 全渲染
+ * 返回只读共享实例（仿 _viewCache 复用模式），调用方勿修改。
+ */
+export function resolvePerformanceConfig(splitMode: boolean, perfMode: boolean): PerformanceConfig {
+  if (perfMode) {
+    return PERF_LOW
+  }
+  if (splitMode) {
+    return PERF_MID
+  }
+  return PERF_HIGH
+}
+
+/**
  * BOOST 蓄力/消耗（G4，纯函数）：漂移激活期间按 BOOST_CHARGE_RATE 蓄力（封顶 1）；
  * inputBoost 按下且 charge > 0 时激活 boost 并按 BOOST_DRAIN_RATE 消耗（不越 0）。
  * 帧块调用后把返回的 boost 并入传给 updatePlayerFrame 的 input（{ ...input, boost }）。
@@ -147,6 +201,8 @@ export function updatePlayerFrame(
  */
 export class GameLoop {
   private readonly splitMode: boolean
+  /** 性能模式（?perf=1，Task 8）：渲染降级档位由 getPerformanceConfig 读取；与 split 不互斥 */
+  private readonly _perfMode: boolean
   /** 热座轮流模式（?hotseat=1）：双人先后跑同赛道比成绩；split 优先互斥 */
   private readonly hotseatMode: boolean
   /** 漂移挑战模式（?challenge=1）：60 秒限时刷分；与 split/hotseat 互斥 */
@@ -206,6 +262,8 @@ export class GameLoop {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
     const params = new URLSearchParams(window.location.search)
     this.splitMode = params.has('split')
+    // Task 8（Task 8）：性能模式——显式降级渲染负载（?perf=1），与分屏不互斥（共存时性能档优先）
+    this._perfMode = params.has('perf')
     this.hotseatMode = params.has('hotseat') && !this.splitMode
     // G1（G1）：挑战模式——限时刷分（60 秒收束），与分屏/热座互斥
     this.challengeMode = params.has('challenge') && !this.splitMode && !this.hotseatMode
@@ -382,6 +440,14 @@ export class GameLoop {
     this.refreshBestSummary()
     this.refreshMatchTop()
     requestAnimationFrame(this.frame)
+  }
+
+  /**
+   * 当前模式下的渲染降级参数（Task 8）：分屏/性能模式返回降级档位，默认全效。
+   * 委托纯函数 resolvePerformanceConfig（单测直接覆盖该函数；GameLoop 依赖 DOM 不便实例化）。
+   */
+  getPerformanceConfig(): PerformanceConfig {
+    return resolvePerformanceConfig(this.splitMode, this._perfMode)
   }
 
   /** 读取持久化主音量（0-1；localStorage 不可用/值无效回退 0.6，防御模式仿 save.ts getStorage） */
