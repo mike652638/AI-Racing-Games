@@ -923,9 +923,14 @@ export class GameLoop {
         dt,
         this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2),
       )
-      // F4（F4）：碰撞计数增长 → 触发碰撞冲击音（CollisionSound 内部 80ms 防刷屏）
+      // F4（F4）：碰撞计数增长 → 触发碰撞冲击音（CollisionSound 内部 80ms 防刷屏）；
+      // H6（H6）：强度 = 双玩家速度比取较快者（单屏 player2 speed=0 自然取 P1），高速撞击更响
       if (this.race.collisionCount > this.lastCollisionCount) {
-        this.collisionSound?.play()
+        const impact = Math.max(
+          this.race.player1.carState.speed / this.carConfig.maxSpeed,
+          this.race.player2.carState.speed / this.carConfig.maxSpeed,
+        )
+        this.collisionSound?.play(impact)
         this.lastCollisionCount = this.race.collisionCount
       }
 

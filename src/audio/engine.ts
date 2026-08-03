@@ -155,12 +155,14 @@ export class CollisionSound {
     return this.playCount
   }
 
-  /** 触发碰撞音（每次重建 BufferSource；80ms 内重复触发跳过，防连续碰撞刷屏） */
-  play(): void {
+  /** 触发碰撞音（每次重建 BufferSource；80ms 内重复触发跳过，防连续碰撞刷屏）。
+   *  volume 为碰撞强度（0-1 速度比），增益 = 0.25 × clamp(volume, 0.4, 1)（高速撞击更响） */
+  play(volume = 1): void {
     const now = this.ctx.currentTime
     if (now - this.lastPlayTime < 0.08) return
     this.lastPlayTime = now
     this.playCount++
+    this.gain.gain.value = 0.25 * Math.min(Math.max(volume, 0.4), 1)
     const source = this.ctx.createBufferSource()
     source.buffer = this.buffer
     source.connect(this.filter)

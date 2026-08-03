@@ -35,9 +35,11 @@ function mockCtx(): {
   getConnected: () => unknown
   getBufferSourceCount: () => number
   getRampTargets: () => number[]
+  getLastGain: () => { gain: { value: number } } | null
 } {
   let connected: unknown = null
   let bufferSourceCount = 0
+  let lastGainNode: { gain: { value: number } } | null = null
   const rampTargets: number[] = []
   const ctx = {
     destination: { id: 'dest' },
@@ -45,17 +47,21 @@ function mockCtx(): {
     state: 'running',
     sampleRate: 44100,
     resume: (): void => undefined,
-    createGain: (): unknown => ({
-      gain: {
-        value: 0,
-        setTargetAtTime: (): void => undefined,
-        setValueAtTime: (): void => undefined,
-        linearRampToValueAtTime: (): void => undefined,
-      },
-      connect: (target: unknown): void => {
-        connected = target
-      },
-    }),
+    createGain: (): unknown => {
+      const node = {
+        gain: {
+          value: 0,
+          setTargetAtTime: (): void => undefined,
+          setValueAtTime: (): void => undefined,
+          linearRampToValueAtTime: (): void => undefined,
+        },
+        connect: (target: unknown): void => {
+          connected = target
+        },
+      }
+      lastGainNode = node
+      return node
+    },
     createBiquadFilter: (): unknown => ({
       type: '',
       frequency: { value: 0, setTargetAtTime: (): void => undefined },
@@ -101,6 +107,7 @@ function mockCtx(): {
     getConnected: (): unknown => connected,
     getBufferSourceCount: (): number => bufferSourceCount,
     getRampTargets: (): number[] => rampTargets,
+    getLastGain: (): { gain: { value: number } } | null => lastGainNode,
   }
 }
 
@@ -145,6 +152,20 @@ describe('CollisionSound 碰撞冲击音', () => {
     ;(ctx as unknown as { currentTime: number }).currentTime = 0.2
     cs.play()
     expect(cs.count).toBe(2)
+  })
+
+  test('play(volume) 按强度缩放增益：play(0.5) 后 gain.value === 0.125', () => {
+    const { ctx, getLastGain } = mockCtx()
+    const cs = new CollisionSound(ctx)
+    // 构造默认增益 0.25
+    expect(getLastGain()?.gain.value).toBe(0.25)
+    cs.play(0.5)
+    // 0.25 × clamp(0.5, 0.4, 1) = 0.125
+    expect(getLastGain()?.gain.value).toBe(0.125)
+    // 推进 currentTime 越过 80ms 防刷屏窗口后，测试低于下限的 clamp
+    ;(ctx as unknown as { currentTime: number }).currentTime = 0.5
+    cs.play(0.2) // 低于下限 0.4 → clamp 到 0.4 → 0.25 × 0.4 = 0.1
+    expect(getLastGain()?.gain.value).toBe(0.1)
   })
 })
 
