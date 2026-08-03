@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameLoop } from '../../src/game/game-loop'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/game/phase'
+import { DRIFT_TOP_KEY } from '../../src/ui/save'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
@@ -781,6 +782,24 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(typeof last).toBe('number')
     expect((last as number) < (first as number)).toBe(true)
   }, 15000)
+
+  it('H4（H4）：注入含 combo 的漂移榜条目后 #drift-top 渲染含「连击 x」后缀', () => {
+    // 直接注入 localStorage drift-top（含 combo 条目），构造后 refreshDriftTop 渲染格式断言
+    const storage = {
+      [DRIFT_TOP_KEY]: JSON.stringify([
+        { player: 'P1', trackId: 'classic', score: 300, time: 30, combo: 4 },
+        { player: 'P2', trackId: 'highway', score: 100, time: 40 },
+      ]),
+    }
+    const env2 = stubEnvironment('', storage)
+    new GameLoop()
+    const top = env2.getElement('drift-top').textContent
+    // 首行（score 降序第一）：`1. P1 · 300 分 · 经典赛道 · 连击 x2.00`（1 + 4*0.25 = 2.00）
+    expect(top.startsWith('1. P1 · 300 分')).toBe(true)
+    expect(top).toContain('连击 x2.00')
+    // 旧条目无 combo → 不追加连击后缀
+    expect(top).not.toContain('连击 x1')
+  })
 
   it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: 15000 }, () => {
     new GameLoop()

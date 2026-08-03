@@ -265,6 +265,25 @@ describe('漂移 TOP10（DriftEntry API）', () => {
     expect(r.top).toHaveLength(1)
     expect(r.entered).toBe(true)
   })
+
+  it('H4（H4）：带 combo 字段的条目写回读回保留字段（排行榜权重）', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 123, time: 30.5, combo: 4 }, s)
+    const top = loadDriftTop(s)
+    expect(top).toHaveLength(1)
+    expect(top[0]).toEqual({ player: 'P1', trackId: 'classic', score: 123, time: 30.5, combo: 4 })
+  })
+
+  it('H4（H4）：旧 4 字段条目与新 combo 条目混存互不丢失', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P2', trackId: 'highway', score: 200, time: 40 }, s)
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 300, time: 30, combo: 2 }, s)
+    const top = loadDriftTop(s)
+    expect(top).toHaveLength(2)
+    // 降序：新 combo 条目在前且保留 combo；旧条目无 combo 字段不受影响
+    expect(top[0]).toEqual({ player: 'P1', trackId: 'classic', score: 300, time: 30, combo: 2 })
+    expect(top[1]).toEqual({ player: 'P2', trackId: 'highway', score: 200, time: 40 })
+  })
 })
 
 describe('对局记录（MatchEntry API）', () => {

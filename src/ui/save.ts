@@ -24,12 +24,14 @@ export interface MatchEntry {
   trackId: string
 }
 
-/** 漂移得分排行榜条目：玩家、赛道、得分与完赛用时 */
+/** 漂移得分排行榜条目：玩家、赛道、得分、完赛用时与最高连击档位（H4：可选，旧条目无此字段不丢） */
 export interface DriftEntry {
   player: 'P1' | 'P2'
   trackId: string
   score: number
   time: number
+  /** 最高连击档位（漂移连击排行榜权重展示；可选，旧 4 字段条目兼容） */
+  combo?: number
 }
 
 /** 双人模式的胜场统计：各玩家胜场数与当前连胜（连胜玩家 + 连胜场次） */

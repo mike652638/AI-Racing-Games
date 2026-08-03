@@ -470,7 +470,8 @@ export class GameLoop {
   }
 
   /** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：取前 5 条渲染，无记录显示占位文本 */
-  private refreshDriftTop(): void {    const el = document.getElementById('drift-top')
+  private refreshDriftTop(): void {
+    const el = document.getElementById('drift-top')
     if (!el) {
       return
     }
@@ -480,7 +481,10 @@ export class GameLoop {
         ? '暂无漂移记录'
         : top
             .map(
-              (e, i) => `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
+              (e, i) =>
+                `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}` +
+                // H4（H4）：最高连击档位 → ` · 连击 x倍率`（1 + combo*0.25）；旧条目无 combo 不追加
+                (e.combo ? ` · 连击 x${(1 + e.combo * 0.25).toFixed(2)}` : ''),
             )
             .join('\n')
   }
@@ -589,6 +593,8 @@ export class GameLoop {
           trackId: this.trackManager.getTrackId(0),
           score: Math.round(this.race.player1.driftState.score),
           time: this.race.player1.raceTime,
+          // H4（H4）：记录最高连击档位（排行榜权重展示）
+          combo: Math.round(this.race.player1.driftState.combo),
         })
       }
       // 挑战模式单屏：P2 恒不参与记分（finishedP2 恒 false，条件天然跳过）
@@ -598,6 +604,7 @@ export class GameLoop {
           trackId: this.trackManager.getTrackId(1),
           score: Math.round(this.race.player2.driftState.score),
           time: this.race.player2.raceTime,
+          combo: Math.round(this.race.player2.driftState.combo),
         })
       }
       // M11 F2：分屏双完赛记录漂移对局（最近 10 局，driftWinner 在双完赛时恒非 null，平局归 P1）
