@@ -1,3 +1,6 @@
+/** 圈数计算：下沉到 game/lap.ts，此处 re-export 保持消费方（hud 等）兼容 */
+export { lapFromZ } from '../game/lap'
+
 /** 速度（世界单位/秒）→ km/h 显示值：maxSpeed 对应 320 km/h */
 export function formatSpeed(speed: number, maxSpeed: number): string {
   return String(Math.round((speed / maxSpeed) * 320))
@@ -16,11 +19,6 @@ export function formatTime(sec: number): string {
 /** 圈数显示 */
 export function formatLap(lap: number, totalLaps: number): string {
   return `LAP ${lap}/${totalLaps}`
-}
-
-/** 行进距离 → 圈数（1 基） */
-export function lapFromZ(cameraZ: number, lapLength: number): number {
-  return Math.floor(cameraZ / lapLength) + 1
 }
 
 /**

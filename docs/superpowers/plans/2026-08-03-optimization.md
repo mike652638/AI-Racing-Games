@@ -695,7 +695,7 @@ git commit -m "refactor(game): split player state and implement true independent
 
 **注意：** 此 Task 与 Task 4 有依赖关系。建议先完成 Task 4（PlayerState 抽象），再执行本 Task。
 
-- [ ] **Step 1: 下沉 Phase 定义**
+- [x] **Step 1: 下沉 Phase 定义**
 
 创建 `src/game/phase.ts`：
 
@@ -723,7 +723,7 @@ export function nextPhase(phase: Phase, lap: number, totalLaps: number): Phase {
 export function togglePause(phase: Phase): Phase { ... }
 ```
 
-- [ ] **Step 2: 提取单玩家帧更新函数消除重复**
+- [x] **Step 2: 提取单玩家帧更新函数消除重复**
 
 在 `src/game/game-loop.ts`：
 
@@ -751,7 +751,7 @@ export function updatePlayerFrame(
 }
 ```
 
-- [ ] **Step 3: 拆分 main.ts 到 GameLoop 与 TrackManager**
+- [x] **Step 3: 拆分 main.ts 到 GameLoop 与 TrackManager**
 
 创建 `src/game/game-loop.ts` 包含 `GameLoop` 类，封装主循环逻辑。
 创建 `src/game/track-manager.ts` 管理 `applyTrack` 与 `updateTrackSelect`。
@@ -766,13 +766,13 @@ import { initGame } from './game/game-loop'
 initGame()
 ```
 
-- [ ] **Step 4: 运行测试**
+- [x] **Step 4: 运行测试**
 
 ```bash
 npx vitest run tests/unit/game-loop.test.ts tests/unit/phase.test.ts tests/unit/track-manager.test.ts
 ```
 
-- [ ] **Step 5: 全量验证与提交**
+- [x] **Step 5: 全量验证与提交**
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run bot
@@ -782,6 +782,15 @@ npm run typecheck && npm run lint && npm test && npm run bot
 git add src/game/phase.ts src/game/phase-logic.ts src/game/game-loop.ts src/game/track-manager.ts src/game/debug-hook.ts src/main.ts src/ui/gamestate.ts tests/unit/phase.test.ts tests/unit/game-loop.test.ts
 git commit -m "refactor(main): split game loop, track manager, debug hook and move Phase to game layer"
 ```
+
+#### 实施偏差（Task 5 实际落地与设计的差异）
+
+1. **lapFromZ 迁移到 game/lap.ts**：文档假设圈数判定来自 `engine/track.ts`，实际 `lapFromZ` 位于 `ui/format.ts`。为避免 `game/game-loop.ts` 引入新的 game→ui 反向依赖，创建 `src/game/lap.ts` 承载 `lapFromZ`，`ui/format.ts` 改为 re-export（`export { lapFromZ } from '../game/lap'`），hud.ts 与 format.test.ts 等旧消费方不受影响。
+2. **updatePlayerFrame 的 lapTimes/lastLapRef 改为可选参数**：文档示例为必选，但原 main.ts 仅 P1 记录圈速（P2 不 push lapTimes、不推进 lastLap）。若 P2 也传共享的 `race.lapTimes`/`lastLap` 会污染 P1 的圈速记录与完赛判定，因此 P2 调用不传圈数参数，保持行为完全不变。
+3. **lastLap 桥接模式**：`RaceState.lastLap` 保持真相源，GameLoop 每帧以 `{ value: race.lastLap }` 包装传入 `updatePlayerFrame`，调用后写回 `race.lastLap = lapRef.value`；未引入持久引用对象。
+4. **TrackManager 依赖注入**：`renderer` 以惰性 getter（`() => this.renderer`）注入（GameLoop 构造后才创建 renderer），`resetRace` 以回调注入；`applyTrack` 内部先 `renderer.setTrack` 再 `resetRace`，顺序与 main.ts 一致。
+5. **测试范围**：除 `phase.test.ts`（9 例）、`game-loop.test.ts`（8 例）外，另新增 `track-manager.test.ts`（4 例，mock Renderer/DOM 薄验证）；`gamestate.test.ts` 未迁移删除，re-export 后原 6 例继续通过；`format.test.ts` 因 lapFromZ re-export 保持通过。
+6. **game/state.ts 反向依赖消除**：import 由 `../ui/gamestate` 改为 `./phase`（P1-2）；同时 `ui/gamestate.ts` 保留为 re-export 兼容层，screens/hud 等旧导入路径不破坏。
 
 ---
 

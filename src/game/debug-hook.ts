@@ -1,0 +1,69 @@
+import type { Phase } from './phase'
+
+/** 调试钩子类型：供自动化验证脚本读取运行时状态（与 installDebugHook 保持同步） */
+declare global {
+  interface Window {
+    __gameDebug?: {
+      readonly audioState: AudioContextState | null
+      readonly musicState: 'stopped' | 'running'
+      readonly phase: Phase
+      readonly driftActive: boolean
+      readonly split: boolean
+      readonly bestTime: number | null
+      readonly trafficCount: number
+      readonly collisions: number
+      readonly selectedTrack: string
+      readonly touchActive: boolean
+    }
+  }
+}
+
+/** 调试钩子取值源：GameLoop 注入运行时状态的读取器 */
+export interface DebugHookSources {
+  audioState: () => AudioContextState | null
+  musicState: () => 'stopped' | 'running'
+  phase: () => Phase
+  driftActive: () => boolean
+  split: boolean
+  bestTime: () => number | null
+  trafficCount: () => number
+  collisions: () => number
+  selectedTrack: () => string
+  touchActive: () => boolean
+}
+
+/** 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取） */
+export function installDebugHook(sources: DebugHookSources): void {
+  window.__gameDebug = {
+    get audioState() {
+      return sources.audioState()
+    },
+    get musicState() {
+      return sources.musicState()
+    },
+    get phase() {
+      return sources.phase()
+    },
+    get driftActive() {
+      return sources.driftActive()
+    },
+    get split() {
+      return sources.split
+    },
+    get bestTime() {
+      return sources.bestTime()
+    },
+    get trafficCount() {
+      return sources.trafficCount()
+    },
+    get collisions() {
+      return sources.collisions()
+    },
+    get selectedTrack() {
+      return sources.selectedTrack()
+    },
+    get touchActive() {
+      return sources.touchActive()
+    },
+  }
+}

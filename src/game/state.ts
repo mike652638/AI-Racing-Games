@@ -1,6 +1,6 @@
 import { createPlayerState, resetPlayerState, type PlayerState } from './player-state'
 import type { TrafficCar } from '../engine/traffic'
-import { PHASE_MENU, type Phase } from '../ui/gamestate'
+import { PHASE_MENU, type Phase } from './phase'
 
 /**
  * 对局可变状态容器：集中管理双玩家的独立状态（PlayerState）、碰撞计数、
