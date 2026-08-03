@@ -398,6 +398,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
     // D3 漂移竞速横幅：未双完赛（P2 未完赛）时保持隐藏
     expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
+    // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
+    expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
   })
 
   it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
@@ -418,6 +420,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
     // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
+    // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
+    expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
   })
 
   // 4000 帧双人模拟在整文件并行时实际耗时 5.8-7.1s，超出默认 5000ms（E2-E5 记录过的既有脆弱性），
@@ -505,6 +509,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(
       hotEnv.getElement('finish-hint').textContent,
     )
+    // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）
+    expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
   })
 
   it('热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进', () => {

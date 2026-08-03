@@ -132,7 +132,9 @@ function fillFinishPanel(
       }
     }
 
-    elements.finishLaps.textContent = formatLapTimes(race.lapTimes).join('  ')
+    // P1：分屏时 P1 圈速行加 'P1 ' 前缀（与 P2 圈速行对称）；单屏不加
+    elements.finishLaps.textContent =
+      `${opts.splitMode ? 'P1 ' : ''}${formatLapTimes(race.lapTimes).join('  ')}`
   }
   else {
     // P1 未完赛：清空其余行，仅显示"未完赛"（分屏加 P1 前缀与 P2 行对称）
@@ -184,7 +186,8 @@ function fillFinishPanel(
       }
 
       if (elements.finishLaps2) {
-        elements.finishLaps2.textContent = formatLapTimes(race.lapTimes2).join('  ')
+        // P1（P1）：P2 圈速行只在双人场景（分屏/热座 round 2）出现，恒加 'P2 ' 前缀
+        elements.finishLaps2.textContent = `P2 ${formatLapTimes(race.lapTimes2).join('  ')}`
       }
     }
     else {

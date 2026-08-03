@@ -161,7 +161,7 @@ canvas {
 
 /* 胜场统计行（#finish-wins：热座/分屏分胜负时由 fillFinishPanel 填充；小字灰色弱化） */
 #finish-wins {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: var(--hint-fs);
   color: rgba(255, 255, 255, 0.6);
   letter-spacing: 1px;
@@ -207,6 +207,11 @@ canvas {
   background-clip: text;
   color: transparent;
   text-shadow: none;
+}
+
+/* P1（P1）：结算面板底部留白，避免"按 R 重新开始"提示贴边/与底部重叠 */
+#finish-screen {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
 }
 
 #start-screen p,
