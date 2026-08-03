@@ -1,14 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest'
 import { Renderer, type BoostParticle, type RenderView } from '../../src/engine/renderer'
-import { SEGMENT_LENGTH, createStraightTrack } from '../../src/engine/track'
+import { SEGMENT_LENGTH } from '../../src/engine/track'
+import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { createTraffic } from '../../src/engine/traffic'
 import { buildRoadStrips } from '../../src/engine/road-strip'
-import {
-  buildCurvePrefixSum,
-  buildSpriteIndex,
-  createRoadsideSprites,
-} from '../../src/engine/sprites'
+import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites } from '../../src/engine/sprites'
 import type { SmokeParticle } from '../../src/physics/drift'
 import {
   createMockCanvas,
@@ -57,16 +54,7 @@ function callCount(calls: MockCanvasCallCounts, method: string): number {
 }
 
 /** 参与"view 路径与默认路径等价"对比的绘制方法（排除 save/translate/rect/clip 等区域管理调用） */
-const DRAW_METHODS = [
-  'beginPath',
-  'moveTo',
-  'lineTo',
-  'closePath',
-  'fill',
-  'fillRect',
-  'arc',
-  'drawImage',
-] as const
+const DRAW_METHODS = ['beginPath', 'moveTo', 'lineTo', 'closePath', 'fill', 'fillRect', 'arc', 'drawImage'] as const
 
 /**
  * 提取绘制方法实参序列。drawImage 的第一参数是各自构造的离屏山形 canvas，
@@ -77,9 +65,7 @@ function drawingArgs(ctx: MockCanvasRenderingContext2D): Record<string, unknown[
   for (const method of DRAW_METHODS) {
     out[method] = (ctx.__args[method] ?? []).map((row) =>
       row.map((arg) =>
-        typeof arg === 'object' && arg !== null && 'width' in arg && 'height' in arg
-          ? '<canvas>'
-          : arg,
+        typeof arg === 'object' && arg !== null && 'width' in arg && 'height' in arg ? '<canvas>' : arg,
       ),
     )
   }
@@ -181,17 +167,17 @@ describe('Renderer 状态切换', () => {
     expect(Number.isInteger(lastTranslate[0])).toBe(true)
   })
 
-  it('drawDivider 绘制全高深色竖线', () => {
+  it('drawDivider 绘制全高半透明可见竖线', () => {
     const { canvas, renderer } = createHarness(800, 600)
     renderer.drawDivider(400)
     const fillRectArgs = canvas.__ctx.__args.fillRect
     const last = fillRectArgs[fillRectArgs.length - 1]
-    // fillRect(Math.round(x - width/2), 0, width, height)：居中 2px 全高竖线
+    // fillRect(Math.round(x - width/2), 0, width, height)：居中 3px 全高竖线（Batch 3：加宽加亮）
     expect(last[0]).toBe(399)
     expect(last[1]).toBe(0)
-    expect(last[2]).toBe(2)
+    expect(last[2]).toBe(3)
     expect(last[3]).toBe(600)
-    expect(canvas.__ctx.fillStyle).toBe('#000')
+    expect(canvas.__ctx.fillStyle).toBe('rgba(255, 255, 255, 0.4)')
   })
 
   it('renderRegion 用自定义 RenderView 渲染不同赛道（s-curve）不抛错且产生绘制', () => {
@@ -248,8 +234,7 @@ describe('Renderer 状态切换', () => {
   it('setViewport 后雨滴离屏 canvas 尺寸重建（宽 = 视口宽、高 = 视口高 + 20）', () => {
     const { canvas, renderer } = createHarness(800, 600)
     // setViewport 会重建离屏 canvas（buildRainCanvas 替换引用），须每次重新读取
-    const getRainCanvas = (): MockCanvas =>
-      (renderer as unknown as { rainCanvas: MockCanvas }).rainCanvas
+    const getRainCanvas = (): MockCanvas => (renderer as unknown as { rainCanvas: MockCanvas }).rainCanvas
     expect(getRainCanvas().width).toBe(800)
     expect(getRainCanvas().height).toBe(620)
     renderer.setViewport(canvas, 400, 300)
@@ -398,8 +383,7 @@ describe('Renderer 状态切换', () => {
       const spritesB = createRoadsideSprites(trackB)
       const roadStrips = buildRoadStrips(trackB)
       renderer.setTrack(trackB, spritesB, roadStrips)
-      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> })
-        .roadStripCache
+      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> }).roadStripCache
       // setTrack 传 roadStrips 后按 strip 数构建离屏缓存
       expect(cache.size).toBe(roadStrips.length)
       // 每项缓存均为预渲染的离屏 canvas（node 环境为 MockOffscreenCanvas，带 width/height）
@@ -415,9 +399,122 @@ describe('Renderer 状态切换', () => {
       const trackB = createTrackFromDef(TRACK_DEFS[0])
       const spritesB = createRoadsideSprites(trackB)
       renderer.setTrack(trackB, spritesB)
-      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> })
-        .roadStripCache
+      const cache = (renderer as unknown as { roadStripCache: Map<number, unknown> }).roadStripCache
       expect(cache.size).toBe(0)
+    })
+  })
+
+  describe('roadStrip 缓存消费（Task A：激活 drawImage 路径）', () => {
+    it('setTrack 带 roadStrips 后渲染走缓存路径：drawImage 切片增量显著高于 fallback', () => {
+      const { canvas, renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0]) // classic
+      const spritesB = createRoadsideSprites(trackB)
+      // fallback 基线：同赛道不带 roadStrips（逐段 drawQuad，道路层零 drawImage）
+      renderer.setTrack(trackB, spritesB)
+      renderer.render(0)
+      const afterFallback = callCount(canvas.__ctx.__calls, 'drawImage')
+      // 激活缓存：同赛道带 roadStrips（每段 ≥1 次切片 drawImage）
+      const roadStrips = buildRoadStrips(trackB)
+      renderer.setTrack(trackB, spritesB, roadStrips)
+      renderer.render(0)
+      const cachedIncr = callCount(canvas.__ctx.__calls, 'drawImage') - afterFallback
+      // 缓存帧：远山平铺 4 次 + 可视段每段 ≥1 次 drawImage 切片（默认 120 段级）
+      expect(cachedIncr).toBeGreaterThan(20)
+    })
+
+    it('缓存路径下 fill 调用显著少于 fallback（drawQuad 三连被 drawImage 替代）', () => {
+      const { canvas, renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0])
+      const spritesB = createRoadsideSprites(trackB)
+      const roadStrips = buildRoadStrips(trackB)
+      // fallback 两帧：取第二帧 fill 增量（避开首帧无差别基线）
+      renderer.setTrack(trackB, spritesB)
+      renderer.render(0)
+      const afterFirst = callCount(canvas.__ctx.__calls, 'fill')
+      renderer.render(0)
+      const fallbackIncr = callCount(canvas.__ctx.__calls, 'fill') - afterFirst
+      // 缓存帧：同赛道带 roadStrips（中心虚线已烘焙，道路层零 fill）
+      renderer.setTrack(trackB, spritesB, roadStrips)
+      renderer.render(0)
+      const cachedIncr = callCount(canvas.__ctx.__calls, 'fill') - (afterFirst + fallbackIncr)
+      // 两条路径共享景物/起终点线 fill，差值 ≈ 道路层逐段 3 fill + 中心线（每段 1 个四边形）
+      // 默认可视 119 段 → 差值应显著（>300 次 fill）
+      expect(fallbackIncr - cachedIncr).toBeGreaterThan(300)
+    })
+
+    it('雨天缓存路径仍保留 overlay drawQuad（fill 增量 > 晴天缓存帧）', () => {
+      const { canvas, renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0])
+      const roadStrips = buildRoadStrips(trackB)
+      renderer.setTrack(trackB, createRoadsideSprites(trackB), roadStrips)
+      renderer.render(0, [], 0) // 晴
+      const afterClear = callCount(canvas.__ctx.__calls, 'fill')
+      renderer.render(0, [], 90) // 雨（phase 2）
+      const rainIncr = callCount(canvas.__ctx.__calls, 'fill') - afterClear
+      // 雨天每可视段 1 次 WET_OVERLAY fill + 近处（k<30）高光条（缓存路径下未随中心线一并烘焙）
+      expect(rainIncr).toBeGreaterThan(60)
+    })
+
+    it('起终点线在缓存路径下仍绘制（wrappedIndex===0 段 16 列 × 2 行棋盘格 fill）', () => {
+      const { canvas, renderer } = createHarness()
+      const straight = createStraightTrack(10) // 10 段环：k=10 时 wrappedIndex 回到 0
+      const roadStrips = buildRoadStrips(straight)
+      renderer.setTrack(straight, [], roadStrips)
+      renderer.render(0)
+      // 缓存激活：道路层切片 drawImage（远山仅 4 次，这里必然更多）
+      expect(callCount(canvas.__ctx.__calls, 'drawImage')).toBeGreaterThan(4)
+      // 起终点线 32 格 fillQuadCoords + 天空/草地各 1 = 34
+      expect(callCount(canvas.__ctx.__calls, 'fill')).toBeGreaterThanOrEqual(34)
+    })
+
+    it('setViewport 后按新宽度重建缓存且渲染不抛错', () => {
+      const { canvas, renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0])
+      const roadStrips = buildRoadStrips(trackB)
+      renderer.setTrack(trackB, createRoadsideSprites(trackB), roadStrips)
+      expect(() => renderer.setViewport(canvas, 400, 300)).not.toThrow()
+      renderer.render(0)
+      expect(callCount(canvas.__ctx.__calls, 'drawImage')).toBeGreaterThan(0)
+      const cache = (renderer as unknown as { roadStripCache: Map<number, { width: number }> }).roadStripCache
+      // 重建后缓存条数不变、纹理宽度 = 新视口宽度
+      expect(cache.size).toBe(roadStrips.length)
+      expect(cache.values().next().value?.width).toBe(400)
+    })
+
+    it('分屏双 Renderer 各自缓存不串扰（cachedTrack 指向各自赛道）', () => {
+      const canvasA = createMockCanvas(800, 600)
+      const rendererA = new Renderer(canvasA, createStraightTrack(10), 800, 600)
+      const canvasB = createMockCanvas(800, 600)
+      const rendererB = new Renderer(canvasB, createStraightTrack(10), 800, 600)
+      const trackA = createTrackFromDef(TRACK_DEFS[0])
+      const trackB = createTrackFromDef(TRACK_DEFS[1])
+      rendererA.setTrack(trackA, createRoadsideSprites(trackA), buildRoadStrips(trackA))
+      rendererB.setTrack(trackB, createRoadsideSprites(trackB), buildRoadStrips(trackB))
+      // 各自渲染默认视图（v.track 各自等于 cachedTrack）→ 各自走自己的缓存
+      expect(() => rendererA.render(0)).not.toThrow()
+      expect(() => rendererB.render(0)).not.toThrow()
+      expect(callCount(canvasA.__ctx.__calls, 'drawImage')).toBeGreaterThan(4)
+      expect(callCount(canvasB.__ctx.__calls, 'drawImage')).toBeGreaterThan(4)
+      const cachedA = (rendererA as unknown as { cachedTrack: unknown }).cachedTrack
+      const cachedB = (rendererB as unknown as { cachedTrack: unknown }).cachedTrack
+      expect(cachedA).toBe(trackA)
+      expect(cachedB).toBe(trackB)
+      expect(cachedA).not.toBe(cachedB)
+    })
+
+    it('setTrack 不带 roadStrips 后缓存消费停用（回退逐段 drawQuad）', () => {
+      const { canvas, renderer } = createHarness()
+      const trackB = createTrackFromDef(TRACK_DEFS[0])
+      const roadStrips = buildRoadStrips(trackB)
+      renderer.setTrack(trackB, createRoadsideSprites(trackB), roadStrips)
+      renderer.render(0)
+      const afterCached = callCount(canvas.__ctx.__calls, 'fill')
+      // 切换赛道且不带 roadStrips：缓存引用保留但段映射作废 → 缓存消费停用
+      renderer.setTrack(createStraightTrack(10), [])
+      renderer.render(0)
+      const fallbackIncr = callCount(canvas.__ctx.__calls, 'fill') - afterCached
+      // fallback：10 段环可视 ~119 段 × 3 四边形 + 中心线 → 数百次 fill
+      expect(fallbackIncr).toBeGreaterThan(100)
     })
   })
 
