@@ -3,10 +3,17 @@ import { createDefaultTrack, totalCurve, type CurveControlPoint } from '../../sr
 import { createTrackFromDef, getTrackDef, TRACK_DEFS } from '../../src/engine/tracks'
 
 describe('TRACK_DEFS 关卡配置', () => {
-  it('提供 5 条赛道且 id 唯一', () => {
-    expect(TRACK_DEFS).toHaveLength(5)
+  it('提供 9 条赛道且 id 唯一', () => {
+    expect(TRACK_DEFS).toHaveLength(9)
     const ids = new Set(TRACK_DEFS.map((def) => def.id))
-    expect(ids.size).toBe(5)
+    expect(ids.size).toBe(9)
+  })
+
+  it('每条赛道难度等级 ∈ {1,2,3} 且回环总曲率绝对值不超过 0.05', () => {
+    for (const def of TRACK_DEFS) {
+      expect([1, 2, 3]).toContain(def.difficulty)
+      expect(Math.abs(totalCurve(createTrackFromDef(def)))).toBeLessThanOrEqual(0.05)
+    }
   })
 
   it('每条赛道首尾控制点曲率为 0 且圈数大于 0', () => {

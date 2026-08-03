@@ -133,10 +133,10 @@ export class GameLoop {
     // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
     if (this.splitMode) {
       const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1: 1-5 选赛道 · P2: Shift+1-5 选赛道 · 按任意键开始'
+      if (menuHint) menuHint.textContent = 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始'
     } else if (this.hotseatMode) {
       const menuHint = document.getElementById('menu-hint')
-      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-5 选赛道'
+      if (menuHint) menuHint.textContent = 'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道'
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -187,6 +187,11 @@ export class GameLoop {
       { length: TRACK_DEFS.length },
       (_, i) => $(`track-option-${i}`) as HTMLDivElement,
     )
+    // 按钮文本：序号 + 名称 + 难度星级（★×difficulty + ☆×(3-difficulty)，覆盖 index.html 初始纯文本）
+    trackOptions.forEach((option, i) => {
+      const def = TRACK_DEFS[i]
+      option.textContent = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
+    })
 
     // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用；P2 赛道名元素 B4 控制显隐）
     this.trackManager = new TrackManager({
@@ -308,11 +313,11 @@ export class GameLoop {
       this.applyPhase(togglePause(this.phase))
       return
     }
-    // 菜单选赛道：P1 用 1-5（左侧），分屏时 P2 用 Shift+1-5（右侧；原 7/8/9 键位废弃）
+    // 菜单选赛道：P1 用 1-9（左侧），分屏时 P2 用 Shift+1-9（右侧；原 7/8/9 键位废弃）
     if (this.phase === PHASE_MENU && e.code.startsWith('Digit')) {
       const digit = Number(e.code.slice(5))
       // 分屏 P2 键位优先：Shift+数字键一律在此分支处理并 return——
-      // 无效数字（超出 1-5）也在此吞掉，防止落进 P1 分支或"任意键开始"逻辑
+      // 无效数字（超出 1-9）也在此吞掉，防止落进 P1 分支或"任意键开始"逻辑
       if (this.splitMode && e.shiftKey) {
         if (digit >= 1 && digit <= TRACK_DEFS.length) this.selectTrackFor(1, digit - 1)
         return

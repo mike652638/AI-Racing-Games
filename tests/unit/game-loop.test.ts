@@ -173,7 +173,7 @@ describe('菜单预览相机', () => {
     expect(initialPreviewCameraZ(2, lapLength)).toBe(Math.floor((2 * lapLength) / count))
   })
 
-  test('三条赛道真实圈长下预览起点互不相同', () => {
+  test('各赛道真实圈长下预览起点互不相同', () => {
     // 与 TrackManager 相同的圈长派生公式：track.length * SEGMENT_LENGTH
     const lapLengths = TRACK_DEFS.map((def) => createTrackFromDef(def).length * SEGMENT_LENGTH)
     const starts = TRACK_DEFS.map((_, i) => initialPreviewCameraZ(i, lapLengths[i]))

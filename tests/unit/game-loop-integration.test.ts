@@ -278,7 +278,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
     expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
 
-    // P2 键位为 Shift+1-5（原 7/8/9 废弃）：Shift+Digit1→index0(classic)、Shift+Digit2→index1(highway)、Shift+Digit3→index2(s-curve)
+    // P2 键位为 Shift+1-9（原 7/8/9 废弃）：Shift+Digit1→index0(classic)、Shift+Digit2→index1(highway)、Shift+Digit3→index2(s-curve)
     splitEnv.fireKey('Digit2', true)
     expect(splitEnv.debugValue('selectedTrack')).toBe('highway')
     expect(splitEnv.debugValue('selectedTrack2')).toBe('highway')
@@ -290,9 +290,10 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.phase()).toBe(PHASE_MENU)
   })
 
-  it('单人模式：菜单数字键不开始比赛（Digit7 忽略、Digit3 切 s-curve），非数字键仍可开始', () => {
+  it('单人模式：菜单数字键不开始比赛（Digit0 忽略、Digit3 切 s-curve），非数字键仍可开始', () => {
     new GameLoop()
-    env.fireKey('Digit7')
+    // 9 条赛道键位 1-9 全有效，Digit0 为无效数字键（原 Digit7 在 5 条时代是无效键，E5 扩 9 条后变为有效）
+    env.fireKey('Digit0')
     expect(env.debugValue('selectedTrack')).toBe('classic')
     expect(env.debugValue('selectedTrack2')).toBe('classic')
     // 修复后：无效数字键静默忽略，不触发"任意键开始"逻辑（缺陷①回归）
@@ -316,6 +317,17 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.phase()).toBe(PHASE_MENU)
   })
 
+  it('单人模式：Digit6/Digit9 选择新赛道（desert/alpine）且不退出菜单', () => {
+    new GameLoop()
+    env.fireKey('Digit6')
+    expect(env.debugValue('selectedTrack')).toBe('desert')
+    expect(env.getElement('track-name').textContent).toBe('沙漠疾驰')
+    env.fireKey('Digit9')
+    expect(env.debugValue('selectedTrack')).toBe('alpine')
+    expect(env.getElement('track-name').textContent).toBe('山岳险道')
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
   it('分屏模式：Shift+1-5 选择 P2 赛道且不影响 P1（Shift+Digit3 → s-curve）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
@@ -329,7 +341,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
   it('分屏模式：Shift+无效数字被吞掉（菜单阶段不触发开始、不切 P2 赛道）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
-    splitEnv.fireKey('Digit6', true)
+    // 9 条赛道 Shift+1-9 全有效，Shift+Digit0 为无效组合（原 Shift+Digit6 在 5 条时代无效，E5 扩 9 条后变为有效）
+    splitEnv.fireKey('Digit0', true)
     expect(splitEnv.debugValue('selectedTrack2')).toBe('classic')
     expect(splitEnv.phase()).toBe(PHASE_MENU)
   })
@@ -407,6 +420,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
   })
 
+  // 4000 帧双人模拟在整文件并行时实际耗时 5.8-7.1s，超出默认 5000ms（E2-E5 记录过的既有脆弱性），
+  // 此处显式放宽超时上限（单跑约 2.3s），不影响断言语义
   it('分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
@@ -429,7 +444,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(banner.hidden).toBe(false)
     expect(banner.textContent).toContain('P1 获胜')
     expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
-  })
+  }, 15000)
 
   it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
