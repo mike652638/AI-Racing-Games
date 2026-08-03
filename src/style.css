@@ -253,6 +253,47 @@ canvas {
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+/* P6（P6）：暂停菜单控件（音量 slider + 重开按钮），随 #pause-screen 面板显隐 */
+#pause-controls {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+#pause-controls label {
+  font-size: var(--subtitle-fs);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#pause-volume {
+  width: 200px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#pause-restart {
+  padding: 8px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--hint-fs);
+  cursor: pointer;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+#pause-restart:hover,
+#pause-restart:active {
+  opacity: 0.85;
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
 #track-select {
   display: flex;
   gap: 12px;

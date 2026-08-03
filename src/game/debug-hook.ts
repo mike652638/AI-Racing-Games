@@ -19,6 +19,7 @@ declare global {
       readonly selectedTrack: string
       readonly selectedTrack2: string
       readonly touchActive: boolean
+      readonly volume: number
     }
   }
 }
@@ -40,6 +41,7 @@ export interface DebugHookSources {
   selectedTrack: () => string
   selectedTrack2: () => string
   touchActive: () => boolean
+  volume: () => number
 }
 
 /** 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取） */
@@ -89,6 +91,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get touchActive() {
       return sources.touchActive()
+    },
+    get volume() {
+      return sources.volume()
     },
   }
 }

@@ -53,7 +53,11 @@ export class MusicPlayer {
   /** 调度步长：30Hz，比 setInterval 更抗节流、更平滑 */
   private readonly STEP = 1 / 30
 
-  constructor(private readonly ctx: AudioContext) {}
+  constructor(
+    private readonly ctx: AudioContext,
+    /** 输出节点（默认 destination；GameLoop 注入 masterGain 实现主音量） */
+    private readonly output: AudioNode = ctx.destination,
+  ) {}
 
   get state(): 'stopped' | 'running' {
     return this.timer === null ? 'stopped' : 'running'
@@ -125,7 +129,7 @@ export class MusicPlayer {
     osc.frequency.value = freq
     gain.gain.setValueAtTime(gainValue, when)
     gain.gain.exponentialRampToValueAtTime(0.001, when + duration)
-    osc.connect(gain).connect(this.ctx.destination)
+    osc.connect(gain).connect(this.output)
     osc.start(when)
     osc.stop(when + duration)
   }
@@ -142,7 +146,7 @@ export class MusicPlayer {
     src.buffer = buffer
     gain.gain.setValueAtTime(0.04, when)
     gain.gain.exponentialRampToValueAtTime(0.001, when + 0.05)
-    src.connect(gain).connect(this.ctx.destination)
+    src.connect(gain).connect(this.output)
     src.start(when)
   }
 }

@@ -12,13 +12,19 @@ interface StubElement {
   style: Record<string, string>
   classList: { toggle: ReturnType<typeof vi.fn> }
   appendChild: ReturnType<typeof vi.fn>
-  addEventListener: ReturnType<typeof vi.fn>
+  addEventListener: (type: string, cb: (e: unknown) => void) => void
   setPointerCapture: ReturnType<typeof vi.fn>
   clientWidth: number
   clientHeight: number
+  /** P6（P6）：音量 slider 的 value（input range 0-100） */
+  value: string
+  /** P6（P6）：记录的事件监听器（fireElementEvent 触发用） */
+  _listeners?: Map<string, Array<(e: unknown) => void>>
 }
 
 function createElementStub(): StubElement {
+  // 记录式事件监听（仿 windowStub 模式）：GameLoop 构造器绑定的元素事件可被 fireElementEvent 触发
+  const listeners = new Map<string, Array<(e: unknown) => void>>()
   return {
     textContent: '',
     hidden: false,
@@ -26,10 +32,16 @@ function createElementStub(): StubElement {
     style: {},
     classList: { toggle: vi.fn() },
     appendChild: vi.fn(),
-    addEventListener: vi.fn(),
+    addEventListener: (type: string, cb: (e: unknown) => void): void => {
+      const arr = listeners.get(type) ?? []
+      arr.push(cb)
+      listeners.set(type, arr)
+    },
     setPointerCapture: vi.fn(),
     clientWidth: 0,
     clientHeight: 0,
+    value: '',
+    _listeners: listeners,
   }
 }
 
@@ -74,6 +86,8 @@ interface Environment {
   debugValue: (key: string) => unknown
   getCanvas: () => MockCanvas
   getElement: (id: string) => StubElement
+  /** P6（P6）：触发指定元素记录的事件监听器（pause-volume input / pause-restart click 等） */
+  fireElementEvent: (id: string, type: string) => void
 }
 
 /**
@@ -201,6 +215,12 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   /** 读取 window.__gameDebug 任意字段（installDebugHook 注入的运行时状态） */
   const debugValue = (key: string): unknown =>
     (windowStub as unknown as { __gameDebug?: Record<string, unknown> }).__gameDebug?.[key]
+  /** 触发元素记录的事件监听器（GameLoop 构造器绑定，如 pause-volume 的 input、pause-restart 的 click） */
+  const fireElementEvent = (id: string, type: string): void => {
+    const el = elements.get(id)
+    const cbs = el?._listeners?.get(type) ?? []
+    for (const cb of cbs) cb({})
+  }
 
   return {
     fireKey,
@@ -209,6 +229,7 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     debugValue,
     getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
+    fireElementEvent,
   }
 }
 
@@ -626,5 +647,40 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(lines[0]).toContain('P1 0:42.500')
     // 未注入 P2 存档 → P2 部分不出现（t2 null 时无 '· P2' 后缀）
     expect(lines[0]).not.toContain('P2')
+  })
+
+  it('P6（P6）：暂停菜单 PAUSED 阶段按 R 返回菜单且 startScreen 可见', () => {
+    new GameLoop()
+    // 菜单 → 比赛（任意键开始）
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_RACING)
+    // Escape 暂停
+    env.fireKey('Escape')
+    expect(env.phase()).toBe(PHASE_PAUSED)
+    // 暂停菜单按 R → 回菜单（applyPhase MENU 块自动 resetRace + 榜单刷新）
+    env.fireKey('KeyR')
+    expect(env.phase()).toBe(PHASE_MENU)
+    expect(env.getElement('start-screen').hidden).toBe(false)
+  })
+
+  it('P6（P6）：重开按钮 click 事件返回菜单', () => {
+    new GameLoop()
+    env.fireKey('Enter')
+    env.fireKey('Escape')
+    expect(env.phase()).toBe(PHASE_PAUSED)
+    env.fireElementEvent('pause-restart', 'click')
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
+  it('P6（P6）：音量 slider input 事件更新主音量（debug hook volume getter）', () => {
+    const env2 = stubEnvironment('')
+    new GameLoop()
+    // 初始音量 0.6（无存档回退默认）
+    expect(env2.debugValue('volume')).toBe(0.6)
+    // slider 拉到 80/100 → input 事件 → setVolume(0.8)
+    const slider = env2.getElement('pause-volume')
+    slider.value = '80'
+    env2.fireElementEvent('pause-volume', 'input')
+    expect(env2.debugValue('volume')).toBe(0.8)
   })
 })

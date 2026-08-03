@@ -18,7 +18,7 @@ import { updateCollisions } from './collision'
 import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
-import { PHASE_FINISHED, PHASE_MENU, PHASE_RACING, type Phase } from './phase'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
 import type { PlayerState } from './player-state'
 
@@ -40,6 +40,9 @@ export function advancePreviewCameraZ(current: number, dt: number, lapLength: nu
   const next = current + PREVIEW_CAMERA_SPEED * dt
   return next > lapLength ? next - lapLength : next
 }
+
+/** 主音量持久化 key（localStorage，存 0-1 字符串） */
+const VOLUME_KEY = 'outrun-pseudo3d-volume'
 
 /**
  * 切换赛道时的预览起点：按赛道序号等分圈长（等分数 = TRACK_DEFS.length）。
@@ -118,6 +121,10 @@ export class GameLoop {
   private phase: Phase = PHASE_MENU
   private engineSound: EngineSound | null = null
   private music: MusicPlayer | null = null
+  /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
+  private masterGain: GainNode | null = null
+  /** 主音量（0-1，localStorage 持久化 key outrun-pseudo3d-volume；初值 0.6） */
+  private volume = 0.6
   private bestTime: number | null
   /** P2 最佳圈速（分屏独立存档，-p2 key；单屏不加载） */
   private bestTime2: number | null = null
@@ -130,6 +137,8 @@ export class GameLoop {
     const params = new URLSearchParams(window.location.search)
     this.splitMode = params.has('split')
     this.hotseatMode = params.has('hotseat') && !this.splitMode
+    // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）
+    this.volume = this.loadVolume()
 
     // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
     if (this.splitMode) {
@@ -182,6 +191,22 @@ export class GameLoop {
       finishHint: $('finish-hint') as HTMLDivElement,
       finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
       finishWins: $('finish-wins') as HTMLDivElement,
+      pauseVolume: $('pause-volume') as HTMLInputElement,
+      pauseRestart: $('pause-restart') as HTMLButtonElement,
+    }
+    // P6（P6）：暂停菜单控件事件——音量 slider input → setVolume；重开按钮 click → 回菜单。
+    // 元素恒存在（hidden 仅面板控制），input/click 监听在构造器绑定一次即可。
+    const pauseVolume = this.screenElements.pauseVolume
+    const pauseRestart = this.screenElements.pauseRestart
+    if (pauseVolume) {
+      pauseVolume.addEventListener('input', () => {
+        this.setVolume(Number(pauseVolume.value) / 100)
+      })
+    }
+    if (pauseRestart) {
+      pauseRestart.addEventListener('click', () => {
+        this.applyPhase(PHASE_MENU)
+      })
     }
     const trackName = $('track-name') as HTMLSpanElement
     // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
@@ -236,6 +261,7 @@ export class GameLoop {
       selectedTrack: () => this.trackManager.getTrackId(0),
       selectedTrack2: () => this.trackManager.getTrackId(1),
       touchActive: () => this.joystick.isActive(),
+      volume: () => this.volume,
     })
 
     window.addEventListener('keydown', this.onKeyDown)
@@ -246,9 +272,43 @@ export class GameLoop {
     requestAnimationFrame(this.frame)
   }
 
+  /** 读取持久化主音量（0-1；localStorage 不可用/值无效回退 0.6，防御模式仿 save.ts getStorage） */
+  private loadVolume(): number {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = window.localStorage.getItem(VOLUME_KEY)
+        if (raw !== null) {
+          const v = Number(raw)
+          if (Number.isFinite(v)) {
+            return Math.max(0, Math.min(1, v))
+          }
+        }
+      }
+    }
+    catch {
+      // localStorage 被禁用（隐私模式等）
+    }
+    return 0.6
+  }
+
+  /** 设置主音量：clamp 0-1、更新字段、masterGain 存在时立即生效、持久化 localStorage */
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v))
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.volume
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        window.localStorage.setItem(VOLUME_KEY, String(this.volume))
+      }
+    }
+    catch {
+      // localStorage 不可用时忽略持久化
+    }
+  }
+
   /** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：取前 5 条渲染，无记录显示占位文本 */
-  private refreshDriftTop(): void {
-    const el = document.getElementById('drift-top')
+  private refreshDriftTop(): void {    const el = document.getElementById('drift-top')
     if (!el) {
       return
     }
@@ -379,6 +439,11 @@ export class GameLoop {
       this.applyPhase(togglePause(this.phase))
       return
     }
+    // P6（P6）：暂停菜单按 R 重新开始（回菜单；applyPhase MENU 块自动 resetRace + 榜单刷新）
+    if (this.phase === PHASE_PAUSED && e.code === 'KeyR') {
+      this.applyPhase(PHASE_MENU)
+      return
+    }
     // 菜单选赛道：P1 用 1-9（左侧），分屏时 P2 用 Shift+1-9（右侧；原 7/8/9 键位废弃）
     if (this.phase === PHASE_MENU && e.code.startsWith('Digit')) {
       const digit = Number(e.code.slice(5))
@@ -431,9 +496,14 @@ export class GameLoop {
     }
     if (!this.engineSound) {
       const ctx = new AudioContext()
-      this.engineSound = new EngineSound(ctx)
+      // P6（P6）：主音量节点——EngineSound/MusicPlayer 均注入 masterGain，slider 调节统一生效
+      const masterGain = ctx.createGain()
+      masterGain.gain.value = this.volume
+      masterGain.connect(ctx.destination)
+      this.masterGain = masterGain
+      this.engineSound = new EngineSound(ctx, masterGain)
       this.engineSound.start()
-      this.music = new MusicPlayer(ctx)
+      this.music = new MusicPlayer(ctx, masterGain)
       this.music.start()
     }
     this.applyPhase(

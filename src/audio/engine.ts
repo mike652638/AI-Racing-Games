@@ -22,7 +22,7 @@ export class EngineSound {
   private filter: BiquadFilterNode
   private oscs: OscillatorNode[]
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
     this.ctx = ctx
     this.gain = ctx.createGain()
     this.gain.gain.value = 0
@@ -38,7 +38,7 @@ export class EngineSound {
       return osc
     })
     this.filter.connect(this.gain)
-    this.gain.connect(ctx.destination)
+    this.gain.connect(output)
   }
 
   /** 当前 AudioContext 状态（调试/验证用） */

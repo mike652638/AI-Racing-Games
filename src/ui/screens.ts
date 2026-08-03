@@ -41,6 +41,10 @@ export interface ScreenElements {
   finishDriftWinner?: HTMLDivElement
   /** 胜场统计行（#finish-wins，热座/分屏分胜负时填充） */
   finishWins?: HTMLDivElement
+  /** 暂停菜单音量 slider（#pause-volume，input range 0-100；GameLoop 构造器绑定 input 事件） */
+  pauseVolume?: HTMLInputElement
+  /** 暂停菜单重开按钮（#pause-restart，click 回菜单） */
+  pauseRestart?: HTMLButtonElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
