@@ -52,6 +52,7 @@ function createAudioNode(): {
   buffer: unknown
   frequency: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void }
   detune: { value: number }
+  Q: { value: number }
   gain: {
     value: number
     setTargetAtTime: () => void
@@ -67,6 +68,7 @@ function createAudioNode(): {
     buffer: null,
     frequency: { value: 0, setTargetAtTime: (): void => undefined, setValueAtTime: (): void => undefined },
     detune: { value: 0 },
+    Q: { value: 1 },
     gain: {
       value: 0,
       setTargetAtTime: (): void => undefined,
@@ -182,6 +184,19 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     createGain = (): unknown => createAudioNode()
     createBiquadFilter = (): unknown => createAudioNode()
     createOscillator = (): unknown => createAudioNode()
+    createBuffer = (channels: number, length: number, rate: number): unknown => ({
+      numberOfChannels: channels,
+      length,
+      sampleRate: rate,
+      getChannelData: (): Float32Array => new Float32Array(length),
+    })
+    createBufferSource = (): unknown => ({
+      buffer: null,
+      loop: false,
+      connect: (): void => undefined,
+      start: (): void => undefined,
+      stop: (): void => undefined,
+    })
     resume = (): void => undefined
   }
 
@@ -718,5 +733,19 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     slider.value = '80'
     env2.fireElementEvent('pause-volume', 'input')
     expect(env2.debugValue('volume')).toBe(0.8)
+  })
+
+  it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: 15000 }, () => {
+    new GameLoop()
+    // Enter 开始比赛：音频惰性创建块实例化 RainSound/CollisionSound（注入 masterGain）
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_RACING)
+    // raceTime 每帧 +dt（约 0.05s，首帧略小故断言点远离 45s 边界）
+    env.driveFrames(1000) // raceTime ≈ 50s → phase 1（阴）
+    expect(env.debugValue('rainPlaying')).toBe(false)
+    env.driveFrames(1000) // raceTime ≈ 100s → phase 2（雨）
+    expect(env.debugValue('rainPlaying')).toBe(true)
+    env.driveFrames(1000) // raceTime ≈ 150s → phase 0（晴）
+    expect(env.debugValue('rainPlaying')).toBe(false)
   })
 })

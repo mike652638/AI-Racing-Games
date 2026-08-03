@@ -4,8 +4,9 @@ import { TRACK_DEFS, getTrackDef } from '../engine/tracks'
 import { updateTraffic } from '../engine/traffic'
 import { createCarConfig, updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
-import { EngineSound } from '../audio/engine'
+import { CollisionSound, EngineSound, RainSound } from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
+import { WEATHER_CYCLE_SECONDS } from '../engine/lighting'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
@@ -122,6 +123,12 @@ export class GameLoop {
   private phase: Phase = PHASE_MENU
   private engineSound: EngineSound | null = null
   private music: MusicPlayer | null = null
+  /** 雨声环境音（音频惰性创建时实例化，雨段 start / 非雨段 stop，类内幂等） */
+  private rainSound: RainSound | null = null
+  /** 碰撞冲击音（音频惰性创建时实例化，collisionCount 增长时 play） */
+  private collisionSound: CollisionSound | null = null
+  /** 上次碰撞计数快照（帧循环对比，增长即触发碰撞音） */
+  private lastCollisionCount = 0
   /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
   private masterGain: GainNode | null = null
   /** 主音量（0-1，localStorage 持久化 key outrun-pseudo3d-volume；初值 0.6） */
@@ -278,6 +285,7 @@ export class GameLoop {
       selectedTrack2: () => this.trackManager.getTrackId(1),
       touchActive: () => this.joystick.isActive(),
       volume: () => this.volume,
+      rainPlaying: () => this.rainSound?.isPlaying() ?? false,
     })
 
     window.addEventListener('keydown', this.onKeyDown)
@@ -391,6 +399,7 @@ export class GameLoop {
     refreshTraffic(this.race.tracks[0])
     refreshTraffic(this.race.tracks[1])
     this.last = performance.now()
+    this.lastCollisionCount = 0 // resetRaceState 已归零 collisionCount，快照同步
     this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
     this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
   }
@@ -563,6 +572,9 @@ export class GameLoop {
       this.engineSound.start()
       this.music = new MusicPlayer(ctx, masterGain)
       this.music.start()
+      // F4（F4）：雨声环境音与碰撞冲击音同样注入 masterGain（随主音量调节）
+      this.rainSound = new RainSound(ctx, masterGain)
+      this.collisionSound = new CollisionSound(ctx, masterGain)
     }
     this.applyPhase(
       nextPhase(
@@ -601,6 +613,10 @@ export class GameLoop {
     this.last = now
 
     if (this.phase === PHASE_RACING) {
+      // F4（F4）：雨段环境音——按 P1 raceTime 判定三态（0 晴 / 1 阴 / 2 雨，各 45s 循环）
+      const raining = Math.floor(this.race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
+      if (raining) this.rainSound?.start()
+      else this.rainSound?.stop()
       // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
       // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
       // P4（P4）：传玩家位置启用车流避让 AI（逼近同车道车流时让道）
@@ -683,6 +699,11 @@ export class GameLoop {
         dt,
         this.splitMode || (this.hotseatMode && this.hotseatPlayer === 2),
       )
+      // F4（F4）：碰撞计数增长 → 触发碰撞冲击音（CollisionSound 内部 80ms 防刷屏）
+      if (this.race.collisionCount > this.lastCollisionCount) {
+        this.collisionSound?.play()
+        this.lastCollisionCount = this.race.collisionCount
+      }
 
       // 完赛判定：P1/P2 各自按本世界圈长/总圈数计算（分屏与热座 P2 回合独立判定）
       const finishedP1 =

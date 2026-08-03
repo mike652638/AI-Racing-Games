@@ -63,3 +63,107 @@ export class EngineSound {
     this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05)
   }
 }
+
+/** 雨声环境音：2 秒白噪声循环 buffer → bandpass 800Hz → gain 0.05 → output（WebAudio 合成） */
+export class RainSound {
+  private ctx: AudioContext
+  private filter: BiquadFilterNode
+  private gain: GainNode
+  private buffer: AudioBuffer
+  private source: AudioBufferSourceNode | null = null
+  private started = false
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.filter = ctx.createBiquadFilter()
+    this.filter.type = 'bandpass'
+    this.filter.frequency.value = 800
+    this.filter.Q.value = 1
+    this.gain = ctx.createGain()
+    this.gain.gain.value = 0
+    this.filter.connect(this.gain)
+    this.gain.connect(output)
+    // 2 秒白噪声 buffer（循环播放，模拟雨声底噪）
+    const length = Math.floor(ctx.sampleRate * 2)
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+    this.buffer = buffer
+  }
+
+  /** 是否正在播放（debug hook / 冒烟断言用） */
+  isPlaying(): boolean {
+    return this.started
+  }
+
+  /** 启动雨声（幂等）：resume ctx + bufferSource 惰性创建 + gain 渐入 */
+  start(): void {
+    if (this.started) return
+    this.started = true
+    this.ctx.resume()
+    const source = this.ctx.createBufferSource()
+    source.buffer = this.buffer
+    source.loop = true
+    source.connect(this.filter)
+    source.start()
+    this.source = source
+    this.gain.gain.setTargetAtTime(0.05, this.ctx.currentTime, 0.5)
+  }
+
+  /** 停止雨声（幂等）：gain 渐出并停止 source */
+  stop(): void {
+    if (!this.started) return
+    this.started = false
+    this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3)
+    this.source?.stop()
+    this.source = null
+  }
+}
+
+/** 碰撞冲击音：0.15s 白噪声 burst → lowpass 300Hz → gain 0.25 → output（80ms 防刷屏） */
+export class CollisionSound {
+  private ctx: AudioContext
+  private filter: BiquadFilterNode
+  private gain: GainNode
+  private buffer: AudioBuffer
+  private lastPlayTime = -Infinity
+  private playCount = 0
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.filter = ctx.createBiquadFilter()
+    this.filter.type = 'lowpass'
+    this.filter.frequency.value = 300
+    this.gain = ctx.createGain()
+    this.gain.gain.value = 0.25
+    this.filter.connect(this.gain)
+    this.gain.connect(output)
+    // 0.15s 白噪声 burst buffer
+    const length = Math.floor(ctx.sampleRate * 0.15)
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+    this.buffer = buffer
+  }
+
+  /** 已触发播放次数（测试/冒烟断言用） */
+  get count(): number {
+    return this.playCount
+  }
+
+  /** 触发碰撞音（每次重建 BufferSource；80ms 内重复触发跳过，防连续碰撞刷屏） */
+  play(): void {
+    const now = this.ctx.currentTime
+    if (now - this.lastPlayTime < 0.08) return
+    this.lastPlayTime = now
+    this.playCount++
+    const source = this.ctx.createBufferSource()
+    source.buffer = this.buffer
+    source.connect(this.filter)
+    source.start(0)
+  }
+}
