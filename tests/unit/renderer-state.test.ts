@@ -200,6 +200,16 @@ describe('Renderer 状态切换', () => {
     expect(callCount(canvas.__ctx.__calls, 'fill')).toBeGreaterThan(0)
   })
 
+  it('雨天（timeSec=90，phase 2 雨）渲染产生雨滴 stroke 路径调用', () => {
+    const { canvas, renderer } = createHarness()
+    renderer.render(0, [], 0)
+    const clearStroke = callCount(canvas.__ctx.__calls, 'stroke')
+    renderer.render(0, [], 90)
+    const rainStroke = callCount(canvas.__ctx.__calls, 'stroke')
+    // 晴天渲染无 stroke；雨天绘制 80 条雨丝后 stroke() 至少一次
+    expect(rainStroke).toBeGreaterThan(clearStroke)
+  })
+
   it('带 view 的 renderRegion 与 setTrack 后默认路径的绘制调用序列一致', () => {
     // 默认路径：renderer 持有 trackB（setTrack 切换），render(0) 用 this 字段渲染
     const canvasA = createMockCanvas(800, 600)

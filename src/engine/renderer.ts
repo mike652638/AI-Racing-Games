@@ -12,6 +12,7 @@ import {
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
 import { updateLighting, WEATHER_CYCLE_SECONDS } from './lighting'
+import { mulberry32 } from './scenery'
 import {
   DRAW_DISTANCE,
   projectSegmentQuad,
@@ -39,6 +40,16 @@ interface MountainLayer {
   peak: number
   /** 离屏预渲染的山形位图 */
   offscreen: HTMLCanvasElement
+}
+
+/** 雨滴数量（确定性生成，渲染时按 timeSec 下落） */
+const RAIN_DROPS = 80
+
+/** 雨滴数据：x 为宽度归一化坐标（0-1，绘制时乘宽度自适应视口），y0 为下落相位，len 为雨丝长度 */
+interface RainDrop {
+  x: number
+  y0: number
+  len: number
 }
 
 function renderMountainOffscreen(layer: MountainLayer, width: number): HTMLCanvasElement {
@@ -98,6 +109,8 @@ export class Renderer {
   private curvePrefixSum: Float64Array
   /** 路边景物段索引（键 = floor(z / SEGMENT_LENGTH)），drawSprites 用 O(候选段数) 查询替代线性扫描 */
   private spriteIndex = new Map<number, Sprite[]>()
+  /** 雨滴数据（构造时确定性生成，x 归一化 0-1） */
+  private rainDrops: RainDrop[]
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -113,6 +126,7 @@ export class Renderer {
     this.mountains = this.buildMountains(width)
     this.curvePrefixSum = buildCurvePrefixSum(track)
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    this.rainDrops = this.buildRainDrops()
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
@@ -132,6 +146,16 @@ export class Renderer {
       ...def,
       offscreen: renderMountainOffscreen(def as MountainLayer, width),
     }))
+  }
+
+  /** 确定性生成雨滴数据（种子 2026；x 归一化 0-1，setViewport 改变画布尺寸时无需重算） */
+  private buildRainDrops(): RainDrop[] {
+    const rnd = mulberry32(2026)
+    const drops: RainDrop[] = []
+    for (let i = 0; i < RAIN_DROPS; i++) {
+      drops.push({ x: rnd(), y0: rnd(), len: 8 + rnd() * 6 })
+    }
+    return drops
   }
 
   private applyCanvasSize(
@@ -226,9 +250,11 @@ export class Renderer {
         traffic: this.traffic,
       }
     this.camera.z = cameraZ
-    // 天气循环：晴/阴各 45 秒交替（timeSec 为渲染用累计时间，由 game-loop 经 render/renderRegion 传入）
-    const overcast = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 2 === 1
-    const colors = updateLighting(timeSec, overcast)
+    // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
+    const phase = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3
+    const overcast = phase === 1
+    const raining = phase === 2
+    const colors = updateLighting(timeSec, overcast, raining)
 
     ctx.fillStyle = colors.skyTop
     ctx.fillRect(0, 0, opts.width, opts.horizon)
@@ -282,6 +308,28 @@ export class Renderer {
     this.drawSprites(cameraZ, opts, v)
     this.drawTraffic(cameraZ, opts, v)
     this.drawSmoke(smoke, cameraZ, opts)
+    if (raining) {
+      this.drawRain(timeSec, opts)
+    }
+  }
+
+  /** 雨滴 overlay：全屏斜线雨丝（最上层特效，忽略投影；y 随 timeSec 以 600px/s 下落并环形回绕） */
+  private drawRain(timeSec: number, opts: ProjectionOptions): void {
+    const { ctx } = this
+    const { width, height } = opts
+    ctx.strokeStyle = 'rgba(180, 200, 220, 0.35)'
+    ctx.lineWidth = 1
+    try {
+      ctx.beginPath()
+      for (const drop of this.rainDrops) {
+        const y = (drop.y0 * (height + 20) + timeSec * 600) % (height + 20) - 10
+        const x = drop.x * width
+        ctx.moveTo(x, y)
+        ctx.lineTo(x - 3, y + drop.len)
+      }
+    } finally {
+      ctx.stroke()
+    }
   }
 
   /** 绘制车流（车身 + 车窗，远→近）；数据取自视图 v */

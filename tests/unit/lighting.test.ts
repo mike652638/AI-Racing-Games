@@ -79,4 +79,17 @@ describe('updateLighting', () => {
     expect(hue).toBeGreaterThanOrEqual(180)
     expect(hue).toBeLessThanOrEqual(260)
   })
+
+  it('raining reuses overcast palette (90s rain skyTop equals overcast)', () => {
+    const rain = updateLighting(45 * 2, false, true)
+    const over = updateLighting(45 * 2, true, false)
+    expect(rain.skyTop).toMatch(/^hsl/)
+    expect(rain.skyTop).toBe(over.skyTop)
+  })
+
+  it('raining skyTop differs from clear (rain darker/grayer)', () => {
+    const rain = updateLighting(45 * 2, false, true)
+    const clear = updateLighting(45 * 2, false, false)
+    expect(rain.skyTop).not.toBe(clear.skyTop)
+  })
 })
