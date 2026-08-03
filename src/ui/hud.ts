@@ -22,6 +22,8 @@ export interface HudElements {
   hudTime2: HTMLDivElement
   /** P2 最佳时间（分屏时显示，P2 独立存档） */
   hudBest2?: HTMLDivElement
+  /** P2 最佳时间（单屏时显示，热座 P2 存档；分屏时隐藏） */
+  hudBestP2?: HTMLDivElement
   driftIndicator: HTMLDivElement
   driftScoreValue: HTMLSpanElement
 }
@@ -59,6 +61,7 @@ export function updateHud(
     elements.hudLap2.hidden = true
     elements.hudTime2.hidden = true
     if (elements.hudBest2) elements.hudBest2.hidden = true
+    if (elements.hudBestP2) elements.hudBestP2.hidden = true
     elements.driftIndicator.hidden = true
     return
   }
@@ -100,5 +103,13 @@ export function updateHud(
   elements.driftIndicator.hidden = !race.player1.driftState.active
   if (race.player1.driftState.active) {
     elements.driftScoreValue.textContent = String(Math.round(race.player1.driftState.score))
+  }
+
+  // 单屏 P2 BEST：热座数据复用 bestTime2，但分屏时隐藏（单屏专用元素）
+  if (elements.hudBestP2) {
+    elements.hudBestP2.hidden = splitMode || bestTime2 === null
+    if (bestTime2 !== null && !elements.hudBestP2.hidden) {
+      elements.hudBestP2.textContent = `P2 BEST ${formatTime(bestTime2)}`
+    }
   }
 }

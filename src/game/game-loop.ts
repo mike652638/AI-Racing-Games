@@ -148,6 +148,7 @@ export class GameLoop {
       hudSpeedUnit2: $('hud-speed-unit-2') as HTMLDivElement,
       hudLap2: $('hud-lap-2') as HTMLDivElement,
       hudTime2: $('hud-time-2') as HTMLDivElement,
+      hudBestP2: $('hud-best-p2') as HTMLDivElement,
       driftIndicator: $('drift-indicator') as HTMLDivElement,
       driftScoreValue: $('drift-score-value') as HTMLSpanElement,
     }

@@ -139,3 +139,39 @@ describe('hud P2 BEST', () => {
     expect(elements.hudBest2!.hidden).toBe(true)
   })
 })
+
+describe('单屏 P2 BEST', () => {
+  /** 在既有 mock 基础上补 hudBestP2 字段（既有用例 mock 无此字段，用于验证可选访问兼容） */
+  const withP2Best = (): HudElements => {
+    const element = () => ({ hidden: false, textContent: '' })
+    return {
+      ...createMockHudElements(),
+      hudBestP2: element() as HTMLDivElement,
+    } as unknown as HudElements
+  }
+
+  it('单屏且 bestTime2 有值时显示 P2 BEST（formatTime 格式）', () => {
+    const elements = withP2Best()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', 12.34)
+    expect(elements.hudBestP2!.hidden).toBe(false)
+    expect(elements.hudBestP2!.textContent).toBe('P2 BEST 0:12.340')
+  })
+
+  it('单屏且 bestTime2 为 null 时隐藏 hudBestP2', () => {
+    const elements = withP2Best()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, false, TRACKS, 'racing', null)
+    expect(elements.hudBestP2!.hidden).toBe(true)
+  })
+
+  it('分屏模式时 hudBestP2 保持隐藏（单屏专用元素）', () => {
+    const elements = withP2Best()
+    const race = createRaceState()
+    const carConfig = createCarConfig()
+    updateHud(elements, race, carConfig, null, true, TRACKS, 'racing', 12.34)
+    expect(elements.hudBestP2!.hidden).toBe(true)
+  })
+})
