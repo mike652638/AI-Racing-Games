@@ -203,9 +203,29 @@ canvas {
   border-color: var(--accent);
 }
 
+/* P2 高亮（绿色系，与 P1 黄色 --accent 区分）：分屏时 P2 用 7/8/9 选择自己的赛道 */
+.track-option.selected-p2 {
+  opacity: 1;
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.track-option.selected-p2:hover,
+.track-option.selected-p2:active {
+  opacity: 1;
+  border-color: #4ade80;
+}
+
 #track-name {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* P2 赛道名（与 #track-name 相邻显示；默认 hidden，分屏时由 GameLoop 控制显隐） */
+#p2-track-name {
+  color: #4ade80;
+  font-weight: 700;
+  margin: 2px 0 0;
 }
 
 #touch-hint {

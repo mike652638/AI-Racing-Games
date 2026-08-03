@@ -142,28 +142,28 @@ export class GameLoop {
       $('track-option-2') as HTMLDivElement,
     ]
 
-    // 赛道管理（依赖 resetRace 回调与惰性 renderer，均在构造完成后才使用）
+    // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用；P2 赛道名元素 B4 控制显隐）
     this.trackManager = new TrackManager({
-      renderer: () => this.renderer,
       resetRace: () => this.resetRace(),
       trackName,
+      p2TrackName: $('p2-track-name') as HTMLSpanElement,
       trackOptions,
     })
     this.carConfig = createCarConfig()
     this.race = createRaceState()
     this.renderer = new Renderer(
       this.canvas,
-      this.trackManager.track,
+      this.trackManager.getContext(0).segments,
       window.innerWidth,
       window.innerHeight,
       undefined,
-      createRoadsideSprites(this.trackManager.track),
+      createRoadsideSprites(this.trackManager.getContext(0).segments),
       this.race.tracks[0].traffic,
     )
     this.input = createInputManager(window)
     this.joystick = new JoystickUI()
     this.joystick.attach(this.canvas)
-    this.bestTime = loadBestTime(this.trackManager.trackDef.id)
+    this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
 
     installDebugHook({
       audioState: () => this.engineSound?.state ?? null,
@@ -174,7 +174,8 @@ export class GameLoop {
       bestTime: () => this.bestTime,
       trafficCount: () => this.race.tracks[0].traffic.length,
       collisions: () => this.race.collisionCount,
-      selectedTrack: () => this.trackManager.trackDef.id,
+      selectedTrack: () => this.trackManager.getTrackId(0),
+      selectedTrack2: () => this.trackManager.getTrackId(1),
       touchActive: () => this.joystick.isActive(),
     })
 
@@ -191,7 +192,7 @@ export class GameLoop {
     refreshTraffic(this.race.tracks[1])
     this.renderer.setTraffic(this.race.tracks[0].traffic)
     this.last = performance.now()
-    this.bestTime = loadBestTime(this.trackManager.trackDef.id)
+    this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
   }
 
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
@@ -202,9 +203,9 @@ export class GameLoop {
       newPhase,
       this.race,
       this.carConfig,
-      this.trackManager.trackDef.id,
+      this.trackManager.getTrackId(0),
     )
-    if (newPhase === PHASE_FINISHED) this.bestTime = loadBestTime(this.trackManager.trackDef.id)
+    if (newPhase === PHASE_FINISHED) this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
     if (newPhase === PHASE_MENU) this.resetRace()
   }
 
@@ -216,9 +217,9 @@ export class GameLoop {
     if (this.phase === PHASE_MENU && e.code.startsWith('Digit')) {
       const index = Number(e.code.slice(5)) - 1
       if (index >= 0 && index < TRACK_DEFS.length) {
-        this.trackManager.applyTrack(index)
+        this.trackManager.selectTrack(0, index)
         // 切换赛道后从不同起点开始预览，避免三条赛道起点直道视觉雷同
-        this.previewCameraZ = initialPreviewCameraZ(index, this.trackManager.lapLength)
+        this.previewCameraZ = initialPreviewCameraZ(index, this.trackManager.getLapLength(0))
         return
       }
     }
@@ -232,8 +233,8 @@ export class GameLoop {
     this.applyPhase(
       nextPhase(
         this.phase,
-        lapFromZ(this.race.player1.cameraZ, this.trackManager.lapLength),
-        this.trackManager.totalLaps,
+        lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)),
+        this.trackManager.getTotalLaps(0),
       ),
     )
   }
@@ -269,29 +270,29 @@ export class GameLoop {
         input1,
         this.race.player1,
         this.carConfig,
-        this.trackManager.lapLength,
+        this.trackManager.getLapLength(0),
         this.race.lapTimes,
         lapRef,
       )
       this.race.lastLap = lapRef.value
 
       // P2 独立更新（分屏时输入有效，否则零输入；不参与圈速记录，保持原行为）
-      updatePlayerFrame(dt, input2, this.race.player2, this.carConfig, this.trackManager.lapLength)
+      updatePlayerFrame(dt, input2, this.race.player2, this.carConfig, this.trackManager.getLapLength(0))
 
       updateCollisions(this.race, dt, this.splitMode)
 
       const finishedP1 =
-        lapFromZ(this.race.player1.cameraZ, this.trackManager.lapLength) > this.trackManager.totalLaps
+        lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
       const finishedP2 =
         this.splitMode &&
-        lapFromZ(this.race.player2.cameraZ, this.trackManager.lapLength) > this.trackManager.totalLaps
+        lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
       if (finishedP1 || finishedP2) this.applyPhase(PHASE_FINISHED)
     }
 
     // 渲染：菜单阶段渲染缓慢滚动的赛道预览（分屏左右两区域都渲染，修复 P2 黑屏）
     const w = window.innerWidth
     if (this.phase === PHASE_MENU) {
-      this.previewCameraZ = advancePreviewCameraZ(this.previewCameraZ, dt, this.trackManager.lapLength)
+      this.previewCameraZ = advancePreviewCameraZ(this.previewCameraZ, dt, this.trackManager.getLapLength(0))
       // 相机横向小幅摆动，让预览即使在直道也有动感
       this.renderer.setCameraX(Math.sin(this.previewCameraZ * 0.001) * 0.3)
       if (this.splitMode) {
@@ -339,8 +340,8 @@ export class GameLoop {
       this.carConfig,
       this.bestTime,
       this.splitMode,
-      this.trackManager.lapLength,
-      this.trackManager.totalLaps,
+      this.trackManager.getLapLength(0),
+      this.trackManager.getTotalLaps(0),
       this.phase,
     )
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)

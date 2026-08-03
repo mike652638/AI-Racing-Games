@@ -1,60 +1,94 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TrackManager } from '../../src/game/track-manager'
 import { TRACK_DEFS } from '../../src/engine/tracks'
-import { SEGMENT_LENGTH } from '../../src/engine/track'
-import type { Renderer } from '../../src/engine/renderer'
 
-/** 构造 TrackManager 依赖 mock：渲染器 setTrack、重置回调与选单 DOM */
-function createHarness() {
-  const setTrack = vi.fn()
-  const renderer = { setTrack } as unknown as Renderer
+/** 构造 TrackManager 依赖 mock：重置回调与选单 DOM（双玩家双类高亮、双赛道名） */
+function createHarness(includeP2 = true) {
   const resetRace = vi.fn()
   const trackName = { textContent: '' }
-  const trackOptions = Array.from({ length: 3 }, () => ({
+  const p2TrackName = { textContent: '' }
+  const trackOptions = Array.from({ length: TRACK_DEFS.length }, () => ({
     classList: { toggle: vi.fn() },
   }))
   const manager = new TrackManager({
-    renderer: () => renderer,
     resetRace,
     trackName: trackName as unknown as HTMLSpanElement,
+    ...(includeP2 ? { p2TrackName: p2TrackName as unknown as HTMLSpanElement } : {}),
     trackOptions: trackOptions as unknown as HTMLDivElement[],
   })
-  return { manager, setTrack, resetRace, trackName, trackOptions }
+  return { manager, resetRace, trackName, p2TrackName, trackOptions }
 }
 
-describe('TrackManager 初始状态', () => {
-  it('默认选中第一个赛道并派生圈长/圈数', () => {
+describe('TrackManager 双玩家赛道上下文', () => {
+  it('默认 P1/P2 均选中经典赛道且圈长一致', () => {
     const { manager } = createHarness()
-    expect(manager.selectedIndex).toBe(0)
-    expect(manager.trackDef).toBe(TRACK_DEFS[0])
-    expect(manager.track.length).toBeGreaterThan(0)
-    expect(manager.totalLaps).toBe(TRACK_DEFS[0].laps)
-    expect(manager.lapLength).toBe(manager.track.length * SEGMENT_LENGTH)
+    expect(manager.getTrackId(0)).toBe('classic')
+    expect(manager.getTrackId(1)).toBe('classic')
+    expect(manager.getLapLength(0)).toBe(manager.getLapLength(1))
+    expect(manager.getTotalLaps(0)).toBe(TRACK_DEFS[0].laps)
+    expect(manager.getContext(0).def).toBe(TRACK_DEFS[0])
+    expect(manager.getContext(1).def).toBe(TRACK_DEFS[0])
+  })
+
+  it('selectTrack(0, 2) 只切换 P1 为 S 弯，P2 不受影响', () => {
+    const { manager } = createHarness()
+    manager.selectTrack(0, 2)
+    expect(manager.getTrackId(0)).toBe('s-curve')
+    expect(manager.getContext(0).totalLaps).toBe(2)
+    expect(manager.getLapLength(0)).toBeLessThan(manager.getLapLength(1))
+    expect(manager.getTrackId(1)).toBe('classic')
+  })
+
+  it('selectTrack(1, 1) 只切换 P2 为高速公路，P1 不受影响', () => {
+    const { manager } = createHarness()
+    manager.selectTrack(1, 1)
+    expect(manager.getTrackId(1)).toBe('highway')
+    expect(manager.getTrackId(0)).toBe('classic')
+    expect(manager.getTotalLaps(1)).toBe(TRACK_DEFS[1].laps)
+    expect(manager.getTotalLaps(0)).toBe(TRACK_DEFS[0].laps)
   })
 })
 
-describe('TrackManager.applyTrack', () => {
-  it('切换赛道定义并派生新的圈长/圈数', () => {
-    const { manager } = createHarness()
-    manager.applyTrack(1)
-    expect(manager.selectedIndex).toBe(1)
-    expect(manager.trackDef).toBe(TRACK_DEFS[1])
-    expect(manager.totalLaps).toBe(TRACK_DEFS[1].laps)
-    expect(manager.lapLength).toBe(manager.track.length * SEGMENT_LENGTH)
-  })
-
-  it('同步渲染器景物并重置对局', () => {
-    const { manager, setTrack, resetRace } = createHarness()
-    manager.applyTrack(2)
-    expect(setTrack).toHaveBeenCalledTimes(1)
-    expect(resetRace).toHaveBeenCalledTimes(1)
-  })
-
-  it('更新赛道名与选单高亮', () => {
-    const { manager, trackName, trackOptions } = createHarness()
-    manager.applyTrack(2)
-    expect(trackName.textContent).toBe(TRACK_DEFS[2].name)
+describe('TrackManager 选单双类高亮与回调', () => {
+  it('P1 用 selected、P2 用 selected-p2 分别高亮对应选项', () => {
+    const { manager, trackOptions } = createHarness()
+    manager.selectTrack(0, 2)
+    // P1 选中 index2：selected 高亮该项、其余项取消
     expect(trackOptions[2].classList.toggle).toHaveBeenCalledWith('selected', true)
     expect(trackOptions[0].classList.toggle).toHaveBeenCalledWith('selected', false)
+    expect(trackOptions[1].classList.toggle).toHaveBeenCalledWith('selected', false)
+    // P2 仍为 classic（index0）：selected-p2 高亮 index0
+    expect(trackOptions[0].classList.toggle).toHaveBeenCalledWith('selected-p2', true)
+
+    manager.selectTrack(1, 1)
+    // P2 切换到 index1：selected-p2 高亮 index1、index0 取消
+    expect(trackOptions[1].classList.toggle).toHaveBeenCalledWith('selected-p2', true)
+    expect(trackOptions[0].classList.toggle).toHaveBeenCalledWith('selected-p2', false)
+    // P1 高亮不被 P2 切换影响（index2 的 selected 仍为 true）
+    expect(trackOptions[2].classList.toggle).toHaveBeenCalledWith('selected', true)
+  })
+
+  it('selectTrack 触发 resetRace 回调（构造时不触发）', () => {
+    const { manager, resetRace } = createHarness()
+    expect(resetRace).not.toHaveBeenCalled()
+    manager.selectTrack(0, 1)
+    expect(resetRace).toHaveBeenCalledTimes(1)
+    manager.selectTrack(1, 2)
+    expect(resetRace).toHaveBeenCalledTimes(2)
+  })
+
+  it('P1/P2 赛道名随各自选择更新；未传 p2TrackName 时不抛错', () => {
+    const { manager, trackName, p2TrackName } = createHarness()
+    expect(trackName.textContent).toBe(TRACK_DEFS[0].name)
+    expect(p2TrackName.textContent).toBe(TRACK_DEFS[0].name)
+    manager.selectTrack(1, 1)
+    expect(p2TrackName.textContent).toBe(TRACK_DEFS[1].name)
+    expect(trackName.textContent).toBe(TRACK_DEFS[0].name)
+
+    // p2TrackName 为可选依赖：不传时构造与切换均不抛错
+    const { manager: noP2 } = createHarness(false)
+    expect(() => noP2.selectTrack(0, 2)).not.toThrow()
+    expect(noP2.getTrackId(0)).toBe('s-curve')
+    expect(noP2.getTrackId(1)).toBe('classic')
   })
 })

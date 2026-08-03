@@ -13,6 +13,7 @@ declare global {
       readonly trafficCount: number
       readonly collisions: number
       readonly selectedTrack: string
+      readonly selectedTrack2: string
       readonly touchActive: boolean
     }
   }
@@ -29,6 +30,7 @@ export interface DebugHookSources {
   trafficCount: () => number
   collisions: () => number
   selectedTrack: () => string
+  selectedTrack2: () => string
   touchActive: () => boolean
 }
 
@@ -61,6 +63,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get selectedTrack() {
       return sources.selectedTrack()
+    },
+    get selectedTrack2() {
+      return sources.selectedTrack2()
     },
     get touchActive() {
       return sources.touchActive()
