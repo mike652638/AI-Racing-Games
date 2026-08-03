@@ -283,8 +283,10 @@ canvas {
   text-shadow: none;
 }
 
-/* P1（P1）：结算面板底部留白，避免"按 R 重新开始"提示贴边/与底部重叠 */
+/* P1（P1）：结算面板底部留白，避免"按 R 重新开始"提示贴边/与底部重叠；内容超一屏时可滚动（分屏双人结算行数多） */
 #finish-screen {
+  max-height: 100vh;
+  overflow-y: auto;
   padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
 }
 
