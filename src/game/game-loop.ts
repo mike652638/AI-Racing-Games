@@ -160,6 +160,11 @@ export class GameLoop {
       finishBest: $('finish-best') as HTMLParagraphElement,
       finishScore: $('finish-score') as HTMLParagraphElement,
       finishLaps: $('finish-laps') as HTMLDivElement,
+      finishTime2: $('finish-time-2') as HTMLParagraphElement,
+      finishSpeed2: $('finish-speed-2') as HTMLParagraphElement,
+      finishBest2: $('finish-best-2') as HTMLParagraphElement,
+      finishScore2: $('finish-score-2') as HTMLParagraphElement,
+      finishLaps2: $('finish-laps-2') as HTMLDivElement,
     }
     const trackName = $('track-name') as HTMLSpanElement
     const trackOptions = [
@@ -227,12 +232,18 @@ export class GameLoop {
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
+    // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
+    const finishedP1 =
+      lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > this.trackManager.getTotalLaps(0)
+    const finishedP2 =
+      this.splitMode &&
+      lapFromZ(this.race.player2.cameraZ, this.trackManager.getLapLength(1)) > this.trackManager.getTotalLaps(1)
     applyPhaseToScreens(
       this.screenElements,
       newPhase,
       this.race,
       this.carConfig,
-      this.trackManager.getTrackId(0),
+      { splitMode: this.splitMode, finishedP1, finishedP2 },
     )
     if (newPhase === PHASE_FINISHED) {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))

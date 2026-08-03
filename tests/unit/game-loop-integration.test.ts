@@ -309,5 +309,24 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('KeyW')
     splitEnv.driveFrames(2500)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+    // C3 双人结算：P1 完赛填 P1 行，P2 静止显示"未完赛"
+    expect(splitEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
+    expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
+  })
+
+  it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    // Enter 开始比赛（P1/P2 均不触发方向键），随后 ArrowUp 驱动 P2 全油门；
+    // P1 无输入保持静止（raceTime 仍随帧递增，但 cameraZ=0 不跨圈 → 未完赛）
+    splitEnv.fireKey('Enter')
+    splitEnv.fireKey('ArrowUp')
+    splitEnv.driveFrames(2500)
+    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+    const time2 = splitEnv.getElement('finish-time-2')
+    expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
+    expect(splitEnv.getElement('finish-time').textContent).toBe('未完赛')
+    // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
+    expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
   })
 })
