@@ -21,6 +21,10 @@ export interface RaceState {
   lapTimes: number[]
   /** 当前已完成圈数（1 基，lapFromZ 推进） */
   lastLap: number
+  /** P2 每圈累计用时（分屏时独立记录，P2 圈速用） */
+  lapTimes2: number[]
+  /** P2 当前已完成圈数（1 基） */
+  lastLap2: number
   /** 游戏阶段（菜单/比赛/暂停/结算） */
   phase: Phase
   /** 结算面板是否已填充（避免重复写入记录） */
@@ -39,6 +43,8 @@ export function createRaceState(): RaceState {
     collisionCount: 0,
     lapTimes: [],
     lastLap: 1,
+    lapTimes2: [],
+    lastLap2: 1,
     phase: PHASE_MENU,
     finishShown: false,
   }
@@ -54,5 +60,7 @@ export function resetRaceState(state: RaceState): void {
   state.collisionCount = 0
   state.lapTimes = []
   state.lastLap = 1
+  state.lapTimes2 = []
+  state.lastLap2 = 1
   state.finishShown = false
 }

@@ -28,6 +28,8 @@ describe('createRaceState / resetRaceState', () => {
     expect(race.player2.collisionCooldown).toBe(0)
     expect(race.lapTimes).toEqual([])
     expect(race.lastLap).toBe(1)
+    expect(race.lapTimes2).toEqual([])
+    expect(race.lastLap2).toBe(1)
     expect(race.phase).toBe('menu')
     expect(race.finishShown).toBe(false)
     // 双玩家各持独立赛道上下文与独立车流数组（分屏各用其一）
@@ -52,6 +54,8 @@ describe('createRaceState / resetRaceState', () => {
     race.player2.collisionCooldown = 0.3
     race.lapTimes = [20, 41]
     race.lastLap = 3
+    race.lapTimes2 = [10, 21]
+    race.lastLap2 = 3
     race.finishShown = true
 
     resetRaceState(race)
@@ -67,6 +71,8 @@ describe('createRaceState / resetRaceState', () => {
     expect(race.player2.collisionCooldown).toBe(0)
     expect(race.lapTimes).toEqual([])
     expect(race.lastLap).toBe(1)
+    expect(race.lapTimes2).toEqual([])
+    expect(race.lastLap2).toBe(1)
     expect(race.finishShown).toBe(false)
     // 重置不重建赛道上下文（由 TrackManager 管理），只清玩家状态与计数
     expect(race.tracks[0]).toBe(tracks0)

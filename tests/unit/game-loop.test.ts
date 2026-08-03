@@ -134,6 +134,22 @@ describe('updatePlayerFrame P1/P2 互不影响', () => {
     expect(lapTimes2).toEqual([1])
     expect(lapTimes1).toHaveLength(2)
   })
+
+  test('P2 跨多圈独立记录到 lapTimes2（与 P1 数组完全隔离）', () => {
+    const config = createCarConfig()
+    const p2 = createPlayerState()
+    const lapTimes1: number[] = []
+    const lapTimes2: number[] = []
+    const ref2 = { value: 1 }
+
+    // P2 全油门推进 3 帧（LAP_LENGTH=1000，每帧跨多圈，与 P1 用例同节奏）
+    for (let i = 0; i < 3; i++) {
+      updatePlayerFrame(1, THROTTLE, p2, config, LAP_LENGTH, lapTimes2, ref2)
+    }
+    expect(lapTimes2).toEqual([1, 2, 3])
+    expect(lapTimes1).toEqual([])
+    expect(ref2.value).toBeGreaterThan(1)
+  })
 })
 
 describe('菜单预览相机', () => {

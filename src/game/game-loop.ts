@@ -9,7 +9,7 @@ import { MusicPlayer } from '../audio/music'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
-import { loadBestTime } from '../ui/save'
+import { loadBestTime, loadBestTimeFor } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic, type TrackContext } from './track-context'
@@ -113,6 +113,8 @@ export class GameLoop {
   private engineSound: EngineSound | null = null
   private music: MusicPlayer | null = null
   private bestTime: number | null
+  /** P2 最佳圈速（分屏独立存档，-p2 key；单屏不加载） */
+  private bestTime2: number | null = null
   /** 菜单预览相机位置（仅 PHASE_MENU 推进；分屏 P1/P2 各自独立，切换赛道时按圈长等分重置起点） */
   private previewCameraZ: [number, number] = [0, 0]
   private last = performance.now()
@@ -189,6 +191,7 @@ export class GameLoop {
     this.joystick = new JoystickUI()
     this.joystick.attach(this.canvas)
     this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
+    this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
 
     installDebugHook({
       audioState: () => this.engineSound?.state ?? null,
@@ -197,6 +200,7 @@ export class GameLoop {
       driftActive: () => this.race.player1.driftState.active,
       split: this.splitMode,
       bestTime: () => this.bestTime,
+      bestTime2: () => this.bestTime2,
       trafficCount: () => this.race.tracks[0].traffic.length,
       collisions: () => this.race.collisionCount,
       selectedTrack: () => this.trackManager.getTrackId(0),
@@ -217,6 +221,7 @@ export class GameLoop {
     refreshTraffic(this.race.tracks[1])
     this.last = performance.now()
     this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
+    this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
   }
 
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
@@ -229,7 +234,10 @@ export class GameLoop {
       this.carConfig,
       this.trackManager.getTrackId(0),
     )
-    if (newPhase === PHASE_FINISHED) this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
+    if (newPhase === PHASE_FINISHED) {
+      this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
+      this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
+    }
     if (newPhase === PHASE_MENU) this.resetRace()
   }
 
@@ -319,8 +327,18 @@ export class GameLoop {
       )
       this.race.lastLap = lapRef.value
 
-      // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；不参与圈速记录，保持原行为）
-      updatePlayerFrame(dt, input2, this.race.player2, this.carConfig, this.trackManager.getLapLength(1))
+      // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；圈速记录到 lapTimes2）
+      const lapRef2 = { value: this.race.lastLap2 }
+      updatePlayerFrame(
+        dt,
+        input2,
+        this.race.player2,
+        this.carConfig,
+        this.trackManager.getLapLength(1),
+        this.race.lapTimes2,
+        lapRef2,
+      )
+      this.race.lastLap2 = lapRef2.value
 
       updateCollisions(this.race, dt, this.splitMode)
 
@@ -413,6 +431,7 @@ export class GameLoop {
       this.splitMode,
       this.race.tracks,
       this.phase,
+      this.bestTime2,
     )
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
     requestAnimationFrame(this.frame)

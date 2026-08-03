@@ -20,6 +20,8 @@ export interface HudElements {
   hudSpeedUnit2?: HTMLDivElement
   hudLap2: HTMLDivElement
   hudTime2: HTMLDivElement
+  /** P2 最佳时间（分屏时显示，P2 独立存档） */
+  hudBest2?: HTMLDivElement
   driftIndicator: HTMLDivElement
   driftScoreValue: HTMLSpanElement
 }
@@ -34,6 +36,7 @@ export function updateHud(
   splitMode: boolean,
   tracks: [TrackContext, TrackContext],
   phase: Phase,
+  bestTime2: number | null,
 ): void {
   // 分屏时切换布局类：P1 HUD 定位左侧区域上方、P2 HUD 定位右侧区域上方
   if (elements.hudContainer) {
@@ -55,6 +58,7 @@ export function updateHud(
     if (elements.hudSpeedUnit2) elements.hudSpeedUnit2.hidden = true
     elements.hudLap2.hidden = true
     elements.hudTime2.hidden = true
+    if (elements.hudBest2) elements.hudBest2.hidden = true
     elements.driftIndicator.hidden = true
     return
   }
@@ -80,6 +84,7 @@ export function updateHud(
   if (elements.hudSpeedUnit2) elements.hudSpeedUnit2.hidden = !splitMode
   elements.hudLap2.hidden = !splitMode
   elements.hudTime2.hidden = !splitMode
+  if (elements.hudBest2) elements.hudBest2.hidden = !splitMode || bestTime2 === null
   if (splitMode) {
     elements.hudSpeed2.textContent = formatSpeed(race.player2.carState.speed, carConfig.maxSpeed)
     elements.hudLap2.textContent = formatLap(
@@ -87,6 +92,9 @@ export function updateHud(
       tracks[1].totalLaps,
     )
     elements.hudTime2.textContent = formatTime(race.player2.raceTime)
+    if (elements.hudBest2 && bestTime2 !== null) {
+      elements.hudBest2.textContent = `BEST ${formatTime(bestTime2)}`
+    }
   }
 
   elements.driftIndicator.hidden = !race.player1.driftState.active

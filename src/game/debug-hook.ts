@@ -10,6 +10,7 @@ declare global {
       readonly driftActive: boolean
       readonly split: boolean
       readonly bestTime: number | null
+      readonly bestTime2: number | null
       readonly trafficCount: number
       readonly collisions: number
       readonly selectedTrack: string
@@ -27,6 +28,7 @@ export interface DebugHookSources {
   driftActive: () => boolean
   split: boolean
   bestTime: () => number | null
+  bestTime2: () => number | null
   trafficCount: () => number
   collisions: () => number
   selectedTrack: () => string
@@ -54,6 +56,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get bestTime() {
       return sources.bestTime()
+    },
+    get bestTime2() {
+      return sources.bestTime2()
     },
     get trafficCount() {
       return sources.trafficCount()
