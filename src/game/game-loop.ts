@@ -78,20 +78,32 @@ export function initialPreviewCameraZ(index: number, lapLength: number): number 
 }
 
 /**
+ * viewFor 渲染视图缓存（Task B6 对象池复用）：模块级单例，复用而非每帧新建 RenderView。
+ * 渲染为同步消费（renderWithOpts 内局部使用、不跨帧持有），分屏两区域先后渲染互不冲突；
+ * 消费者均为内部代码，按只读使用、不做防御性拷贝。初始占位对象字段会被 viewFor 全量覆盖。
+ */
+const _viewCache: RenderView = {
+  track: [],
+  curvePrefixSum: new Float64Array(0),
+  spriteIndex: new Map(),
+  traffic: [],
+}
+
+/**
  * 从赛道上下文构造渲染视图：分段/曲率前缀和/景物索引/车流。
  * 分屏双世界各持一份 TrackContext，渲染时用各自 view（单次渲染零重建，
- * 预计算在 TrackContext 创建时完成）。
+ * 预计算在 TrackContext 创建时完成）。Task B6：复用模块级 _viewCache 赋值各字段后
+ * 返回同一引用（两次调用之间渲染已完成，覆盖安全；导出供单测验证引用复用）。
  */
-function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): RenderView {
-  return {
-    track: ctx.segments,
-    curvePrefixSum: ctx.curvePrefixSum,
-    spriteIndex: ctx.spriteIndex,
-    traffic: ctx.traffic,
-    night: ctx.def.timeOfDay === 'night',
-    // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
-    boostParticles,
-  }
+export function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): RenderView {
+  _viewCache.track = ctx.segments
+  _viewCache.curvePrefixSum = ctx.curvePrefixSum
+  _viewCache.spriteIndex = ctx.spriteIndex
+  _viewCache.traffic = ctx.traffic
+  _viewCache.night = ctx.def.timeOfDay === 'night'
+  // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
+  _viewCache.boostParticles = boostParticles
+  return _viewCache
 }
 
 /**

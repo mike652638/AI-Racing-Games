@@ -5,8 +5,10 @@ import {
   PREVIEW_CAMERA_SPEED,
   updateBoostCharge,
   updatePlayerFrame,
+  viewFor,
 } from '../../src/game/game-loop'
 import { createPlayerState } from '../../src/game/player-state'
+import { createTrackContext } from '../../src/game/track-context'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
 import { TRACK_DEFS, createTrackFromDef } from '../../src/engine/tracks'
 import { SEGMENT_LENGTH } from '../../src/engine/track'
@@ -210,6 +212,35 @@ describe('菜单预览相机', () => {
       expect(starts[i]).toBeGreaterThanOrEqual(0)
       expect(starts[i]).toBeLessThan(lapLengths[i])
     }
+  })
+})
+
+describe('viewFor 缓存复用（Task B6）', () => {
+  test('连续调用返回同一对象引用（模块级 _viewCache 复用）', () => {
+    const ctx = createTrackContext(TRACK_DEFS[0])
+    const v1 = viewFor(ctx)
+    const v2 = viewFor(ctx)
+    expect(v1).toBe(v2)
+  })
+
+  test('复用对象字段随 TrackContext 覆盖更新（不同赛道引用正确替换）', () => {
+    const ctxA = createTrackContext(TRACK_DEFS[0])
+    const ctxB = createTrackContext(TRACK_DEFS[1])
+    const v = viewFor(ctxA)
+    // 首次调用：字段指向 ctxA
+    expect(v.track).toBe(ctxA.segments)
+    expect(v.curvePrefixSum).toBe(ctxA.curvePrefixSum)
+    expect(v.spriteIndex).toBe(ctxA.spriteIndex)
+    expect(v.traffic).toBe(ctxA.traffic)
+    expect(v.night).toBe(ctxA.def.timeOfDay === 'night')
+    // 再次调用（不同赛道）：同一引用上字段覆盖为 ctxB
+    const same = viewFor(ctxB)
+    expect(same).toBe(v)
+    expect(v.track).toBe(ctxB.segments)
+    expect(v.curvePrefixSum).toBe(ctxB.curvePrefixSum)
+    expect(v.spriteIndex).toBe(ctxB.spriteIndex)
+    expect(v.traffic).toBe(ctxB.traffic)
+    expect(v.night).toBe(ctxB.def.timeOfDay === 'night')
   })
 })
 
