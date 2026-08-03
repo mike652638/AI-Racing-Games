@@ -286,7 +286,9 @@ canvas {
   gap: 10px;
 }
 
-#pause-volume {
+#pause-volume,
+#pause-music-volume,
+#pause-sfx-volume {
   width: 200px;
   accent-color: var(--accent);
   cursor: pointer;

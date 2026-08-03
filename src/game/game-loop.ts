@@ -44,6 +44,9 @@ export function advancePreviewCameraZ(current: number, dt: number, lapLength: nu
 
 /** 主音量持久化 key（localStorage，存 0-1 字符串） */
 const VOLUME_KEY = 'outrun-pseudo3d-volume'
+/** 音乐/音效分级音量持久化 key（G7：独立于总音量的分轨控制） */
+const MUSIC_VOLUME_KEY = 'outrun-pseudo3d-music-volume'
+const SFX_VOLUME_KEY = 'outrun-pseudo3d-sfx-volume'
 
 /**
  * 切换赛道时的预览起点：按赛道序号等分圈长（等分数 = TRACK_DEFS.length）。
@@ -140,8 +143,16 @@ export class GameLoop {
   private lapRef2 = { value: 1 }
   /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
   private masterGain: GainNode | null = null
+  /** 音乐分轨增益（G7：MusicPlayer 注入此节点，各连 masterGain，独立于音效调节） */
+  private musicGain: GainNode | null = null
+  /** 音效分轨增益（G7：EngineSound/RainSound/CollisionSound 注入此节点） */
+  private sfxGain: GainNode | null = null
   /** 主音量（0-1，localStorage 持久化 key outrun-pseudo3d-volume；初值 0.6） */
   private volume = 0.6
+  /** 音乐分轨音量（0-1，MusicPlayer 注入 musicGain；初值 0.8，G7） */
+  private musicVolume = 0.8
+  /** 音效分轨音量（0-1，EngineSound/RainSound/CollisionSound 注入 sfxGain；初值 1.0，G7） */
+  private sfxVolume = 1.0
   private bestTime: number | null
   /** P2 最佳圈速（分屏独立存档，-p2 key；单屏不加载） */
   private bestTime2: number | null = null
@@ -154,8 +165,10 @@ export class GameLoop {
     const params = new URLSearchParams(window.location.search)
     this.splitMode = params.has('split')
     this.hotseatMode = params.has('hotseat') && !this.splitMode
-    // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）
+    // P6（P6）：构造时读取持久化主音量（无效/不可用回退 0.6）；G7：分轨音量独立读取
     this.volume = this.loadVolume()
+    this.musicVolume = this.loadMusicVolume()
+    this.sfxVolume = this.loadSfxVolume()
 
     // 模式菜单提示（#menu-hint 由 index.html 提供）：分屏双键盘 / 热座轮流 / 默认单屏
     if (this.splitMode) {
@@ -212,6 +225,8 @@ export class GameLoop {
       pauseVolume: $('pause-volume') as HTMLInputElement,
       pauseRestart: $('pause-restart') as HTMLButtonElement,
       pauseResume: $('pause-resume') as HTMLButtonElement,
+      pauseMusicVolume: $('pause-music-volume') as HTMLInputElement,
+      pauseSfxVolume: $('pause-sfx-volume') as HTMLInputElement,
     }
     // P6（P6）：暂停菜单控件事件——音量 slider input → setVolume；重开按钮 click → 回菜单。
     // 元素恒存在（hidden 仅面板控制），input/click 监听在构造器绑定一次即可。
@@ -225,6 +240,19 @@ export class GameLoop {
     if (pauseRestart) {
       pauseRestart.addEventListener('click', () => {
         this.applyPhase(PHASE_MENU)
+      })
+    }
+    // G7（G7）：音乐/音效分轨音量 slider（仿 pauseVolume 模式，守卫式绑定）
+    const pauseMusicVolume = this.screenElements.pauseMusicVolume
+    const pauseSfxVolume = this.screenElements.pauseSfxVolume
+    if (pauseMusicVolume) {
+      pauseMusicVolume.addEventListener('input', () => {
+        this.setMusicVolume(Number(pauseMusicVolume.value) / 100)
+      })
+    }
+    if (pauseSfxVolume) {
+      pauseSfxVolume.addEventListener('input', () => {
+        this.setSfxVolume(Number(pauseSfxVolume.value) / 100)
       })
     }
     // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
@@ -323,6 +351,76 @@ export class GameLoop {
       // localStorage 被禁用（隐私模式等）
     }
     return 0.6
+  }
+
+  /** 读取持久化音乐分轨音量（0-1；不可用/无效回退 0.8，G7） */
+  private loadMusicVolume(): number {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = window.localStorage.getItem(MUSIC_VOLUME_KEY)
+        if (raw !== null) {
+          const v = Number(raw)
+          if (Number.isFinite(v)) {
+            return Math.max(0, Math.min(1, v))
+          }
+        }
+      }
+    }
+    catch {
+      // localStorage 被禁用
+    }
+    return 0.8
+  }
+
+  /** 读取持久化音效分轨音量（0-1；不可用/无效回退 1.0，G7） */
+  private loadSfxVolume(): number {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = window.localStorage.getItem(SFX_VOLUME_KEY)
+        if (raw !== null) {
+          const v = Number(raw)
+          if (Number.isFinite(v)) {
+            return Math.max(0, Math.min(1, v))
+          }
+        }
+      }
+    }
+    catch {
+      // localStorage 被禁用
+    }
+    return 1.0
+  }
+
+  /** 设置音乐分轨音量：clamp 0-1、更新字段、musicGain 存在时立即生效、持久化 localStorage（G7） */
+  setMusicVolume(v: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, v))
+    if (this.musicGain) {
+      this.musicGain.gain.value = this.musicVolume
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        window.localStorage.setItem(MUSIC_VOLUME_KEY, String(this.musicVolume))
+      }
+    }
+    catch {
+      // localStorage 不可用时忽略持久化
+    }
+  }
+
+  /** 设置音效分轨音量：clamp 0-1、更新字段、sfxGain 存在时立即生效、持久化 localStorage（G7） */
+  setSfxVolume(v: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, v))
+    if (this.sfxGain) {
+      this.sfxGain.gain.value = this.sfxVolume
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        window.localStorage.setItem(SFX_VOLUME_KEY, String(this.sfxVolume))
+      }
+    }
+    catch {
+      // localStorage 不可用时忽略持久化
+    }
   }
 
   /** 设置主音量：clamp 0-1、更新字段、masterGain 存在时立即生效、持久化 localStorage */
@@ -572,18 +670,27 @@ export class GameLoop {
     }
     if (!this.engineSound) {
       const ctx = new AudioContext()
-      // P6（P6）：主音量节点——EngineSound/MusicPlayer 均注入 masterGain，slider 调节统一生效
+      // P6（P6）：主音量节点——总控；G7 起分轨：musicGain/sfxGain 各连 masterGain，独立调节
       const masterGain = ctx.createGain()
       masterGain.gain.value = this.volume
       masterGain.connect(ctx.destination)
       this.masterGain = masterGain
-      this.engineSound = new EngineSound(ctx, masterGain)
+      // G7（G7）：音乐/音效分轨——MusicPlayer 走 musicGain、引擎/雨声/碰撞音走 sfxGain
+      const musicGain = ctx.createGain()
+      musicGain.gain.value = this.musicVolume
+      musicGain.connect(masterGain)
+      this.musicGain = musicGain
+      const sfxGain = ctx.createGain()
+      sfxGain.gain.value = this.sfxVolume
+      sfxGain.connect(masterGain)
+      this.sfxGain = sfxGain
+      this.engineSound = new EngineSound(ctx, sfxGain)
       this.engineSound.start()
-      this.music = new MusicPlayer(ctx, masterGain)
+      this.music = new MusicPlayer(ctx, musicGain)
       this.music.start()
-      // F4（F4）：雨声环境音与碰撞冲击音同样注入 masterGain（随主音量调节）
-      this.rainSound = new RainSound(ctx, masterGain)
-      this.collisionSound = new CollisionSound(ctx, masterGain)
+      // F4（F4）：雨声环境音与碰撞冲击音同样走音效分轨（随 sfxVolume 与主音量调节）
+      this.rainSound = new RainSound(ctx, sfxGain)
+      this.collisionSound = new CollisionSound(ctx, sfxGain)
     }
     this.applyPhase(
       nextPhase(

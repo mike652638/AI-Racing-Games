@@ -735,6 +735,32 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env2.debugValue('volume')).toBe(0.8)
   })
 
+  it('G7（G7）：音乐音量 slider input 更新 musicVolume 并持久化（key 独立于总音量）', () => {
+    // 传空对象激活 localStorage stub（持久化断言需要可写存储）
+    const env2 = stubEnvironment('', {})
+    new GameLoop()
+    // slider 拉到 40/100 → input 事件 → setMusicVolume(0.4) → 写 outrun-pseudo3d-music-volume
+    const slider = env2.getElement('pause-music-volume')
+    slider.value = '40'
+    env2.fireElementEvent('pause-music-volume', 'input')
+    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem(
+      'outrun-pseudo3d-music-volume',
+    )
+    expect(saved).toBe('0.4')
+  })
+
+  it('G7（G7）：音效音量 slider input 更新 sfxVolume 并持久化', () => {
+    const env2 = stubEnvironment('', {})
+    new GameLoop()
+    const slider = env2.getElement('pause-sfx-volume')
+    slider.value = '80'
+    env2.fireElementEvent('pause-sfx-volume', 'input')
+    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem(
+      'outrun-pseudo3d-sfx-volume',
+    )
+    expect(saved).toBe('0.8')
+  })
+
   it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: 15000 }, () => {
     new GameLoop()
     // Enter 开始比赛：音频惰性创建块实例化 RainSound/CollisionSound（注入 masterGain）
