@@ -4,7 +4,8 @@
  * 覆盖 renderer.ts 实际调用的全部 ctx 方法（fillRect/beginPath/moveTo/lineTo/closePath/
  * fill/save/restore/translate/rect/clip/drawImage/arc/setTransform/getImageData），
  * 以及 GameLoop 集成测试用到的元素方法（addEventListener/appendChild/setPointerCapture）；
- * 通过 __calls 记录各方法调用次数，供"渲染输出稳定/确实发生绘制"断言使用。
+ * 通过 __calls 记录各方法调用次数、__args 记录各方法调用实参（二者一一对应），
+ * 供"渲染输出稳定/确实发生绘制/坐标整数对齐"断言使用。
  */
 
 /** ctx 方法调用计数（键为方法名） */
@@ -12,9 +13,15 @@ export interface MockCanvasCallCounts {
   [method: string]: number
 }
 
-/** mock 上下文：在 CanvasRenderingContext2D 基础上附加调用计数 */
+/** ctx 方法调用实参记录（键为方法名，值为每次调用的实参数组，按调用顺序追加） */
+export interface MockCanvasArgRecords {
+  [method: string]: unknown[][]
+}
+
+/** mock 上下文：在 CanvasRenderingContext2D 基础上附加调用计数与实参记录 */
 export interface MockCanvasRenderingContext2D extends CanvasRenderingContext2D {
   __calls: MockCanvasCallCounts
+  __args: MockCanvasArgRecords
 }
 
 /** mock canvas：在 HTMLCanvasElement 基础上附加上下文引用 */
@@ -24,28 +31,33 @@ export interface MockCanvas extends HTMLCanvasElement {
 
 export function createMockCanvas(width = 800, height = 600): MockCanvas {
   const calls: MockCanvasCallCounts = {}
-  const record = (method: string): void => {
+  const argRecords: MockCanvasArgRecords = {}
+  const record = (method: string, args: unknown[]): void => {
     calls[method] = (calls[method] ?? 0) + 1
+    const list = argRecords[method] ?? []
+    list.push(args)
+    argRecords[method] = list
   }
   const noop = (): void => undefined
 
   const ctx = {
     __calls: calls,
+    __args: argRecords,
     fillStyle: '',
-    fillRect: (): void => record('fillRect'),
-    beginPath: (): void => record('beginPath'),
-    moveTo: (): void => record('moveTo'),
-    lineTo: (): void => record('lineTo'),
-    closePath: (): void => record('closePath'),
-    fill: (): void => record('fill'),
-    save: (): void => record('save'),
-    restore: (): void => record('restore'),
-    translate: (): void => record('translate'),
-    rect: (): void => record('rect'),
-    clip: (): void => record('clip'),
-    drawImage: (): void => record('drawImage'),
-    arc: (): void => record('arc'),
-    setTransform: (): void => record('setTransform'),
+    fillRect: (...args: unknown[]): void => record('fillRect', args),
+    beginPath: (...args: unknown[]): void => record('beginPath', args),
+    moveTo: (...args: unknown[]): void => record('moveTo', args),
+    lineTo: (...args: unknown[]): void => record('lineTo', args),
+    closePath: (...args: unknown[]): void => record('closePath', args),
+    fill: (...args: unknown[]): void => record('fill', args),
+    save: (...args: unknown[]): void => record('save', args),
+    restore: (...args: unknown[]): void => record('restore', args),
+    translate: (...args: unknown[]): void => record('translate', args),
+    rect: (...args: unknown[]): void => record('rect', args),
+    clip: (...args: unknown[]): void => record('clip', args),
+    drawImage: (...args: unknown[]): void => record('drawImage', args),
+    arc: (...args: unknown[]): void => record('arc', args),
+    setTransform: (...args: unknown[]): void => record('setTransform', args),
     getImageData: () => ({
       data: new Uint8ClampedArray(4),
       width: 1,

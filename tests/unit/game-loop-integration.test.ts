@@ -76,13 +76,14 @@ interface Environment {
 
 /**
  * stub 全局 DOM/window/RAF/AudioContext，返回事件触发与帧驱动工具。
- * - window：location（非分屏）、innerWidth/Height、addEventListener 记录监听器供 fireKey 触发
+ * - split: 为 true 时 window.location.search = '?split=1'（GameLoop 据此进入分屏模式）
+ * - window：location、innerWidth/Height、addEventListener 记录监听器供 fireKey 触发
  * - document：getElementById 按 id 返回元素替身（'game' 返回 canvas mock）
  * - requestAnimationFrame：记录回调；GameLoop 构造时唯一注册的 rAF 回调即 frame，
  *   测试据此驱动帧循环（MusicPlayer.tick 等其它回调不驱动）
  * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
  */
-function stubEnvironment(): Environment {
+function stubEnvironment(split = false): Environment {
   const listeners = new Map<string, Array<(e: { code: string }) => void>>()
   const elements = new Map<string, StubElement>()
   const rafCallbacks: FrameRequestCallback[] = []
@@ -90,7 +91,7 @@ function stubEnvironment(): Environment {
   let now = performance.now()
 
   const windowStub = {
-    location: { search: '' },
+    location: { search: split ? '?split=1' : '' },
     innerWidth: 800,
     innerHeight: 600,
     devicePixelRatio: 1,
@@ -219,5 +220,28 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 途中可能与车流碰撞减速，帧数留足余量
     env.driveFrames(2500)
     expect(env.phase()).toBe(PHASE_FINISHED)
+  })
+
+  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 2px 全高分隔线）', () => {
+    // 重新构造分屏环境（window.location.search = '?split=1'），覆盖 beforeEach 的单屏 stub
+    const splitEnv = stubEnvironment(true)
+    new GameLoop()
+    const canvas = splitEnv.getCanvas()
+    // 过滤出"2px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线
+    const countDivider = (): number =>
+      (canvas.__ctx.__args.fillRect ?? []).filter(
+        (a) => a[1] === 0 && a[2] === 2 && a[3] === 600,
+      ).length
+
+    // 菜单分屏：左/右两次 renderRegion + 一次 drawDivider
+    splitEnv.driveFrames(3)
+    const menuDivider = countDivider()
+    expect(menuDivider).toBeGreaterThan(0)
+
+    // 进入比赛分屏后每帧同样绘制分隔线
+    splitEnv.fireKey('KeyW')
+    splitEnv.driveFrames(2)
+    expect(countDivider()).toBeGreaterThan(menuDivider)
+    expect(splitEnv.phase()).toBe(PHASE_RACING)
   })
 })

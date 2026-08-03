@@ -104,4 +104,32 @@ describe('Renderer 状态切换', () => {
     renderer.setCameraX(0.5)
     renderer.render(0)
   })
+
+  it('renderRegion 使用整数像素对齐的裁剪区域（奇数宽触发 640.5）', () => {
+    // 1281 奇数宽：w/2 = 640.5 非整数，未对齐前 rect/translate 落在像素网格之间，
+    // 交界处出现 1px 级重叠/缝隙（近处路缘石斜边交错）
+    const { canvas, renderer } = createHarness(1281, 720)
+    renderer.renderRegion(0, 640.5, 640.5, [], 0)
+    const args = canvas.__ctx.__args
+    const lastRect = args.rect[args.rect.length - 1]
+    // rect(0, 0, ow, height)：x=0 恒为整数，w 必须取整
+    expect(Number.isInteger(lastRect[0])).toBe(true)
+    expect(Number.isInteger(lastRect[2])).toBe(true)
+    const lastTranslate = args.translate[args.translate.length - 1]
+    // translate(ox, 0)：x 必须取整，否则裁剪区域偏移到半像素
+    expect(Number.isInteger(lastTranslate[0])).toBe(true)
+  })
+
+  it('drawDivider 绘制全高深色竖线', () => {
+    const { canvas, renderer } = createHarness(800, 600)
+    renderer.drawDivider(400)
+    const fillRectArgs = canvas.__ctx.__args.fillRect
+    const last = fillRectArgs[fillRectArgs.length - 1]
+    // fillRect(Math.round(x - width/2), 0, width, height)：居中 2px 全高竖线
+    expect(last[0]).toBe(399)
+    expect(last[1]).toBe(0)
+    expect(last[2]).toBe(2)
+    expect(last[3]).toBe(600)
+    expect(canvas.__ctx.fillStyle).toBe('#000')
+  })
 })

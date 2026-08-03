@@ -290,6 +290,8 @@ export class GameLoop {
       if (this.splitMode) {
         this.renderer.renderRegion(this.previewCameraZ, 0, w / 2, [], 0)
         this.renderer.renderRegion(this.previewCameraZ, w / 2, w / 2, [], 0)
+        // 交界处深色分隔线：覆盖两区域近处路缘石交错瑕疵（标准分屏做法）
+        this.renderer.drawDivider(w / 2)
       } else {
         this.renderer.render(this.previewCameraZ, [], 0)
       }
@@ -311,6 +313,9 @@ export class GameLoop {
         this.race.player2.driftState.smoke,
         this.race.player2.raceTime,
       )
+      // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
+      // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
+      this.renderer.drawDivider(w / 2)
     }
     else {
       this.renderer.setCameraX(this.race.player1.carState.position)

@@ -162,7 +162,11 @@ export class Renderer {
     this.renderWithOpts(cameraZ, this.opts, smoke, timeSec)
   }
 
-  /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移 */
+  /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移。
+   *  viewX/viewW 先做整数像素对齐（Math.round）：窗口宽为奇数时 w/2 是 x.5，
+   *  半像素 translate/clip 会导致交界处 1px 级重叠/缝隙，近处路缘石斜边交错成
+   *  "三角形重叠/撕裂"。
+   */
   renderRegion(
     cameraZ: number,
     viewX: number,
@@ -172,13 +176,24 @@ export class Renderer {
   ): void {
     const { ctx } = this
     const opts = this.buildOpts(viewW, this.opts.height)
+    const ox = Math.round(viewX)
+    const ow = Math.round(viewW)
     ctx.save()
-    ctx.translate(viewX, 0)
+    ctx.translate(ox, 0)
     ctx.beginPath()
-    ctx.rect(0, 0, viewW, this.opts.height)
+    ctx.rect(0, 0, ow, this.opts.height)
     ctx.clip()
     this.renderWithOpts(cameraZ, opts, smoke, timeSec)
     ctx.restore()
+  }
+
+  /** 分屏交界分隔线：全高深色竖线，覆盖两区域近处路缘石交错瑕疵。
+   *  必须在 renderRegion 的 ctx.restore() 之后调用（transform 已复位，用全屏坐标）。
+   */
+  drawDivider(x: number, width = 2): void {
+    const { ctx } = this
+    ctx.fillStyle = '#000'
+    ctx.fillRect(Math.round(x - width / 2), 0, width, this.opts.height)
   }
 
   private renderWithOpts(
