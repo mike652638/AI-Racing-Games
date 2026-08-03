@@ -224,3 +224,51 @@ describe('hud 热座玩家标签（hudPlayerTag）', () => {
     expect(elements.hudPlayerTag!.hidden).toBe(true)
   })
 })
+
+describe('hud 漂移连击显示（driftCombo）', () => {
+  /** 在既有 mock 基础上补 driftCombo 字段（既有用例 mock 无此字段，验证可选访问兼容） */
+  const withCombo = (): HudElements => {
+    const element = () => ({ hidden: false, textContent: '' })
+    return {
+      ...createMockHudElements(),
+      driftCombo: element() as HTMLDivElement,
+    } as unknown as HudElements
+  }
+
+  /** 构造已激活且指定 combo 的 P1 漂移态（漂移指示与连击都走 P1） */
+  const driftRace = (active: boolean, combo: number) => {
+    const race = createRaceState()
+    race.player1.driftState.active = active
+    race.player1.driftState.combo = combo
+    return race
+  }
+
+  it('active 且 combo≥1 时显示 COMBO 文本（倍率 1+combo*0.25）', () => {
+    const elements = withCombo()
+    const race = driftRace(true, 1)
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.driftCombo!.hidden).toBe(false)
+    expect(elements.driftCombo!.textContent).toBe('COMBO x1.25')
+  })
+
+  it('active 但 combo=0 时隐藏连击显示', () => {
+    const elements = withCombo()
+    const race = driftRace(true, 0)
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.driftCombo!.hidden).toBe(true)
+  })
+
+  it('菜单阶段隐藏连击显示（即使 active 且 combo≥1）', () => {
+    const elements = withCombo()
+    const race = driftRace(true, 3)
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'menu', null, null)
+    expect(elements.driftCombo!.hidden).toBe(true)
+  })
+
+  it('既有用例 mock 无 driftCombo 字段时零改动可过（可选访问兼容）', () => {
+    const elements = createMockHudElements()
+    const race = createRaceState()
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.driftIndicator.hidden).toBe(true)
+  })
+})

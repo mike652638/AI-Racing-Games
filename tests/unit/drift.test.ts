@@ -6,10 +6,11 @@ import {
   type DriftState,
 } from '../../src/physics/drift'
 import { createCarConfig } from '../../src/physics/car'
+import { DRIFT_SCORE_MAX } from '../../src/game/constants'
 
 const DT = 1 / 60
 
-const idleDrift = (): DriftState => ({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })
+const idleDrift = (): DriftState => ({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
 
 describe('漂移状态机', () => {
   test('高速强转向积累 charge 并激活漂移', () => {
@@ -92,15 +93,15 @@ describe('漂移状态机', () => {
 describe('漂移对物理的影响', () => {
   test('active 时转向率提升 1.5 倍', () => {
     const cfg = createCarConfig()
-    const active = effectiveTurnRate(cfg, { charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0 })
+    const active = effectiveTurnRate(cfg, { charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
     expect(active).toBeCloseTo(cfg.turnRate * 1.5, 10)
-    const idle = effectiveTurnRate(cfg, { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })
+    const idle = effectiveTurnRate(cfg, { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
     expect(idle).toBe(cfg.turnRate)
   })
 
   test('active 时速度有损耗因子', () => {
-    expect(driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0 })).toBeCloseTo(0.985, 10)
-    expect(driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 })).toBe(1)
+    expect(driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })).toBeCloseTo(0.985, 10)
+    expect(driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })).toBe(1)
   })
 })
 
@@ -109,7 +110,7 @@ describe('漂移得分', () => {
   const state = { position: 0.5, speed: 6000 }
   const steerInput = { throttle: 0, brake: false, steer: 1 }
   const idleInput = { throttle: 0, brake: false, steer: 0 }
-  const scored = (): DriftState => ({ charge: 1, active: false, lastSmoke: 0, smoke: [], score: 0 })
+  const scored = (): DriftState => ({ charge: 1, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 })
 
   test('漂移中按速度累计得分', () => {
     const drift = scored()
@@ -151,6 +152,8 @@ describe('updateDrift 纯函数性', () => {
       lastSmoke: 0.9,
       smoke: [{ x: 0.3, z: 100, t: 0.2 }],
       score: 10,
+      combo: 0,
+      comboTimer: 0,
     }
     const before = JSON.parse(JSON.stringify(drift)) as DriftState
     const next = updateDrift(0.1, input, state, cfg, drift, 100)
@@ -161,5 +164,66 @@ describe('updateDrift 纯函数性', () => {
     expect(next.charge).toBeGreaterThan(drift.charge)
     expect(next.active).toBe(true)
     expect(next.smoke[0].t).toBeCloseTo(0.3, 10)
+  })
+})
+
+describe('漂移连击与得分上限', () => {
+  const cfg = createCarConfig({ maxSpeed: 6000 })
+  const state = { position: 0.5, speed: 6000 }
+  const steerInput = { throttle: 0, brake: false, steer: 1 }
+  const idleInput = { throttle: 0, brake: false, steer: 0 }
+  /** 已激活（active=true）的漂移态：避免 updateDrift 的新漂移段检测重置 combo */
+  const activeDrift = (combo: number): DriftState =>
+    ({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo, comboTimer: 0 })
+
+  /** 持续漂移 frames 帧后返回状态（含 30 帧 charge 激活预热） */
+  const driftFor = (frames: number, start: DriftState = idleDrift()): DriftState => {
+    let drift = start
+    for (let i = 0; i < frames; i++) {
+      drift = updateDrift(DT, steerInput, state, cfg, drift, 0)
+    }
+    return drift
+  }
+
+  test('持续漂移 2.1s 后 combo 0→1，4.2s 后 →2', () => {
+    // 30 帧激活（charge≈0.5>0.25），随后 active 期间累计 comboTimer
+    const activated = driftFor(30)
+    expect(activated.active).toBe(true)
+    // 2.1s = 126 帧：comboTimer 满 2s → combo=1
+    const at21 = driftFor(126, activated)
+    expect(at21.combo).toBe(1)
+    // 再 2.1s（累计 4.2s）：第二个 2s 窗口 → combo=2
+    const at42 = driftFor(126, at21)
+    expect(at42.combo).toBe(2)
+  })
+
+  test('漂移中断（松转向 active 变 false）后 combo 归 0', () => {
+    const activated = driftFor(30)
+    const at21 = driftFor(126, activated)
+    expect(at21.combo).toBe(1)
+    // 松转向 1s：charge 衰减 → active=false → 中断重置 combo/comboTimer
+    let drift = at21
+    for (let i = 0; i < 60; i++) {
+      drift = updateDrift(DT, idleInput, state, cfg, drift, 0)
+    }
+    expect(drift.active).toBe(false)
+    expect(drift.combo).toBe(0)
+    expect(drift.comboTimer).toBe(0)
+  })
+
+  test('倍率生效：combo=1 时相同 dt/速度得分大于无 combo 基线', () => {
+    // 两者均 active=true（跳过新段重置）：combo=1 倍率 1.25，combo=0 倍率 1.0
+    const withCombo = updateDrift(1, steerInput, state, cfg, activeDrift(1), 0)
+    const noCombo = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0)
+    expect(withCombo.score).toBeGreaterThan(noCombo.score)
+  })
+
+  test('得分 clamp：score 不超 DRIFT_SCORE_MAX', () => {
+    const drift = activeDrift(10)
+    drift.score = DRIFT_SCORE_MAX - 1
+    // 大 dt 单帧增量远超 1：若无 clamp 必然越界
+    const next = updateDrift(10, steerInput, state, cfg, drift, 0)
+    expect(next.score).toBeLessThanOrEqual(DRIFT_SCORE_MAX)
+    expect(next.score).toBe(DRIFT_SCORE_MAX)
   })
 })

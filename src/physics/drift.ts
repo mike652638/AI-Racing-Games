@@ -1,5 +1,6 @@
 import {
   DRIFT_CHARGE_THRESHOLD,
+  DRIFT_SCORE_MAX,
   DRIFT_SPEED_FACTOR,
   DRIFT_STEER_THRESHOLD,
 } from '../game/constants'
@@ -23,11 +24,15 @@ export interface DriftState {
   smoke: SmokeParticle[]
   /** 漂移累计得分 */
   score: number
+  /** 连击数：连续漂移每满 COMBO_WINDOW_SECONDS 秒 +1，中断归零 */
+  combo: number
+  /** 连击计时器（秒，仅 active 期间累积） */
+  comboTimer: number
 }
 
 /** 新建初始漂移状态（含归零得分） */
 export function createDriftState(): DriftState {
-  return { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0 }
+  return { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }
 }
 
 const SPEED_RATIO_THRESHOLD = 0.5
@@ -36,6 +41,13 @@ const SMOKE_INTERVAL = 1
 const SMOKE_LIFETIME = 0.6
 /** 漂移得分速率（得分/秒/单位速度） */
 const DRIFT_SCORE_RATE = 0.01
+
+/** 连击窗口（秒）：连续漂移每满该时长 combo+1 */
+const COMBO_WINDOW_SECONDS = 2
+/** 连击上限：倍率封顶 1 + 10 * 0.25 = 3.5x */
+const COMBO_MAX = 10
+/** 每级连击的倍率步进 */
+const COMBO_MULTIPLIER_STEP = 0.25
 
 /** 漂移激活时的转向率倍率 */
 const DRIFT_TURN_MULTIPLIER = 1.5
@@ -61,8 +73,27 @@ export function updateDrift(
     : Math.max(next.charge - dt * CHARGE_DECAY, 0)
   next.active = next.charge > DRIFT_CHARGE_THRESHOLD
 
+  // 连击：仅 active 期间累积 comboTimer，满窗口 combo+1；得分按倍率 1+combo*0.25 累计并 clamp
   if (next.active) {
-    next.score += state.speed * dt * DRIFT_SCORE_RATE
+    next.comboTimer += dt
+    if (next.comboTimer >= COMBO_WINDOW_SECONDS) {
+      next.comboTimer = 0
+      next.combo = Math.min(next.combo + 1, COMBO_MAX)
+    }
+    const multiplier = 1 + next.combo * COMBO_MULTIPLIER_STEP
+    next.score = Math.min(
+      next.score + state.speed * dt * DRIFT_SCORE_RATE * multiplier,
+      DRIFT_SCORE_MAX,
+    )
+  }
+  // 中断/新漂移段检测：active 翻转即重置连击与计时（漂移中断断连击）
+  if (next.active && !drift.active) {
+    next.combo = 0
+    next.comboTimer = 0
+  }
+  if (!next.active && drift.active) {
+    next.combo = 0
+    next.comboTimer = 0
   }
 
   next.lastSmoke += dt

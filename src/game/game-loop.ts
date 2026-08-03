@@ -162,6 +162,7 @@ export class GameLoop {
       hudPlayerTag: $('hud-player-tag') as HTMLDivElement,
       driftIndicator: $('drift-indicator') as HTMLDivElement,
       driftScoreValue: $('drift-score-value') as HTMLSpanElement,
+      driftCombo: $('drift-combo') as HTMLDivElement,
     }
     this.screenElements = {
       startScreen: $('start-screen') as HTMLDivElement,

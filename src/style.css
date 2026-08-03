@@ -115,6 +115,16 @@ canvas {
   animation: pulse 0.3s ease-in-out infinite alternate;
 }
 
+/* 漂移连击倍率（#drift-combo：active 且 combo≥1 时由 updateHud 显示；黄绿加粗随漂移指示） */
+#drift-combo {
+  margin-top: 4px;
+  font-size: clamp(14px, 3vw, 18px);
+  font-weight: 700;
+  color: #fde047;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
 /* 热座当前驾驶玩家标签（#hud-player-tag 由 GameLoop 控制显隐与 p1/p2 类） */
 #hud-player-tag {
   font-weight: bold;

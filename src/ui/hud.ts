@@ -28,6 +28,8 @@ export interface HudElements {
   hudPlayerTag?: HTMLDivElement
   driftIndicator: HTMLDivElement
   driftScoreValue: HTMLSpanElement
+  /** 漂移连击倍率显示（active 且 combo≥1 时显示，如 COMBO x1.25） */
+  driftCombo?: HTMLDivElement
 }
 
 /** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。
@@ -68,6 +70,7 @@ export function updateHud(
     if (elements.hudBestP2) elements.hudBestP2.hidden = true
     if (elements.hudPlayerTag) elements.hudPlayerTag.hidden = true
     elements.driftIndicator.hidden = true
+    if (elements.driftCombo) elements.driftCombo.hidden = true
     return
   }
 
@@ -120,6 +123,17 @@ export function updateHud(
   elements.driftIndicator.hidden = !driftPlayer.driftState.active
   if (driftPlayer.driftState.active) {
     elements.driftScoreValue.textContent = String(Math.round(driftPlayer.driftState.score))
+  }
+
+  // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*0.25)，否则隐藏
+  // （combo 已在 drift.ts 内 clamp 到 COMBO_MAX=10，倍率上限 3.5x）
+  if (elements.driftCombo) {
+    const combo = driftPlayer.driftState.combo
+    elements.driftCombo.hidden = !(driftPlayer.driftState.active && combo >= 1)
+    if (!elements.driftCombo.hidden) {
+      const mult = 1 + combo * 0.25
+      elements.driftCombo.textContent = `COMBO x${mult.toFixed(2)}`
+    }
   }
 
   // 单屏 P2 BEST：热座数据复用 bestTime2，但分屏时隐藏（单屏专用元素）
