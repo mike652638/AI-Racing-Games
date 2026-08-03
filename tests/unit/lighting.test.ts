@@ -56,4 +56,27 @@ describe('updateLighting', () => {
     const over = updateLighting(30, true)
     expect(saturationOf(over.skyTop)).toBeLessThan(saturationOf(clear.skyTop))
   })
+
+  it('keeps skyTop blue at daytime noon (45s, clear)', () => {
+    // 修复前 hue=lerp(210,25,0.5)=117（绿色）；修复后应恒为 210（蓝色调）
+    const hueOf = (c: string): number => {
+      const m = c.match(/^hsl\((\d+(?:\.\d+)?),/)
+      return m ? Number(m[1]) : -1
+    }
+    const c = updateLighting(45, false)
+    const hue = hueOf(c.skyTop)
+    expect(hue).toBeGreaterThanOrEqual(180)
+    expect(hue).toBeLessThanOrEqual(260)
+  })
+
+  it('keeps skyTop blue at daytime noon (45s, overcast)', () => {
+    const hueOf = (c: string): number => {
+      const m = c.match(/^hsl\((\d+(?:\.\d+)?),/)
+      return m ? Number(m[1]) : -1
+    }
+    const c = updateLighting(45, true)
+    const hue = hueOf(c.skyTop)
+    expect(hue).toBeGreaterThanOrEqual(180)
+    expect(hue).toBeLessThanOrEqual(260)
+  })
 })

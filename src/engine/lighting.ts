@@ -41,8 +41,9 @@ export function updateLighting(timeSec: number, overcast = false): LightingColor
   } else if (phase < 0.5) {
     const t = (phase - 0.25) / 0.25
     return {
-      skyTop: build(lerp(210, 25, t), 60, lerp(45, 55, t)),
-      skyBottom: build(lerp(200, 35, t), 50, lerp(55, 50, t)),
+      // 白天段：色相恒蓝（skyTop 210 / skyBottom 200），仅明度随 t 变化，避免插值中途经过绿色
+      skyTop: build(210, 60, lerp(45, 55, t)),
+      skyBottom: build(200, 50, lerp(55, 50, t)),
       grass: build(lerp(130, 35, t), lerp(40, 50, t), lerp(28, 18, t)),
       mountainFar: build(lerp(210, 30, t), 30, lerp(22, 15, t)),
       mountainNear: build(lerp(210, 30, t), 35, lerp(18, 12, t)),
@@ -50,8 +51,9 @@ export function updateLighting(timeSec: number, overcast = false): LightingColor
   } else if (phase < 0.75) {
     const t = (phase - 0.5) / 0.25
     return {
-      skyTop: build(lerp(25, 220, t), lerp(60, 55, t), lerp(55, 10, t)),
-      skyBottom: build(lerp(35, 210, t), lerp(50, 45, t), lerp(50, 15, t)),
+      // 黄昏段：从蓝 210 过渡到紫 220（不再经过橙黄 25）
+      skyTop: build(lerp(210, 220, t), lerp(60, 55, t), lerp(55, 10, t)),
+      skyBottom: build(lerp(200, 210, t), lerp(50, 45, t), lerp(50, 15, t)),
       grass: build(130, 40, lerp(18, 8, t)),
       mountainFar: build(210, 30, lerp(15, 8, t)),
       mountainNear: build(210, 35, lerp(12, 6, t)),
