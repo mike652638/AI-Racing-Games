@@ -419,4 +419,49 @@ describe('Renderer 状态切换', () => {
       expect(cache.size).toBe(0)
     })
   })
+
+  describe('fillStyle cache', () => {
+    /** 以私有成员访问方式暴露 getFillStyle / _fillStyleCache */
+    function expose(renderer: Renderer): {
+      getFillStyle: (r: number, g: number, b: number, a: number) => string
+      _fillStyleCache: Map<string, string>
+    } {
+      return renderer as unknown as {
+        getFillStyle: (r: number, g: number, b: number, a: number) => string
+        _fillStyleCache: Map<string, string>
+      }
+    }
+
+    it('should return same string for same rgba values', () => {
+      const { renderer } = createHarness()
+      const r = expose(renderer)
+      // 连续浮点 alpha 经 toFixed(3) 归一化到同一键 → 命中缓存，返回同一字符串实例
+      const first = r.getFillStyle(200, 200, 210, 0.4721)
+      const second = r.getFillStyle(200, 200, 210, 0.4724)
+      expect(second).toBe(first)
+      // 缓存键只与归一化后的分量有关：0.4721 与 0.4724 均四舍五入为 0.472
+      expect(first).toBe('rgba(200, 200, 210, 0.472)')
+      expect(r._fillStyleCache.size).toBe(1)
+      // 不同 alpha 归一化后不同 → 新键新串，原串不被覆盖
+      const other = r.getFillStyle(200, 200, 210, 0.5)
+      expect(other).toBe('rgba(200, 200, 210, 0.500)')
+      expect(r._fillStyleCache.size).toBe(2)
+      // 命中路径不改变缓存大小
+      r.getFillStyle(200, 200, 210, 0.5001)
+      expect(r._fillStyleCache.size).toBe(2)
+    })
+
+    it('缓存超过 1024 项时清空（防内存泄漏）', () => {
+      const { renderer } = createHarness()
+      const r = expose(renderer)
+      // 固定 r/g/b、alpha 步进 0.001：i=0..1024 生成 1025 个互异归一化键，
+      // 第 1025 次插入触发 size > 1024 → clear
+      for (let i = 0; i < 1025; i++) {
+        r.getFillStyle(5, 6, 7, i / 1000)
+      }
+      expect(r._fillStyleCache.size).toBe(0)
+      // 清空后仍可正常获取（重建缓存）
+      expect(r.getFillStyle(5, 6, 7, 0.5)).toBe('rgba(5, 6, 7, 0.500)')
+    })
+  })
 })

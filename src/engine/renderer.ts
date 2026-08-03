@@ -135,6 +135,9 @@ export class Renderer {
   private roadStrips: RoadStrip[] = []
   /** spritesInRangeIndexed 的复用输出数组（Task 5：每帧清空重填，避免帧内新建数组） */
   private spriteScratch: Sprite[] = []
+  /** fillStyle 字符串缓存（Task B7）：key = 归一化后的 rgba 分量，命中复用同一字符串，
+   *  避免每帧为烟雾/尾焰粒子用模板字符串重建；超过上限清空防内存泄漏 */
+  private _fillStyleCache = new Map<string, string>()
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -499,11 +502,29 @@ export class Renderer {
     ctx.fill()
   }
 
+  /** 获取 rgba fillStyle 字符串：按 (r,g,b,a) 归一化键缓存。
+   *  a 内部先 toFixed(3) 归一化：既与原模板字符串 `rgba(...)` 的渲染输出逐字节一致，
+   *  又让连续浮点 alpha（每帧每粒子都不同）落入有限键空间，缓存才能真正命中。 */
+  private getFillStyle(r: number, g: number, b: number, a: number): string {
+    const aStr = a.toFixed(3)
+    const key = `${r},${g},${b},${aStr}`
+    let style = this._fillStyleCache.get(key)
+    if (!style) {
+      style = `rgba(${r}, ${g}, ${b}, ${aStr})`
+      this._fillStyleCache.set(key, style)
+      // 防止内存泄漏：限制缓存大小
+      if (this._fillStyleCache.size > 1024) {
+        this._fillStyleCache.clear()
+      }
+    }
+    return style
+  }
+
   /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */
   private drawSmoke(smoke: SmokeParticle[], cameraZ: number, opts: ProjectionOptions): void {
     const { ctx } = this
     for (const p of projectSmoke(smoke, cameraZ, this.camera.x, opts, this.camera)) {
-      ctx.fillStyle = `rgba(200, 200, 210, ${p.alpha.toFixed(3)})`
+      ctx.fillStyle = this.getFillStyle(200, 200, 210, p.alpha)
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
       ctx.fill()
@@ -524,7 +545,7 @@ export class Renderer {
       }
       const radius = Math.max(proj.scale * opts.height * 0.15, 2)
       const alpha = Math.max(1 - p.t / 0.6, 0)
-      ctx.fillStyle = `rgba(255, 180, 80, ${alpha.toFixed(3)})`
+      ctx.fillStyle = this.getFillStyle(255, 180, 80, alpha)
       ctx.beginPath()
       ctx.arc(proj.x, proj.y - radius * 0.5, radius, 0, Math.PI * 2)
       ctx.fill()
