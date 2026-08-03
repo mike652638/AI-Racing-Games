@@ -23,6 +23,15 @@ import { projectSmoke } from './smoke-render'
 
 export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
+/** 一次渲染所需的完整赛道数据（分屏双世界各持一份，避免每帧重建）。
+ *  不传 view 时回退到 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。 */
+export interface RenderView {
+  track: Segment[]
+  curvePrefixSum: Float64Array
+  spriteIndex: Map<number, Sprite[]>
+  traffic: TrafficCar[]
+}
+
 interface MountainLayer {
   profile: number[]
   factor: number
@@ -157,15 +166,16 @@ export class Renderer {
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
   }
 
-  /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
-  render(cameraZ: number, smoke: SmokeParticle[] = [], timeSec = 0): void {
-    this.renderWithOpts(cameraZ, this.opts, smoke, timeSec)
+  /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾。
+   *  view 可选：缺省用 Renderer 自身字段（setTrack/setTraffic 设置的默认视图）。 */
+  render(cameraZ: number, smoke: SmokeParticle[] = [], timeSec = 0, view?: RenderView): void {
+    this.renderWithOpts(cameraZ, this.opts, smoke, timeSec, view)
   }
 
   /** 渲染到指定屏幕区域（分屏用）：viewX 起 viewW 宽，内部裁剪平移。
    *  viewX/viewW 先做整数像素对齐（Math.round）：窗口宽为奇数时 w/2 是 x.5，
    *  半像素 translate/clip 会导致交界处 1px 级重叠/缝隙，近处路缘石斜边交错成
-   *  "三角形重叠/撕裂"。
+   *  "三角形重叠/撕裂"。view 可选，语义同 render。
    */
   renderRegion(
     cameraZ: number,
@@ -173,6 +183,7 @@ export class Renderer {
     viewW: number,
     smoke: SmokeParticle[] = [],
     timeSec = 0,
+    view?: RenderView,
   ): void {
     const { ctx } = this
     const opts = this.buildOpts(viewW, this.opts.height)
@@ -183,7 +194,7 @@ export class Renderer {
     ctx.beginPath()
     ctx.rect(0, 0, ow, this.opts.height)
     ctx.clip()
-    this.renderWithOpts(cameraZ, opts, smoke, timeSec)
+    this.renderWithOpts(cameraZ, opts, smoke, timeSec, view)
     ctx.restore()
   }
 
@@ -201,8 +212,19 @@ export class Renderer {
     opts: ProjectionOptions,
     smoke: SmokeParticle[],
     timeSec: number,
+    view?: RenderView,
   ): void {
     const { ctx } = this
+    // 视图数据：显式传入的 RenderView 优先；缺省回退到 this 字段（setTrack/setTraffic 的默认视图）。
+    // 注：计划原案 `view ?? this` 因 track/curvePrefixSum 等为 private 字段无法做结构兼容赋值，
+    // 改为类内显式对象构造（语义完全一致，见计划 Task B2 实施偏差）。
+    const v: RenderView =
+      view ?? {
+        track: this.track,
+        curvePrefixSum: this.curvePrefixSum,
+        spriteIndex: this.spriteIndex,
+        traffic: this.traffic,
+      }
     this.camera.z = cameraZ
     const colors = updateLighting(timeSec)
 
@@ -214,7 +236,7 @@ export class Renderer {
     ctx.fillStyle = colors.grass
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
 
-    const baseIndex = trackIndexForCameraZ(this.track, cameraZ)
+    const baseIndex = trackIndexForCameraZ(v.track, cameraZ)
     const baseZ = Math.floor(cameraZ / SEGMENT_LENGTH) * SEGMENT_LENGTH
 
     let curveSum = 0
@@ -223,7 +245,7 @@ export class Renderer {
       if (z <= cameraZ) {
         continue
       }
-      const segment = this.track[(baseIndex + k) % this.track.length]
+      const segment = v.track[(baseIndex + k) % v.track.length]
       const cur = projectSegmentQuad(opts, this.camera, z, curveSum)
       const next = projectSegmentQuad(
         opts,
@@ -255,15 +277,15 @@ export class Renderer {
       }
       curveSum += segment.curve
     }
-    this.drawSprites(cameraZ, opts)
-    this.drawTraffic(cameraZ, opts)
+    this.drawSprites(cameraZ, opts, v)
+    this.drawTraffic(cameraZ, opts, v)
     this.drawSmoke(smoke, cameraZ, opts)
   }
 
-  /** 绘制车流（车身 + 车窗，远→近） */
-  private drawTraffic(cameraZ: number, opts: ProjectionOptions): void {
+  /** 绘制车流（车身 + 车窗，远→近）；数据取自视图 v */
+  private drawTraffic(cameraZ: number, opts: ProjectionOptions, v: RenderView): void {
     const { ctx } = this
-    for (const car of projectTraffic(this.traffic, cameraZ, this.camera.x, opts, this.camera)) {
+    for (const car of projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera)) {
       ctx.fillStyle = car.color
       ctx.fillRect(car.bottom.x - car.width / 2, car.top.y, car.width, car.height)
       ctx.fillStyle = '#1b2430'
@@ -287,17 +309,17 @@ export class Renderer {
     }
   }
 
-  /** 绘制路边景物（远→近） */
-  private drawSprites(cameraZ: number, opts: ProjectionOptions): void {
+  /** 绘制路边景物（远→近）；数据取自视图 v */
+  private drawSprites(cameraZ: number, opts: ProjectionOptions, v: RenderView): void {
     const seen = spritesInRangeIndexed(
-      this.spriteIndex,
-      this.track,
+      v.spriteIndex,
+      v.track,
       cameraZ,
       DRAW_DISTANCE * SEGMENT_LENGTH,
     )
     for (let i = seen.length - 1; i >= 0; i--) {
       const sprite = seen[i]
-      const centerX = curveOffsetAtZ(this.track, this.curvePrefixSum, sprite.z)
+      const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z)
       const cx = centerX - this.camera.x
       const bottom = project(opts, this.camera, {
         x: cx + sprite.offset,

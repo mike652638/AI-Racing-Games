@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Renderer } from '../../src/engine/renderer'
-import { createStraightTrack } from '../../src/engine/track'
+import { Renderer, type RenderView } from '../../src/engine/renderer'
+import { SEGMENT_LENGTH, createStraightTrack } from '../../src/engine/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { createTraffic } from '../../src/engine/traffic'
-import { createMockCanvas, type MockCanvas, type MockCanvasCallCounts } from '../__mocks__/canvas'
+import {
+  buildCurvePrefixSum,
+  buildSpriteIndex,
+  createRoadsideSprites,
+} from '../../src/engine/sprites'
+import {
+  createMockCanvas,
+  type MockCanvas,
+  type MockCanvasCallCounts,
+  type MockCanvasRenderingContext2D,
+} from '../__mocks__/canvas'
 
 /**
  * Renderer 构造/重建视口时会调用 document.createElement('canvas') 生成离屏山形缓存
@@ -24,6 +34,36 @@ function createHarness(width = 800, height = 600): { canvas: MockCanvas; rendere
 
 function callCount(calls: MockCanvasCallCounts, method: string): number {
   return calls[method] ?? 0
+}
+
+/** 参与"view 路径与默认路径等价"对比的绘制方法（排除 save/translate/rect/clip 等区域管理调用） */
+const DRAW_METHODS = [
+  'beginPath',
+  'moveTo',
+  'lineTo',
+  'closePath',
+  'fill',
+  'fillRect',
+  'arc',
+  'drawImage',
+] as const
+
+/**
+ * 提取绘制方法实参序列。drawImage 的第一参数是各自构造的离屏山形 canvas，
+ * 跨实例不相等，统一替换为占位符后再比较。
+ */
+function drawingArgs(ctx: MockCanvasRenderingContext2D): Record<string, unknown[][]> {
+  const out: Record<string, unknown[][]> = {}
+  for (const method of DRAW_METHODS) {
+    out[method] = (ctx.__args[method] ?? []).map((row) =>
+      row.map((arg) =>
+        typeof arg === 'object' && arg !== null && 'width' in arg && 'height' in arg
+          ? '<canvas>'
+          : arg,
+      ),
+    )
+  }
+  return out
 }
 
 describe('Renderer 状态切换', () => {
@@ -131,5 +171,59 @@ describe('Renderer 状态切换', () => {
     expect(last[2]).toBe(2)
     expect(last[3]).toBe(600)
     expect(canvas.__ctx.fillStyle).toBe('#000')
+  })
+
+  it('renderRegion 用自定义 RenderView 渲染不同赛道（s-curve）不抛错且产生绘制', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[2]) // s-curve
+    const viewB: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+    }
+    expect(() => renderer.renderRegion(0, 0, 400, [], 0, viewB)).not.toThrow()
+    expect(callCount(canvas.__ctx.__calls, 'fill')).toBeGreaterThan(0)
+    expect(callCount(canvas.__ctx.__calls, 'fillRect')).toBeGreaterThan(0)
+  })
+
+  it('render 接受自定义 RenderView 参数并按视图渲染', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[2])
+    const viewB: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+    }
+    expect(() => renderer.render(0, [], 0, viewB)).not.toThrow()
+    expect(callCount(canvas.__ctx.__calls, 'fill')).toBeGreaterThan(0)
+  })
+
+  it('带 view 的 renderRegion 与 setTrack 后默认路径的绘制调用序列一致', () => {
+    // 默认路径：renderer 持有 trackB（setTrack 切换），render(0) 用 this 字段渲染
+    const canvasA = createMockCanvas(800, 600)
+    const rendererA = new Renderer(canvasA, createStraightTrack(10), 800, 600)
+    const trackB = createTrackFromDef(TRACK_DEFS[2])
+    const spritesB = createRoadsideSprites(trackB)
+    rendererA.setTrack(trackB, spritesB)
+    rendererA.render(0)
+
+    // view 路径：renderer 构造时仍为直道，renderRegion 传入 viewB（trackB 全套数据）
+    const canvasB = createMockCanvas(800, 600)
+    const rendererB = new Renderer(canvasB, createStraightTrack(10), 800, 600)
+    const viewB: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(spritesB, SEGMENT_LENGTH),
+      traffic: [],
+    }
+    rendererB.renderRegion(0, 0, 800, [], 0, viewB)
+
+    // renderRegion 的裁剪路径在绘制开始前多一次 ctx.beginPath()（save→translate→beginPath→rect→clip），
+    // 属区域管理调用而非 view 数据差异，去掉后其余绘制序列必须与默认路径完全一致
+    const actual = drawingArgs(canvasB.__ctx)
+    actual.beginPath = actual.beginPath.slice(1)
+    expect(actual).toEqual(drawingArgs(canvasA.__ctx))
   })
 })
