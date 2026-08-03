@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultTrack, totalCurve, type CurveControlPoint } from '../../src/engine/track'
+import { totalCurve, type CurveControlPoint } from '../../src/engine/track'
 import { createTrackFromDef, getTrackDef, TRACK_DEFS } from '../../src/engine/tracks'
+import { createDefaultTrack } from '../helpers/track'
 
 describe('TRACK_DEFS 关卡配置', () => {
   it('提供 9 条赛道且 id 唯一', () => {

@@ -10,7 +10,7 @@ export const DRIFT_STEER_THRESHOLD = 0.7
 export const DRIFT_CHARGE_THRESHOLD = 0.25
 /** 漂移激活时的每帧速度损耗因子 */
 export const DRIFT_SPEED_FACTOR = 0.985
-/** 单次漂移得分上限（当前仅为注册，score clamp 逻辑未落地） */
+/** 单次漂移得分上限（drift.ts 的 updateDrift 已实现 clamp，HUD 得分触顶显示 MAX） */
 export const DRIFT_SCORE_MAX = 99999
 
 /** 漂移挑战模式限时时长（秒，?challenge=1 时按此倒计时收束对局） */

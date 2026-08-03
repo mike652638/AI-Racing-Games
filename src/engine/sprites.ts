@@ -20,11 +20,7 @@ const TREE_HEIGHT = 1.2
 const LAMP_HEIGHT = 0.8
 
 /** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing） */
-export function createRoadsideSprites(
-  track: Segment[],
-  seed = 1234,
-  spacing = 800,
-): Sprite[] {
+export function createRoadsideSprites(track: Segment[], seed = 1234, spacing = 800): Sprite[] {
   const rand = mulberry32(seed)
   const totalLength = track.length * SEGMENT_LENGTH
   const sprites: Sprite[] = []
@@ -38,43 +34,17 @@ export function createRoadsideSprites(
 }
 
 /** 环形窗口过滤的单一事实来源：返回绝对 z 化副本或 null（视距外） */
-function windowedSprite(
-  sprite: Sprite,
-  totalLength: number,
-  cameraZ: number,
-  viewDistance: number,
-): Sprite | null {
+function windowedSprite(sprite: Sprite, totalLength: number, cameraZ: number, viewDistance: number): Sprite | null {
   const zNorm = ((sprite.z % totalLength) + totalLength) % totalLength
-  const relZ = ((zNorm - cameraZ) % totalLength + totalLength) % totalLength
+  const relZ = (((zNorm - cameraZ) % totalLength) + totalLength) % totalLength
   if (relZ > viewDistance) {
     return null
   }
   return { ...sprite, z: cameraZ + relZ }
 }
 
-/** 环形可见窗口：[cameraZ, cameraZ+viewDistance)，返回绝对 z 化的可见景物（按输入顺序） */
-export function spritesInRange(
-  sprites: Sprite[],
-  track: Segment[],
-  cameraZ: number,
-  viewDistance: number,
-): Sprite[] {
-  const totalLength = track.length * SEGMENT_LENGTH
-  const seen: Sprite[] = []
-  for (const sprite of sprites) {
-    const windowed = windowedSprite(sprite, totalLength, cameraZ, viewDistance)
-    if (windowed) {
-      seen.push(windowed)
-    }
-  }
-  return seen
-}
-
 /** 按段分组构建精灵空间索引：键 = floor(z / segmentLength)（z 应在 [0, track 总长) 内） */
-export function buildSpriteIndex(
-  sprites: Sprite[],
-  segmentLength: number,
-): Map<number, Sprite[]> {
+export function buildSpriteIndex(sprites: Sprite[], segmentLength: number): Map<number, Sprite[]> {
   const index = new Map<number, Sprite[]>()
   for (const sprite of sprites) {
     const seg = Math.floor(sprite.z / segmentLength)
@@ -90,7 +60,7 @@ export function buildSpriteIndex(
 
 /**
  * 环形可见窗口的索引查询版：仅遍历相机前方 viewDistance 内的候选段（O(候选段数)），
- * 逐精灵过滤与 spritesInRange 完全一致（环形回绕 + 绝对 z 化 + relZ <= viewDistance）。
+ * 逐精灵过滤与线性版（已迁移至 tests/helpers/sprites.ts 的 spritesInRange）完全一致（环形回绕 + 绝对 z 化 + relZ <= viewDistance）。
  * 候选段数为 floor(viewDistance / SEGMENT_LENGTH) + 2 的安全上界（窗口跨段数 + 1），
  * 且不超过总段数（视距 >= 环长时退化为全环）。
  *
@@ -122,10 +92,7 @@ export function spritesInRangeIndexed(
   const totalLength = track.length * SEGMENT_LENGTH
   const camWrapped = ((cameraZ % totalLength) + totalLength) % totalLength
   const startSeg = Math.floor(camWrapped / SEGMENT_LENGTH)
-  const numSegs = Math.min(
-    track.length,
-    Math.floor(viewDistance / SEGMENT_LENGTH) + 2,
-  )
+  const numSegs = Math.min(track.length, Math.floor(viewDistance / SEGMENT_LENGTH) + 2)
   for (let k = 0; k < numSegs; k++) {
     const bucket = index.get((startSeg + k) % track.length)
     if (!bucket) {
@@ -151,11 +118,7 @@ export function buildCurvePrefixSum(track: Segment[]): Float64Array {
 }
 
 /** sprite 所在 z 处的中心线累计曲率偏移（世界单位），O(1) 前缀和查询 */
-export function curveOffsetAtZ(
-  track: Segment[],
-  prefixSum: Float64Array,
-  z: number,
-): number {
+export function curveOffsetAtZ(track: Segment[], prefixSum: Float64Array, z: number): number {
   const index = trackIndexForCameraZ(track, z)
   const baseZ = index * SEGMENT_LENGTH
   const curveSum = prefixSum[index] // O(1) 查询

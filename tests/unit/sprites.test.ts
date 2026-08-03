@@ -4,12 +4,13 @@ import {
   buildSpriteIndex,
   createRoadsideSprites,
   curveOffsetAtZ,
-  spritesInRange,
   spritesInRangeIndexed,
   type Sprite,
 } from '../../src/engine/sprites'
+import { spritesInRange } from '../helpers/sprites'
 import { project, type Camera3D, type ProjectionOptions } from '../../src/engine/projection'
-import { createStraightTrack, createTrack, SEGMENT_LENGTH } from '../../src/engine/track'
+import { createTrack, SEGMENT_LENGTH } from '../../src/engine/track'
+import { createStraightTrack } from '../helpers/track'
 
 describe('路边景物生成', () => {
   test('确定性生成（同 seed 同结果）', () => {
@@ -149,9 +150,7 @@ describe('精灵段索引（Task 10 性能优化）', () => {
     const indexed = spritesInRangeIndexed(index, track, 1500, 900)
     const linear = spritesInRange(sprites, track, 1500, 900)
     // 跨环时索引版按段序返回、线性版按输入顺序，集合与绝对 z 必须一致
-    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(
-      linear.map((s) => s.z).sort((a, b) => a - b),
-    )
+    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(linear.map((s) => s.z).sort((a, b) => a - b))
     // z=400 → relZ=(400-1500+2000)%2000=900 边界可见 → z=2400；z=1600 → relZ=100 → z=1600
     expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual([1600, 2400])
   })
@@ -175,9 +174,7 @@ describe('精灵段索引（Task 10 性能优化）', () => {
     const indexed = spritesInRangeIndexed(index, track, 500, 3000)
     const linear = spritesInRange(sprites, track, 500, 3000)
     expect(indexed).toHaveLength(linear.length)
-    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(
-      linear.map((s) => s.z).sort((a, b) => a - b),
-    )
+    expect(indexed.map((s) => s.z).sort((a, b) => a - b)).toEqual(linear.map((s) => s.z).sort((a, b) => a - b))
   })
 })
 

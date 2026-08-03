@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { decideBotInput, createBotConfig, DEFAULT_BOT_CONFIG, type BotContext } from '../../src/ai/bot'
-import { createStraightTrack, createTrack, SEGMENT_LENGTH } from '../../src/engine/track'
+import { createTrack, SEGMENT_LENGTH } from '../../src/engine/track'
+import { createStraightTrack } from '../helpers/track'
 
 const MAX_SPEED = 6000
 

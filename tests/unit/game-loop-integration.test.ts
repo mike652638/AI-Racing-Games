@@ -5,7 +5,7 @@ import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } fr
 import { Renderer } from '../../src/engine/renderer'
 import { buildRoadStrips } from '../../src/engine/road-strip'
 import { createRoadsideSprites, spritesInRangeIndexed, type Sprite } from '../../src/engine/sprites'
-import { createStraightTrack } from '../../src/engine/track'
+import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { DRIFT_TOP_KEY } from '../../src/ui/save'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
@@ -16,7 +16,11 @@ interface StubElement {
   hidden: boolean
   className: string
   style: Record<string, string>
-  classList: { toggle: ReturnType<typeof vi.fn> }
+  classList: {
+    toggle: ReturnType<typeof vi.fn>
+    add: ReturnType<typeof vi.fn>
+    remove: ReturnType<typeof vi.fn>
+  }
   appendChild: ReturnType<typeof vi.fn>
   addEventListener: (type: string, cb: (e: unknown) => void) => void
   setPointerCapture: ReturnType<typeof vi.fn>
@@ -36,7 +40,7 @@ function createElementStub(): StubElement {
     hidden: false,
     className: '',
     style: {},
-    classList: { toggle: vi.fn() },
+    classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() },
     appendChild: vi.fn(),
     addEventListener: (type: string, cb: (e: unknown) => void): void => {
       const arr = listeners.get(type) ?? []
@@ -168,10 +172,7 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
         // 及胜场统计行（#finish-wins）与 index.html 一致：初始 hidden。
         // 视觉缺陷回归：fillFinishPanel 必须显式控制这些元素的显隐，
         // 仅写 textContent 会导致截图不可见（stub 默认 hidden=false 掩盖此缺陷）。
-        if (
-          id.startsWith('finish-') &&
-          (id.endsWith('-2') || id === 'finish-drift-winner' || id === 'finish-wins')
-        ) {
+        if (id.startsWith('finish-') && (id.endsWith('-2') || id === 'finish-drift-winner' || id === 'finish-wins')) {
           stub.hidden = true
         }
         elements.set(id, stub)
@@ -331,16 +332,14 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.getElement('finish-time-2').hidden).toBe(true)
   })
 
-  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 2px 全高分隔线）', () => {
+  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 3px 全高分隔线）', () => {
     // 重新构造分屏环境（window.location.search = '?split=1'），覆盖 beforeEach 的单屏 stub
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     const canvas = splitEnv.getCanvas()
-    // 过滤出"2px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线
+    // 过滤出"3px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线
     const countDivider = (): number =>
-      (canvas.__ctx.__args.fillRect ?? []).filter(
-        (a) => a[1] === 0 && a[2] === 2 && a[3] === 600,
-      ).length
+      (canvas.__ctx.__args.fillRect ?? []).filter((a) => a[1] === 0 && a[2] === 3 && a[3] === 600).length
 
     // 菜单分屏：左/右两次 renderRegion + 一次 drawDivider
     splitEnv.driveFrames(3)
@@ -609,9 +608,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(hotEnv.getElement('finish-time-2').hidden).toBe(false)
     // finish-hint 显示胜负（用可预测帧数驱动时 P1/P2 用时接近，三选一断言）
     expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
-    expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(
-      hotEnv.getElement('finish-hint').textContent,
-    )
+    expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(hotEnv.getElement('finish-hint').textContent)
     // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）
     expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
   })
@@ -686,9 +683,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
 
   it('P3（P3）：预设 9 条赛道存档后 BEST 汇总渲染齐全且对应行含格式化时间', () => {
     // 注入全部 9 条赛道的 P1 best（key: outrun-pseudo3d-best-<id>，P1 无后缀）
-    const storage = Object.fromEntries(
-      TRACK_DEFS.map((def) => [`outrun-pseudo3d-best-${def.id}`, '42.5']),
-    )
+    const storage = Object.fromEntries(TRACK_DEFS.map((def) => [`outrun-pseudo3d-best-${def.id}`, '42.5']))
     const env2 = stubEnvironment('', storage)
     new GameLoop()
     const summary = env2.getElement('best-summary')
@@ -767,9 +762,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     const slider = env2.getElement('pause-music-volume')
     slider.value = '40'
     env2.fireElementEvent('pause-music-volume', 'input')
-    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem(
-      'outrun-pseudo3d-music-volume',
-    )
+    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem('outrun-pseudo3d-music-volume')
     expect(saved).toBe('0.4')
   })
 
@@ -779,17 +772,15 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     const slider = env2.getElement('pause-sfx-volume')
     slider.value = '80'
     env2.fireElementEvent('pause-sfx-volume', 'input')
-    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem(
-      'outrun-pseudo3d-sfx-volume',
-    )
+    const saved = (window as unknown as { localStorage: Storage }).localStorage.getItem('outrun-pseudo3d-sfx-volume')
     expect(saved).toBe('0.8')
   })
 
   it('G1（G1）：挑战模式限时刷分——驱动到限时后 finished 且结算面板显示挑战文案', () => {
     const chEnv = stubEnvironment('?challenge=1')
     new GameLoop()
-    // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写）
-    expect(chEnv.getElement('menu-hint').textContent).toContain('挑战')
+    // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写；Batch 3 文案格式：[限时说明] · 驾驶 · 开始）
+    expect(chEnv.getElement('menu-hint').textContent).toContain('限时刷分')
     chEnv.fireKey('Enter')
     chEnv.fireKey('KeyW')
     // 首帧挑战剩余时间 60s（raceTime 0）

@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import {
   SEGMENT_LENGTH,
-  createDefaultTrack,
   createSmoothTrack,
-  createStraightTrack,
   createTrack,
   totalCurve,
   trackIndexForCameraZ,
   type Segment,
 } from '../../src/engine/track'
+import { createDefaultTrack, createStraightTrack } from '../helpers/track'
 
 describe('直道分段生成', () => {
   test('生成指定数量的等距分段', () => {

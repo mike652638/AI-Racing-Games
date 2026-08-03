@@ -25,11 +25,6 @@ export function createTrack(groups: CurveGroup[], segmentLength = SEGMENT_LENGTH
   return track
 }
 
-/** 生成直线赛道分段 */
-export function createStraightTrack(count: number): Segment[] {
-  return createTrack([{ curve: 0, count }])
-}
-
 /** 默认环形赛道控制点：直道+左右弯交替（弯道带渐变坡道），总曲率回环为 0 */
 export const DEFAULT_CONTROL_POINTS: CurveControlPoint[] = [
   { z: 0, curve: 0 },
@@ -52,11 +47,6 @@ export const DEFAULT_CONTROL_POINTS: CurveControlPoint[] = [
   { z: 91800, curve: 0 },
 ]
 
-/** 默认环形赛道：直道+左右弯交替（弯道带渐变坡道），总曲率回环为 0（460 段，约 15 秒/圈） */
-export function createDefaultTrack(): Segment[] {
-  return createSmoothTrack(DEFAULT_CONTROL_POINTS)
-}
-
 export interface CurveControlPoint {
   /** 分段起点 z 坐标（应为段长的整数倍） */
   z: number
@@ -65,10 +55,7 @@ export interface CurveControlPoint {
 }
 
 /** 按控制点线性插值生成平滑曲线赛道（环形赛道） */
-export function createSmoothTrack(
-  controlPoints: CurveControlPoint[],
-  segmentLength = SEGMENT_LENGTH,
-): Segment[] {
+export function createSmoothTrack(controlPoints: CurveControlPoint[], segmentLength = SEGMENT_LENGTH): Segment[] {
   if (controlPoints.length === 0) return []
   const segments: Segment[] = []
   const lastZ = controlPoints[controlPoints.length - 1].z
