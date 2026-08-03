@@ -12,9 +12,11 @@ function createMockHudElements(): HudElements {
     hud2Container: container() as unknown as HTMLDivElement,
     hudBest: element(),
     hudSpeed: element(),
+    hudSpeedUnit: element(),
     hudLap: element(),
     hudTime: element(),
     hudSpeed2: element(),
+    hudSpeedUnit2: element(),
     hudLap2: element(),
     hudTime2: element(),
     driftIndicator: element(),
@@ -29,6 +31,8 @@ describe('hud visibility', () => {
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, false, 1000, 3, 'menu')
     expect(elements.hudSpeed.hidden).toBe(true)
+    expect(elements.hudSpeedUnit!.hidden).toBe(true)
+    expect(elements.hudSpeedUnit2!.hidden).toBe(true)
     expect(elements.hudLap.hidden).toBe(true)
     expect(elements.hudTime.hidden).toBe(true)
     expect(elements.hudBest.hidden).toBe(true)
@@ -44,6 +48,7 @@ describe('hud visibility', () => {
     const carConfig = createCarConfig()
     updateHud(elements, race, carConfig, null, false, 1000, 3, 'racing')
     expect(elements.hudSpeed.hidden).toBe(false)
+    expect(elements.hudSpeedUnit!.hidden).toBe(false)
     expect(elements.hudLap.hidden).toBe(false)
     expect(elements.hudTime.hidden).toBe(false)
     expect(elements.driftIndicator.hidden).toBe(true)

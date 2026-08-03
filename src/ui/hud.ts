@@ -11,9 +11,12 @@ export interface HudElements {
   hud2Container?: HTMLDivElement
   hudBest: HTMLDivElement
   hudSpeed: HTMLDivElement
+  /** 速度单位标签（km/h），菜单阶段需与速度数字一同隐藏 */
+  hudSpeedUnit?: HTMLDivElement
   hudLap: HTMLDivElement
   hudTime: HTMLDivElement
   hudSpeed2: HTMLDivElement
+  hudSpeedUnit2?: HTMLDivElement
   hudLap2: HTMLDivElement
   hudTime2: HTMLDivElement
   driftIndicator: HTMLDivElement
@@ -43,10 +46,12 @@ export function updateHud(
   const showHud = phase === PHASE_RACING || phase === PHASE_PAUSED
   if (!showHud) {
     elements.hudSpeed.hidden = true
+    if (elements.hudSpeedUnit) elements.hudSpeedUnit.hidden = true
     elements.hudLap.hidden = true
     elements.hudTime.hidden = true
     elements.hudBest.hidden = true
     elements.hudSpeed2.hidden = true
+    if (elements.hudSpeedUnit2) elements.hudSpeedUnit2.hidden = true
     elements.hudLap2.hidden = true
     elements.hudTime2.hidden = true
     elements.driftIndicator.hidden = true
@@ -54,6 +59,7 @@ export function updateHud(
   }
 
   elements.hudSpeed.hidden = false
+  if (elements.hudSpeedUnit) elements.hudSpeedUnit.hidden = false
   elements.hudLap.hidden = false
   elements.hudTime.hidden = false
   elements.hudSpeed.textContent = formatSpeed(race.player1.carState.speed, carConfig.maxSpeed)
@@ -67,6 +73,7 @@ export function updateHud(
 
   // P2 元素显隐由 updateHud 统一处理：非分屏隐藏、分屏显示
   elements.hudSpeed2.hidden = !splitMode
+  if (elements.hudSpeedUnit2) elements.hudSpeedUnit2.hidden = !splitMode
   elements.hudLap2.hidden = !splitMode
   elements.hudTime2.hidden = !splitMode
   if (splitMode) {
