@@ -819,11 +819,11 @@ export class GameLoop {
       this.race.player2.boostCharge = boost2.charge
       const effInput2: CarInput = { ...input2, boost: boost2.boost }
 
-      // G4（G4）：BOOST 条——帧块直接操作（宽度 = P1 charge 百分比），仅比赛阶段可见
+      // G4（G4）：BOOST 条——帧块直接操作（宽度 = P1 charge 相对 max-width 200px 的像素值，charge 0→200px 平滑映射；勿用百分比——百分比相对视口会被 max-width 截断导致 0.3~1.0 区间恒满条），仅比赛阶段可见
       this.boostBar ??= document.getElementById('boost-bar') as HTMLDivElement | null
       if (this.boostBar) {
         this.boostBar.hidden = this.phase !== PHASE_RACING
-        this.boostBar.style.width = `${Math.round(this.race.player1.boostCharge * 100)}%`
+        this.boostBar.style.width = `${Math.round(this.race.player1.boostCharge * 200)}px`
       }
 
       if (this.hotseatMode) {
