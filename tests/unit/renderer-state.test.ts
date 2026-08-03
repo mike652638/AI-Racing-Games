@@ -260,6 +260,30 @@ describe('Renderer 状态切换', () => {
     expect(nightIncrement).toBeGreaterThan(baseIncrement)
   })
 
+  it('night 渲染车尾灯：fillRect 增量高于 day（每辆可见车 2 次红色尾灯）', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[4]) // canyon（夜晚赛道）
+    const traffic = createTraffic(2000)
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic,
+    }
+    const nightView: RenderView = { ...baseView, night: true }
+    // 预热一帧后，分别统计 day / night 渲染各自新增的 fillRect 次数（callCount 为累计值，须取增量）
+    renderer.render(0, [], 0, baseView)
+    const beforeNight = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, nightView)
+    const afterNight = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, baseView)
+    const afterBase = callCount(canvas.__ctx.__calls, 'fillRect')
+    const nightIncrement = afterNight - beforeNight
+    const baseIncrement = afterBase - afterNight
+    // 同一场景下 night 每辆可见车多 2 次 fillRect（红色尾灯双灯），增量应高于 day
+    expect(nightIncrement).toBeGreaterThan(baseIncrement)
+  })
+
   it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4])

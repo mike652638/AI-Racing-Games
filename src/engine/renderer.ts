@@ -380,6 +380,21 @@ export class Renderer {
         car.height * 0.4,
       )
       if (night) {
+        // 红色尾灯：车身下部（车头朝画面上方，车尾在下）双灯——cx ± width*0.3、宽 width*0.2、
+        // 从 car.top.y + height*0.7 起高 height*0.25；day 渲染零新增
+        ctx.fillStyle = '#ff3b30'
+        ctx.fillRect(
+          car.bottom.x - car.width * 0.3,
+          car.top.y + car.height * 0.7,
+          car.width * 0.2,
+          car.height * 0.25,
+        )
+        ctx.fillRect(
+          car.bottom.x + car.width * 0.3,
+          car.top.y + car.height * 0.7,
+          car.width * 0.2,
+          car.height * 0.25,
+        )
         // car 为 TrafficProjection（含原始车数据字段 car.car），shiftDir 取自车数据
         this.drawHeadlight(car.bottom.x, car.top.y, car.width, car.height, car.car.shiftDir)
       }
