@@ -93,13 +93,32 @@ export function buildSpriteIndex(
  * 逐精灵过滤与 spritesInRange 完全一致（环形回绕 + 绝对 z 化 + relZ <= viewDistance）。
  * 候选段数为 floor(viewDistance / SEGMENT_LENGTH) + 2 的安全上界（窗口跨段数 + 1），
  * 且不超过总段数（视距 >= 环长时退化为全环）。
+ *
+ * 重载：不传 out 时返回新数组（旧行为，向后兼容）；传 out 时清空重填该数组并返回匹配数量，
+ * 避免渲染循环每帧创建新数组（对象复用，见 Task B-5）。
  */
 export function spritesInRangeIndexed(
   index: Map<number, Sprite[]>,
   track: Segment[],
   cameraZ: number,
   viewDistance: number,
-): Sprite[] {
+): Sprite[]
+export function spritesInRangeIndexed(
+  index: Map<number, Sprite[]>,
+  track: Segment[],
+  cameraZ: number,
+  viewDistance: number,
+  out: Sprite[],
+): number
+export function spritesInRangeIndexed(
+  index: Map<number, Sprite[]>,
+  track: Segment[],
+  cameraZ: number,
+  viewDistance: number,
+  out?: Sprite[],
+): Sprite[] | number {
+  const result = out ?? []
+  result.length = 0 // 清空但保留内存（复用数组时避免重新分配）
   const totalLength = track.length * SEGMENT_LENGTH
   const camWrapped = ((cameraZ % totalLength) + totalLength) % totalLength
   const startSeg = Math.floor(camWrapped / SEGMENT_LENGTH)
@@ -107,7 +126,6 @@ export function spritesInRangeIndexed(
     track.length,
     Math.floor(viewDistance / SEGMENT_LENGTH) + 2,
   )
-  const seen: Sprite[] = []
   for (let k = 0; k < numSegs; k++) {
     const bucket = index.get((startSeg + k) % track.length)
     if (!bucket) {
@@ -116,11 +134,11 @@ export function spritesInRangeIndexed(
     for (const sprite of bucket) {
       const windowed = windowedSprite(sprite, totalLength, cameraZ, viewDistance)
       if (windowed) {
-        seen.push(windowed)
+        result.push(windowed)
       }
     }
   }
-  return seen
+  return out ? result.length : result
 }
 
 /** 预计算前缀和：prefixCurveSum[i] = sum(track[0..i-1].curve) */

@@ -181,6 +181,46 @@ describe('精灵段索引（Task 10 性能优化）', () => {
   })
 })
 
+describe('spritesInRangeIndexed 复用数组（Task 5）', () => {
+  test('传入 out 时复用同一数组并返回匹配数量', () => {
+    const track = createStraightTrack(10) // 总长 2000
+    const sprites = createRoadsideSprites(track, 1234)
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const reuseArray: Sprite[] = []
+    const count1 = spritesInRangeIndexed(index, track, 1500, 900, reuseArray)
+    expect(count1).toBeGreaterThan(0)
+    const firstAddr = reuseArray
+    const count2 = spritesInRangeIndexed(index, track, 1500, 900, reuseArray)
+    expect(reuseArray).toBe(firstAddr) // 同一引用，未创建新数组
+    expect(count2).toBe(count1)
+    expect(reuseArray).toHaveLength(count2) // 数组内容与返回数量一致
+  })
+
+  test('复用数组每帧清空重填（上次残留不残留）', () => {
+    const track = createStraightTrack(10)
+    const sprites = createRoadsideSprites(track, 1234)
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const out: Sprite[] = []
+    const c1 = spritesInRangeIndexed(index, track, 1500, 900, out)
+    // 人为塞入残留，模拟上一帧旧数据
+    out.push({ kind: 'tree', z: 99999, offset: 0, height: 1 })
+    const c2 = spritesInRangeIndexed(index, track, 1500, 900, out)
+    expect(c2).toBe(c1)
+    expect(out).toHaveLength(c2)
+    expect(out.some((s) => s.z === 99999)).toBe(false) // 残留已被清空
+  })
+
+  test('不传 out 时返回新数组（向后兼容，语义与线性版一致）', () => {
+    const track = createStraightTrack(10)
+    const sprites = createRoadsideSprites(track, 1234)
+    const index = buildSpriteIndex(sprites, SEGMENT_LENGTH)
+    const a = spritesInRangeIndexed(index, track, 1500, 900)
+    const b = spritesInRangeIndexed(index, track, 1500, 900)
+    expect(a).not.toBe(b) // 无 out 时每次创建新数组
+    expect(a).toEqual(spritesInRange(sprites, track, 1500, 900))
+  })
+})
+
 describe('路边景物投影尺寸（P0-3 回归）', () => {
   // 与 Renderer.buildOpts 同参：horizon = height*0.35, depth = width*0.84
   const opts: ProjectionOptions = { width: 800, height: 600, horizon: 210, depth: 672 }

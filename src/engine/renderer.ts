@@ -133,6 +133,8 @@ export class Renderer {
   private roadStripCache = new Map<number, OffscreenCanvas>()
   /** 最近一次 setTrack 传入的道路段列表（renderCachedRoadStrips 的数据源；Task 4 支撑字段） */
   private roadStrips: RoadStrip[] = []
+  /** spritesInRangeIndexed 的复用输出数组（Task 5：每帧清空重填，避免帧内新建数组） */
+  private spriteScratch: Sprite[] = []
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -531,14 +533,15 @@ export class Renderer {
 
   /** 绘制路边景物（远→近）；数据取自视图 v */
   private drawSprites(cameraZ: number, opts: ProjectionOptions, v: RenderView): void {
-    const seen = spritesInRangeIndexed(
+    const count = spritesInRangeIndexed(
       v.spriteIndex,
       v.track,
       cameraZ,
       DRAW_DISTANCE * SEGMENT_LENGTH,
+      this.spriteScratch, // 复用数组：返回匹配数量，数组内容在下一次调用前有效
     )
-    for (let i = seen.length - 1; i >= 0; i--) {
-      const sprite = seen[i]
+    for (let i = count - 1; i >= 0; i--) {
+      const sprite = this.spriteScratch[i]
       const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z)
       const cx = centerX - this.camera.x
       const bottom = project(opts, this.camera, {
