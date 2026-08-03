@@ -39,19 +39,23 @@ export function updateCar(
   state: CarState,
   config: CarConfig,
   turnRateOverride?: number,
+  wet = false,
 ): boolean {
   if (input.throttle > 0) {
     state.speed = Math.min(config.maxSpeed, state.speed + config.acceleration * input.throttle * dt)
   }
   else if (input.brake) {
-    state.speed = Math.max(0, state.speed - config.braking * dt)
+    // G3（G3）：雨天制动力降 30%（刹车距离变长）；仅 brake 分支受影响，松油门 deceleration 不变
+    state.speed = Math.max(0, state.speed - config.braking * (wet ? 0.7 : 1) * dt)
   }
   else {
     state.speed = Math.max(0, state.speed - config.deceleration * dt)
   }
 
+  // G3（G3）：雨天抓地力降 15%（有效转向率 ×0.85，转向不足）；wet=false 路径与旧版逐字节一致
+  const effectiveTurn = wet ? (turnRateOverride ?? config.turnRate) * 0.85 : (turnRateOverride ?? config.turnRate)
   state.position +=
-    input.steer * (turnRateOverride ?? config.turnRate) * (state.speed / config.maxSpeed) * dt
+    input.steer * effectiveTurn * (state.speed / config.maxSpeed) * dt
 
   if (Math.abs(state.position) > config.roadHalfWidth) {
     state.speed = Math.max(0, state.speed - config.offRoadDeceleration * dt)

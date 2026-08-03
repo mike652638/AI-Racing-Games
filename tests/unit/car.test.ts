@@ -131,3 +131,24 @@ describe('collidePlayers', () => {
     expect(collidePlayers(0, 0, 0, 1.5)).toBe(false)
   })
 })
+
+describe('wet 雨天物理（G3）', () => {
+  // 用默认配置（maxSpeed 6000、turnRate 0.8、braking 3600）：speed 3000 时单帧转向增量 0.4 < roadHalfWidth 1，不出界
+  const cfg = createCarConfig()
+
+  it('wet 时转向抓地力降 15%（position 增量为非 wet 的 0.85 倍）', () => {
+    const base = state(0, 3000)
+    updateCar(1, { throttle: 0, brake: false, steer: 1 }, base, cfg)
+    // 松油门分支先减速（3000-1200=1800）再算转向：基准增量 = steer 1 * turnRate 0.8 * (1800/6000) * 1 = 0.24
+    expect(base.position).toBeCloseTo(0.24, 6)
+    const wet = state(0, 3000)
+    updateCar(1, { throttle: 0, brake: false, steer: 1 }, wet, cfg, undefined, true)
+    expect(wet.position).toBeCloseTo(base.position * 0.85, 6)
+  })
+
+  it('wet 时制动力降 30%（brake 1 秒速度降幅 = braking * 0.7，刹车距离变长）', () => {
+    const s = state(0, 3000)
+    updateCar(1, { throttle: 0, brake: true, steer: 0 }, s, cfg, undefined, true)
+    expect(s.speed).toBeCloseTo(3000 - cfg.braking * 0.7, 6)
+  })
+})

@@ -39,6 +39,21 @@ describe('updatePlayerFrame 完整更新链路', () => {
     updatePlayerFrame(10, THROTTLE, player, config, LAP_LENGTH)
     expect(player.carState.speed).toBe(config.maxSpeed)
   })
+
+  test('G3（G3）：wet=true 时转向偏移小于 wet=false（湿滑路面抓地力透传）', () => {
+    const dry = createPlayerState()
+    const wet = createPlayerState()
+    const config = createCarConfig()
+    const steer: CarInput = { throttle: 0, brake: false, steer: 1 }
+    // 预热：各加速 1 秒到同速度（2400），随后同速度下转向 1 秒对比横向偏移
+    updatePlayerFrame(1, THROTTLE, dry, config, LAP_LENGTH)
+    updatePlayerFrame(1, THROTTLE, wet, config, LAP_LENGTH)
+    const dryBase = dry.carState.position
+    const wetBase = wet.carState.position
+    updatePlayerFrame(1, steer, dry, config, LAP_LENGTH, undefined, undefined, false)
+    updatePlayerFrame(1, steer, wet, config, LAP_LENGTH, undefined, undefined, true)
+    expect(wet.carState.position - wetBase).toBeLessThan(dry.carState.position - dryBase)
+  })
 })
 
 describe('updatePlayerFrame 漂移链路', () => {

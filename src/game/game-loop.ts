@@ -83,10 +83,11 @@ export function updatePlayerFrame(
   lapLength: number,
   lapTimes?: number[],
   lastLapRef?: LastLapRef,
+  wet = false,
 ): void {
   player.driftState = updateDrift(dt, input, player.carState, carConfig, player.driftState, player.cameraZ)
   player.carState.speed *= driftSpeedFactor(player.driftState)
-  updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState))
+  updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState), wet)
   player.cameraZ += player.carState.speed * dt
   player.raceTime += dt
 
@@ -625,6 +626,8 @@ export class GameLoop {
       const raining = Math.floor(this.race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
       if (raining) this.rainSound?.start()
       else this.rainSound?.stop()
+      // G3（G3）：雨天物理——与雨声同公式同源（raceTime 三态 phase 2）；热座/分屏 P2 世界统一同一 wet 值
+      const wet = Math.floor(this.race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
       // 双世界车流独立推进：P1 用 tracks[0]，分屏或热座 P2 回合时 P2 用 tracks[1]
       // （热座 P1 回合 tracks[1] 静止、P2 回合推进，交棒后车流随当前玩家世界前进）
       // P4（P4）：传玩家位置启用车流避让 AI（逼近同车道车流时让道）
@@ -657,6 +660,7 @@ export class GameLoop {
             this.trackManager.getLapLength(0),
             this.race.lapTimes,
             this.lapRef,
+            wet,
           )
           this.race.lastLap = this.lapRef.value
         } else {
@@ -669,6 +673,7 @@ export class GameLoop {
             this.trackManager.getLapLength(1),
             this.race.lapTimes2,
             this.lapRef2,
+            wet,
           )
           this.race.lastLap2 = this.lapRef2.value
         }
@@ -683,6 +688,7 @@ export class GameLoop {
           this.trackManager.getLapLength(0),
           this.race.lapTimes,
           this.lapRef,
+          wet,
         )
         this.race.lastLap = this.lapRef.value
 
@@ -696,6 +702,7 @@ export class GameLoop {
           this.trackManager.getLapLength(1),
           this.race.lapTimes2,
           this.lapRef2,
+          wet,
         )
         this.race.lastLap2 = this.lapRef2.value
       }
