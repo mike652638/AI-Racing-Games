@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BASS_LINE, MELODY_LINE, noteToFreq, tickMsForBpm } from '../../src/audio/music'
+import {
+  BASS_LINE,
+  MELODY_LINE,
+  nextStep,
+  noteToFreq,
+  stepEvents,
+  tickMsForBpm,
+} from '../../src/audio/music'
 
 describe('noteToFreq 音符转频率', () => {
   it('A4 为 440Hz', () => {
@@ -48,5 +55,31 @@ describe('音乐序列', () => {
       expect(freq).toBeGreaterThan(200)
       expect(freq).toBeLessThan(2000)
     }
+  })
+})
+
+describe('调度纯函数', () => {
+  it('stepEvents(0)：低音 BASS_LINE[0]、旋律 MELODY_LINE[0]、踩镲', () => {
+    const ev = stepEvents(0)
+    expect(ev.bass).toBe(BASS_LINE[0])
+    expect(ev.melody).toBe(MELODY_LINE[0])
+    expect(ev.hat).toBe(true)
+  })
+
+  it('stepEvents(1)：仅低音（无旋律无踩镲）', () => {
+    const ev = stepEvents(1)
+    expect(ev.bass).toBe(BASS_LINE[Math.floor(1 / 4) % 4])
+    expect(ev.melody).toBeNull()
+    expect(ev.hat).toBe(false)
+  })
+
+  it('stepEvents(2)：旋律为 MELODY_LINE[1]', () => {
+    const ev = stepEvents(2)
+    expect(ev.melody).toBe(MELODY_LINE[1])
+  })
+
+  it('nextStep 循环推进：0→1、15→0', () => {
+    expect(nextStep(0)).toBe(1)
+    expect(nextStep(15)).toBe(0)
   })
 })

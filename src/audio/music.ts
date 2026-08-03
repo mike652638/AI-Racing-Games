@@ -40,6 +40,20 @@ export const BASS_LINE = ['A2', 'F2', 'C3', 'G2'] as const
 /** 旋律线：8 个音循环 */
 export const MELODY_LINE = ['A4', 'C5', 'E5', 'G5', 'E5', 'C5', 'A4', 'G4'] as const
 
+/** 16 步循环中某一步的音乐事件（纯函数：step → 音符/踩镲事件，供 playStep 分发与单测） */
+export function stepEvents(step: number): { bass: string; melody: string | null; hat: boolean } {
+  return {
+    bass: BASS_LINE[Math.floor(step / 4) % BASS_LINE.length],
+    melody: step % 2 === 0 ? MELODY_LINE[Math.floor(step / 2) % MELODY_LINE.length] : null,
+    hat: step % 4 === 0,
+  }
+}
+
+/** 下一步进（16 步循环回绕） */
+export function nextStep(step: number): number {
+  return (step + 1) % 16
+}
+
 /** 16 步循环的合成音乐播放器（与引擎音效共享 AudioContext） */
 export class MusicPlayer {
   /** RAF 句柄：非 null 表示正在播放（代替 setInterval 定时器） */
@@ -99,19 +113,19 @@ export class MusicPlayer {
     const tickSec = tickMsForBpm(BPM) / 1000
     while (this.nextTime < this.ctx.currentTime + 0.2) {
       this.playStep(this.step, this.nextTime)
-      this.step = (this.step + 1) % 16
+      this.step = nextStep(this.step)
       this.nextTime += tickSec
     }
   }
 
   private playStep(step: number, when: number): void {
-    const bass = noteToFreq(BASS_LINE[Math.floor(step / 4) % BASS_LINE.length])
-    this.oscillator(bass, 'square', 0.1, when, tickMsForBpm(BPM) / 1000 * 0.9)
-    if (step % 2 === 0) {
-      const melody = noteToFreq(MELODY_LINE[Math.floor(step / 2) % MELODY_LINE.length])
-      this.oscillator(melody, 'sawtooth', 0.06, when, tickMsForBpm(BPM) / 1000 * 0.5)
+    // 分发由纯函数 stepEvents 决定（与重构前逐字节一致：bass 恒播、melody 隔拍、hat 每 4 拍）
+    const { bass, melody, hat } = stepEvents(step)
+    this.oscillator(noteToFreq(bass), 'square', 0.1, when, tickMsForBpm(BPM) / 1000 * 0.9)
+    if (melody !== null) {
+      this.oscillator(noteToFreq(melody), 'sawtooth', 0.06, when, tickMsForBpm(BPM) / 1000 * 0.5)
     }
-    if (step % 4 === 0) {
+    if (hat) {
       this.hat(when)
     }
   }
