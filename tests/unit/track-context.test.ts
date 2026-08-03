@@ -27,6 +27,18 @@ describe('createTrackContext', () => {
     refreshTraffic(ctx)
     expect(ctx.traffic).not.toBe(old)
   })
+  it('车流密度按赛道 trafficCount 生效（highway 12）', () => {
+    const highway = createTrackContext(TRACK_DEFS[1])
+    expect(highway.traffic.length).toBe(12)
+  })
+  it('车流密度按赛道 trafficCount 生效（s-curve 6）', () => {
+    const scurve = createTrackContext(TRACK_DEFS[2])
+    expect(scurve.traffic.length).toBe(6)
+  })
+  it('无 trafficCount 字段的赛道走默认密度（classic 8）', () => {
+    const classic = createTrackContext(TRACK_DEFS[0])
+    expect(classic.traffic.length).toBe(8)
+  })
   it('不同赛道定义产生不同圈长（S 弯短于经典）', () => {
     const classic = createTrackContext(TRACK_DEFS[0])
     const scurve = createTrackContext(TRACK_DEFS[2])

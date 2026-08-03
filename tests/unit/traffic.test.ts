@@ -24,6 +24,9 @@ describe('createTraffic', () => {
     const traffic = createTraffic(20000, 777, 8)
     traffic.forEach((c) => expect(Math.abs(c.offset)).toBeLessThan(1))
   })
+  test('count 参数自定义车流数量', () => {
+    expect(createTraffic(20000, 777, 3)).toHaveLength(3)
+  })
   test('speed 为正', () => {
     const traffic = createTraffic(20000, 777, 8)
     traffic.forEach((c) => expect(c.speed).toBeGreaterThan(0))

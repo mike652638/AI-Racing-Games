@@ -7,6 +7,7 @@ import {
 } from '../engine/sprites'
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
 import { createTraffic, type TrafficCar } from '../engine/traffic'
+import { TRAFFIC_DEFAULT_COUNT } from './constants'
 
 /**
  * 单个玩家的完整赛道世界上下文：赛道定义、分段数据、圈长/圈数、
@@ -46,11 +47,11 @@ export function createTrackContext(def: TrackDef): TrackContext {
     curvePrefixSum: buildCurvePrefixSum(segments),
     spriteIndex: buildSpriteIndex(sprites, SEGMENT_LENGTH),
     sprites,
-    traffic: createTraffic(lapLength),
+    traffic: createTraffic(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT),
   }
 }
 
 /** 重建本世界车流（重置后调用，引用替换；不触碰其它预计算字段） */
 export function refreshTraffic(ctx: TrackContext): void {
-  ctx.traffic = createTraffic(ctx.lapLength)
+  ctx.traffic = createTraffic(ctx.lapLength, 777, ctx.def.trafficCount ?? TRAFFIC_DEFAULT_COUNT)
 }

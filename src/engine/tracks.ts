@@ -14,6 +14,8 @@ export interface TrackDef {
   controlPoints: CurveControlPoint[]
   /** 圈数 */
   laps: number
+  /** 车流密度（条/圈），缺省时使用 TRAFFIC_DEFAULT_COUNT */
+  trafficCount?: number
 }
 
 /** 高速公路：长直道 + 大半径缓弯 */
@@ -86,11 +88,12 @@ const CANYON_CONTROL_POINTS: CurveControlPoint[] = [
 ]
 
 export const TRACK_DEFS: TrackDef[] = [
+  // classic 不写 trafficCount，走默认密度（TRAFFIC_DEFAULT_COUNT = 8）
   { id: 'classic', name: '经典赛道', controlPoints: DEFAULT_CONTROL_POINTS, laps: 3 },
-  { id: 'highway', name: '高速公路', controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3 },
-  { id: 's-curve', name: 'S 弯挑战', controlPoints: SCURVE_CONTROL_POINTS, laps: 2 },
-  { id: 'island', name: '环岛巡回', controlPoints: ISLAND_CONTROL_POINTS, laps: 3 },
-  { id: 'canyon', name: '峡谷疾驰', controlPoints: CANYON_CONTROL_POINTS, laps: 2 },
+  { id: 'highway', name: '高速公路', controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3, trafficCount: 12 },
+  { id: 's-curve', name: 'S 弯挑战', controlPoints: SCURVE_CONTROL_POINTS, laps: 2, trafficCount: 6 },
+  { id: 'island', name: '环岛巡回', controlPoints: ISLAND_CONTROL_POINTS, laps: 3, trafficCount: 10 },
+  { id: 'canyon', name: '峡谷疾驰', controlPoints: CANYON_CONTROL_POINTS, laps: 2, trafficCount: 8 },
 ]
 
 /** 按赛道定义生成分段数据 */

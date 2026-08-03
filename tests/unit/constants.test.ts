@@ -11,6 +11,7 @@ import {
   RENDER_DRAW_DISTANCE,
   RENDER_HORIZON_RATIO,
   ROAD_HALF_WIDTH,
+  TRAFFIC_DEFAULT_COUNT,
 } from '../../src/game/constants'
 import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
 
@@ -36,6 +37,10 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
   it('路面几何常量值与约定一致', () => {
     expect(ROAD_HALF_WIDTH).toBe(1)
     expect(EDGE_WIDTH).toBe(0.15)
+  })
+
+  it('车流常量值与约定一致', () => {
+    expect(TRAFFIC_DEFAULT_COUNT).toBe(8)
   })
 
   it('road-geometry 兼容导出 DRAW_DISTANCE 与真源 RENDER_DRAW_DISTANCE 一致', () => {
