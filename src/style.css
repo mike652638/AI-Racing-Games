@@ -1,3 +1,21 @@
+/* 设计令牌：间距、字体、色彩、字号统一由变量管理，方便响应式与安全区适配 */
+:root {
+  --hud-pad: 24px;
+  --font-mono: 'Consolas', 'Courier New', monospace;
+  --accent: #ffd75e;
+  --bg-overlay: rgba(0, 0, 0, 0.75);
+  --speed-fs: clamp(36px, 12vw, 56px);
+  --title-fs: clamp(28px, 9vw, 64px);
+  --subtitle-fs: clamp(16px, 4vw, 24px);
+  --hud-fs: clamp(14px, 3vw, 20px);
+  --hint-fs: clamp(12px, 2.5vw, 14px);
+}
+
+/* 修复：display:flex 会覆盖浏览器默认的 [hidden] 样式，需要显式强制 */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -6,15 +24,19 @@ body {
   background: #000;
 }
 
+/* 画布：CSS 尺寸接管显示大小，避免 DPR 缩放导致只显示左上角；禁止触摸默认手势 */
 canvas {
   display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
 }
 
 #hud {
   position: fixed;
-  top: 24px;
-  right: 24px;
-  font-family: 'Consolas', 'Courier New', monospace;
+  top: calc(var(--hud-pad) + env(safe-area-inset-top));
+  right: calc(var(--hud-pad) + env(safe-area-inset-right));
+  font-family: var(--font-mono);
   color: #fff;
   text-align: right;
   pointer-events: none;
@@ -23,28 +45,28 @@ canvas {
 }
 
 #hud-speed {
-  font-size: 56px;
+  font-size: var(--speed-fs);
   font-weight: 700;
   line-height: 1;
 }
 
 #hud-speed-unit {
-  font-size: 14px;
+  font-size: var(--hint-fs);
   opacity: 0.7;
   margin-bottom: 8px;
 }
 
 #hud-lap,
 #hud-time {
-  font-size: 20px;
+  font-size: var(--hud-fs);
   opacity: 0.9;
 }
 
 #hud2 {
   position: fixed;
-  bottom: 24px;
-  left: 24px;
-  font-family: 'Consolas', 'Courier New', monospace;
+  bottom: calc(var(--hud-pad) + env(safe-area-inset-bottom));
+  left: calc(var(--hud-pad) + env(safe-area-inset-left));
+  font-family: var(--font-mono);
   color: #fff;
   text-align: left;
   pointer-events: none;
@@ -53,26 +75,26 @@ canvas {
 }
 
 #hud-speed-2 {
-  font-size: 56px;
+  font-size: var(--speed-fs);
   font-weight: 700;
   line-height: 1;
 }
 
 #hud-speed-unit-2 {
-  font-size: 14px;
+  font-size: var(--hint-fs);
   opacity: 0.7;
   margin-bottom: 8px;
 }
 
 #hud-lap-2,
 #hud-time-2 {
-  font-size: 20px;
+  font-size: var(--hud-fs);
   opacity: 0.9;
 }
 
 #drift-indicator {
   margin-top: 12px;
-  font-size: 32px;
+  font-size: clamp(24px, 6vw, 32px);
   font-weight: 700;
   color: #ff8c1a;
   letter-spacing: 2px;
@@ -88,17 +110,18 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--bg-overlay);
   color: #fff;
-  font-family: 'Consolas', 'Courier New', monospace;
+  font-family: var(--font-mono);
   text-align: center;
   user-select: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #start-screen h1,
 #finish-screen h1,
 #pause-screen h1 {
-  font-size: 64px;
+  font-size: var(--title-fs);
   margin: 0 0 16px;
   letter-spacing: 6px;
   background: linear-gradient(180deg, #ffd166, #ef476f);
@@ -111,7 +134,7 @@ canvas {
 #start-screen p,
 #finish-screen p,
 #pause-screen p {
-  font-size: 18px;
+  font-size: var(--subtitle-fs);
   margin: 6px 0;
   opacity: 0.85;
 }
@@ -120,7 +143,7 @@ canvas {
 #finish-screen .hint,
 #pause-screen .hint {
   margin-top: 32px;
-  font-size: 14px;
+  font-size: var(--hint-fs);
   opacity: 0.6;
   animation: pulse 1.6s ease-in-out infinite;
 }
@@ -130,6 +153,7 @@ canvas {
   gap: 12px;
   justify-content: center;
   margin: 12px 0 8px;
+  flex-wrap: wrap;
 }
 
 .track-option {
@@ -139,17 +163,34 @@ canvas {
   cursor: pointer;
   user-select: none;
   opacity: 0.55;
-  font-size: 14px;
+  font-size: var(--hint-fs);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.track-option:hover,
+.track-option:active {
+  opacity: 0.85;
+  border-color: rgba(255, 255, 255, 0.65);
 }
 
 .track-option.selected {
   opacity: 1;
-  border-color: #ffd75e;
-  color: #ffd75e;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.track-option.selected:hover,
+.track-option.selected:active {
+  opacity: 1;
+  border-color: var(--accent);
 }
 
 #track-name {
-  color: #ffd75e;
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -159,18 +200,94 @@ canvas {
 
 #finish-laps {
   margin-top: 12px;
-  font-size: 14px;
+  font-size: var(--hint-fs);
   opacity: 0.8;
   line-height: 1.6;
   text-align: left;
 }
 
+/* 虚拟摇杆：样式统一由 CSS 控制，JS 仅负责显示/隐藏与位置更新 */
+.joystick-base {
+  position: fixed;
+  width: min(22vw, 120px);
+  height: min(22vw, 120px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  display: none;
+  z-index: 100;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.joystick-knob {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
 @media (pointer: coarse) {
   #touch-hint {
     display: block;
-    font-size: 14px;
+    font-size: var(--hint-fs);
     opacity: 0.7;
   }
+}
+
+/* 竖屏手机：进一步缩小 HUD 间距与字号，避免遮挡画面 */
+@media (max-width: 640px) {
+  :root {
+    --hud-pad: 12px;
+    --speed-fs: clamp(32px, 10vw, 48px);
+    --title-fs: clamp(24px, 8vw, 48px);
+    --subtitle-fs: clamp(14px, 3.5vw, 20px);
+    --hud-fs: clamp(12px, 2.5vw, 16px);
+  }
+
+  #hud2 {
+    --speed-fs: clamp(24px, 8vw, 36px);
+    --hud-fs: clamp(10px, 2vw, 14px);
+  }
+
+  #track-select {
+    gap: 8px;
+  }
+
+  .track-option {
+    padding: 6px 12px;
+  }
+}
+
+/* 横屏手机（高度受限）：压缩标题与屏幕间距 */
+@media (max-height: 480px) {
+  #start-screen h1,
+  #finish-screen h1,
+  #pause-screen h1 {
+    font-size: clamp(24px, 6vw, 40px);
+    margin: 0 0 8px;
+  }
+
+  #start-screen .hint,
+  #finish-screen .hint,
+  #pause-screen .hint {
+    margin-top: 16px;
+  }
+
+  #track-select {
+    margin: 8px 0 4px;
+  }
+}
+
+/* 分屏模式：第二位 HUD 字号进一步缩小，避免左右分屏时信息拥挤 */
+#hud2 {
+  --speed-fs: clamp(24px, 8vw, 48px);
+  --hud-fs: clamp(12px, 2.5vw, 18px);
 }
 
 @keyframes pulse {

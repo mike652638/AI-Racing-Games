@@ -42,9 +42,16 @@ export const MELODY_LINE = ['A4', 'C5', 'E5', 'G5', 'E5', 'C5', 'A4', 'G4'] as c
 
 /** 16 步循环的合成音乐播放器（与引擎音效共享 AudioContext） */
 export class MusicPlayer {
-  private timer: ReturnType<typeof setInterval> | null = null
+  /** RAF 句柄：非 null 表示正在播放（代替 setInterval 定时器） */
+  private timer: number | null = null
   private step = 0
   private nextTime = 0
+  /** RAF 上一次回调的时间戳（毫秒） */
+  private lastTime = 0
+  /** 时间累积器（秒）：按固定步长触发调度 */
+  private accumulator = 0
+  /** 调度步长：30Hz，比 setInterval 更抗节流、更平滑 */
+  private readonly STEP = 1 / 30
 
   constructor(private readonly ctx: AudioContext) {}
 
@@ -55,13 +62,31 @@ export class MusicPlayer {
   start(): void {
     if (this.timer !== null) return
     this.nextTime = this.ctx.currentTime + 0.1
-    this.timer = setInterval(() => this.schedule(), tickMsForBpm(BPM) / 2)
+    this.lastTime = performance.now()
+    this.accumulator = 0
+    this.timer = requestAnimationFrame(this.tick)
   }
 
   stop(): void {
     if (this.timer !== null) {
-      clearInterval(this.timer)
+      cancelAnimationFrame(this.timer)
       this.timer = null
+    }
+  }
+
+  /** RAF 驱动循环：按 30Hz 固定步长调用前瞻调度（页面隐藏时 RAF 自动暂停，恢复后 dt 受限不会突发） */
+  private tick = (now: number): void => {
+    const dt = Math.min((now - this.lastTime) / 1000, 0.1) // 限制最大 dt，避免后台恢复时突发调度
+    this.lastTime = now
+    this.accumulator += dt
+
+    while (this.accumulator >= this.STEP) {
+      this.schedule()
+      this.accumulator -= this.STEP
+    }
+
+    if (this.timer !== null) {
+      this.timer = requestAnimationFrame(this.tick)
     }
   }
 

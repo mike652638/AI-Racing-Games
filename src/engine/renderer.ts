@@ -1,21 +1,20 @@
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
-import { curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
+import { buildCurvePrefixSum, curveOffsetAtZ, spritesInRange, type Sprite } from './sprites'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
 import { updateLighting } from './lighting'
+import {
+  DRAW_DISTANCE,
+  projectSegmentQuad,
+  roadColors,
+  shouldDrawCenterLine,
+} from './road-geometry'
+import { projectTraffic } from './traffic-render'
+import { projectSmoke } from './smoke-render'
 
-/** 路面半宽（世界单位） */
-export const ROAD_HALF_WIDTH = 1
-/** 路缘宽度（世界单位） */
-export const EDGE_WIDTH = 0.15
-/** 渲染可视距离（分段数） */
-export const DRAW_DISTANCE = 120
-
-const ROAD_COLORS = ['#4a4a4a', '#3c3c3c']
-const SIDE_COLORS = ['#d03030', '#e8e8e8']
-const TRAFFIC_COLORS = ['#d84a4a', '#4a8ad8', '#d8c04a', '#4ad88a']
+export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
 interface MountainLayer {
   profile: number[]
@@ -56,13 +55,6 @@ function drawMountainLayerCached(
   ctx.drawImage(layer.offscreen, layer.offscreen.width - offset, y)
 }
 
-interface Quad {
-  l1: Projected
-  l2: Projected
-  r1: Projected
-  r2: Projected
-}
-
 function drawQuad(
   ctx: CanvasRenderingContext2D,
   a: Projected,
@@ -86,6 +78,8 @@ export class Renderer {
   private opts: ProjectionOptions
   private camera = { x: 0, y: 1, z: 0 }
   private mountains: MountainLayer[]
+  /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
+  private curvePrefixSum: Float64Array
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -99,6 +93,7 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
     this.mountains = this.buildMountains(width)
+    this.curvePrefixSum = buildCurvePrefixSum(track)
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
@@ -145,10 +140,11 @@ export class Renderer {
     this.traffic = traffic
   }
 
-  /** 切换赛道数据与路边景物（关卡选单用） */
+  /** 切换赛道数据与路边景物（关卡选单用），同时重建曲率前缀和 */
   setTrack(track: Segment[], sprites: Sprite[]): void {
     this.track = track
     this.sprites = sprites
+    this.curvePrefixSum = buildCurvePrefixSum(track)
   }
 
   /** 渲染一帧：天空 + 视差远山 + 草地 + 曲线路面 + 景物 + 漂移烟雾 */
@@ -203,18 +199,23 @@ export class Renderer {
         continue
       }
       const segment = this.track[(baseIndex + k) % this.track.length]
-      const cur = this.projectQuad(z, curveSum, opts)
-      const next = this.projectQuad(z + SEGMENT_LENGTH, curveSum + segment.curve, opts)
+      const cur = projectSegmentQuad(opts, this.camera, z, curveSum)
+      const next = projectSegmentQuad(
+        opts,
+        this.camera,
+        z + SEGMENT_LENGTH,
+        curveSum + segment.curve,
+      )
       if (!cur || !next) {
         continue
       }
-      const parity = (baseIndex + k) % 2
+      const colors = roadColors(baseIndex + k)
 
-      drawQuad(ctx, cur.l1, cur.r1, next.r1, next.l1, ROAD_COLORS[parity])
-      drawQuad(ctx, cur.l2, cur.l1, next.l1, next.l2, SIDE_COLORS[parity])
-      drawQuad(ctx, cur.r1, cur.r2, next.r2, next.r1, SIDE_COLORS[parity])
+      drawQuad(ctx, cur.l1, cur.r1, next.r1, next.l1, colors.road)
+      drawQuad(ctx, cur.l2, cur.l1, next.l1, next.l2, colors.side)
+      drawQuad(ctx, cur.r1, cur.r2, next.r2, next.r1, colors.side)
 
-      if (k % 2 === 0) {
+      if (shouldDrawCenterLine(k)) {
         const cw = (cur.r1.x - cur.l1.x) * 0.06
         const centerProj = project(opts, this.camera, { x: curveSum, y: 0, z })
         const centerX = centerProj ? centerProj.x : opts.width / 2
@@ -237,52 +238,26 @@ export class Renderer {
   /** 绘制车流（车身 + 车窗，远→近） */
   private drawTraffic(cameraZ: number, opts: ProjectionOptions): void {
     const { ctx } = this
-    if (this.traffic.length === 0) {
-      return
-    }
-    const seen = this.traffic
-      .filter((car) => car.z > cameraZ)
-      .sort((a, b) => b.z - a.z)
-    for (const car of seen) {
-      const cx = car.offset - this.camera.x
-      const bottom = project(opts, this.camera, { x: cx, y: 0, z: car.z })
-      if (!bottom) {
-        continue
-      }
-      const top = project(opts, this.camera, { x: cx, y: 1.4, z: car.z })
-      if (!top) {
-        continue
-      }
-      const w = Math.max(bottom.scale * opts.height * 0.9, 3)
-      const h = bottom.y - top.y
-      ctx.fillStyle = TRAFFIC_COLORS[car.colorIndex % TRAFFIC_COLORS.length]
-      ctx.fillRect(bottom.x - w / 2, top.y, w, h)
+    for (const car of projectTraffic(this.traffic, cameraZ, this.camera.x, opts, this.camera)) {
+      ctx.fillStyle = car.color
+      ctx.fillRect(car.bottom.x - car.width / 2, car.top.y, car.width, car.height)
       ctx.fillStyle = '#1b2430'
-      ctx.fillRect(bottom.x - w / 4, top.y + h * 0.3, w / 2, h * 0.4)
+      ctx.fillRect(
+        car.bottom.x - car.width / 4,
+        car.top.y + car.height * 0.3,
+        car.width / 2,
+        car.height * 0.4,
+      )
     }
   }
 
   /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */
   private drawSmoke(smoke: SmokeParticle[], cameraZ: number, opts: ProjectionOptions): void {
     const { ctx } = this
-    for (const particle of smoke) {
-      const dz = particle.z - cameraZ
-      if (dz <= 0) {
-        continue
-      }
-      const proj = project(opts, this.camera, {
-        x: particle.x - this.camera.x,
-        y: 0,
-        z: particle.z,
-      })
-      if (!proj) {
-        continue
-      }
-      const radius = Math.max(proj.scale * opts.height * 0.06, 2)
-      const alpha = Math.max(1 - particle.t / 0.6, 0) * 0.4
-      ctx.fillStyle = `rgba(200, 200, 210, ${alpha.toFixed(3)})`
+    for (const p of projectSmoke(smoke, cameraZ, this.camera.x, opts, this.camera)) {
+      ctx.fillStyle = `rgba(200, 200, 210, ${p.alpha.toFixed(3)})`
       ctx.beginPath()
-      ctx.arc(proj.x, proj.y - radius * 0.5, radius, 0, Math.PI * 2)
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2)
       ctx.fill()
     }
   }
@@ -297,7 +272,7 @@ export class Renderer {
     )
     for (let i = seen.length - 1; i >= 0; i--) {
       const sprite = seen[i]
-      const centerX = curveOffsetAtZ(this.track, sprite.z)
+      const centerX = curveOffsetAtZ(this.track, this.curvePrefixSum, sprite.z)
       const cx = centerX - this.camera.x
       const bottom = project(opts, this.camera, {
         x: cx + sprite.offset,
@@ -356,26 +331,5 @@ export class Renderer {
     ctx.beginPath()
     ctx.arc(x, y - hpx, r, 0, Math.PI * 2)
     ctx.fill()
-  }
-
-  private projectQuad(z: number, centerX: number, opts: ProjectionOptions): Quad | null {
-    const { camera } = this
-    const cx = centerX - camera.x
-    const l1 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
-    const l2 = project(opts, camera, {
-      x: cx - ROAD_HALF_WIDTH - EDGE_WIDTH,
-      y: 0,
-      z,
-    })
-    const r1 = project(opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z })
-    const r2 = project(opts, camera, {
-      x: cx + ROAD_HALF_WIDTH + EDGE_WIDTH,
-      y: 0,
-      z,
-    })
-    if (!l1 || !l2 || !r1 || !r2) {
-      return null
-    }
-    return { l1, l2, r1, r2 }
   }
 }

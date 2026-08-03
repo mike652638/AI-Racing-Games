@@ -42,11 +42,9 @@ export class JoystickUI {
 
   constructor() {
     this.base = document.createElement('div')
-    this.base.style.cssText =
-      'position:fixed;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.25);display:none;z-index:100;pointer-events:none;'
+    this.base.className = 'joystick-base'
     this.knob = document.createElement('div')
-    this.knob.style.cssText =
-      'position:absolute;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.45);left:38px;top:38px;'
+    this.knob.className = 'joystick-knob'
     this.base.appendChild(this.knob)
     this.container = document.body
   }
@@ -59,8 +57,9 @@ export class JoystickUI {
       this.activeId = e.pointerId
       this.startX = e.clientX
       this.startY = e.clientY
-      this.base.style.left = `${e.clientX - 60}px`
-      this.base.style.top = `${e.clientY - 60}px`
+      const baseSize = this.base.clientWidth
+      this.base.style.left = `${e.clientX - baseSize / 2}px`
+      this.base.style.top = `${e.clientY - baseSize / 2}px`
       this.base.style.display = 'block'
       canvas.setPointerCapture(e.pointerId)
     })
@@ -72,8 +71,7 @@ export class JoystickUI {
       this.input = offsetToInput(dx, dy, RADIUS)
       const clampedDx = Math.max(-RADIUS, Math.min(RADIUS, dx))
       const clampedDy = Math.max(-RADIUS, Math.min(RADIUS, dy))
-      this.knob.style.left = `${38 + clampedDx}px`
-      this.knob.style.top = `${38 + clampedDy}px`
+      this.knob.style.transform = `translate(calc(-50% + ${clampedDx}px), calc(-50% + ${clampedDy}px))`
     })
 
     const endTouch = (e: PointerEvent) => {
