@@ -68,6 +68,7 @@ export function updateDrift(
   config: CarConfig,
   drift: DriftState,
   cameraZ: number,
+  scoreMultiplier = 1,
 ): DriftState {
   const next: DriftState = { ...drift, smoke: [...drift.smoke] }
   const charging =
@@ -86,8 +87,9 @@ export function updateDrift(
       next.combo = Math.min(next.combo + 1, COMBO_MAX)
     }
     const multiplier = 1 + next.combo * COMBO_MULTIPLIER_STEP
+    // H1（H1）：挑战加成——scoreMultiplier 额外乘入得分（默认 1 时与现状逐字节一致）
     next.score = Math.min(
-      next.score + state.speed * dt * DRIFT_SCORE_RATE * multiplier,
+      next.score + state.speed * dt * DRIFT_SCORE_RATE * multiplier * scoreMultiplier,
       DRIFT_SCORE_MAX,
     )
   }

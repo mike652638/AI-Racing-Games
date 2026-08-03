@@ -55,6 +55,20 @@ describe('updatePlayerFrame 完整更新链路', () => {
     updatePlayerFrame(1, steer, wet, config, LAP_LENGTH, undefined, true)
     expect(wet.carState.position - wetBase).toBeLessThan(dry.carState.position - dryBase)
   })
+
+  test('H1（H1）：scoreMultiplier=1.5 时漂移得分 1.5×（挑战加成经 updatePlayerFrame 透传）', () => {
+    const config = createCarConfig()
+    const a = createPlayerState()
+    const b = createPlayerState()
+    const steer: CarInput = { throttle: 0, brake: false, steer: 1 }
+    // 预热：各加速 3 秒到满速（6000），随后单帧大转向（dt=1 直接满 charge）激活漂移得分
+    updatePlayerFrame(3, THROTTLE, a, config, LAP_LENGTH)
+    updatePlayerFrame(3, THROTTLE, b, config, LAP_LENGTH)
+    updatePlayerFrame(1, steer, a, config, LAP_LENGTH, undefined, false)
+    updatePlayerFrame(1, steer, b, config, LAP_LENGTH, undefined, false, 1.5)
+    expect(a.driftState.score).toBeGreaterThan(0)
+    expect(b.driftState.score).toBeCloseTo(a.driftState.score * 1.5, 6)
+  })
 })
 
 describe('updatePlayerFrame 漂移链路', () => {

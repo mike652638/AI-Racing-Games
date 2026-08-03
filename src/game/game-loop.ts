@@ -98,6 +98,7 @@ function viewFor(ctx: TrackContext): RenderView {
  * 分屏 P2 不参与圈速记录（保持原 main.ts 行为：仅 P1 记录 lapTimes）。
  * H5：返回「新 lastLap」——传入 lapTimes 时返回当前圈数（currentLap，过圈时已 push raceTime），
  * 未传 lapTimes 返回 1；wet（雨天物理，G3）上移为第 6 尾参。
+ * H1：scoreMultiplier（挑战加成）为第 7 尾参，默认 1 时行为不变。
  */
 export function updatePlayerFrame(
   dt: number,
@@ -107,8 +108,9 @@ export function updatePlayerFrame(
   lapLength: number,
   lapTimes?: number[],
   wet = false,
+  scoreMultiplier = 1,
 ): number {
-  player.driftState = updateDrift(dt, input, player.carState, carConfig, player.driftState, player.cameraZ)
+  player.driftState = updateDrift(dt, input, player.carState, carConfig, player.driftState, player.cameraZ, scoreMultiplier)
   player.carState.speed *= driftSpeedFactor(player.driftState)
   updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState), wet)
   player.cameraZ += player.carState.speed * dt
@@ -766,6 +768,11 @@ export class GameLoop {
       else this.rainSound?.stop()
       // G3（G3）：雨天物理——与雨声同公式同源（raceTime 三态 phase 2）；热座/分屏 P2 世界统一同一 wet 值
       const wet = Math.floor(this.race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
+      // H1（H1）：挑战计分加成——雨天 +50%、难度加成（2★ +25%、3★ +50%）；仅 challengeMode 生效
+      // （非挑战传 undefined → updatePlayerFrame 默认 1，行为不变）
+      const challengeMult = this.challengeMode
+        ? 1 + (raining ? 0.5 : 0) + (this.race.tracks[0].def.difficulty - 1) * 0.25
+        : undefined
       // G1（G1）：挑战倒计时 HUD——仅挑战模式且比赛阶段可见，文本显示剩余秒数
       if (this.challengeMode) {
         this.challengeTimer ??= document.getElementById('challenge-timer') as HTMLDivElement | null
@@ -831,6 +838,7 @@ export class GameLoop {
             this.trackManager.getLapLength(0),
             this.race.lapTimes,
             wet,
+            challengeMult,
           )
         } else {
           this.race.lastLap2 = updatePlayerFrame(
@@ -841,6 +849,7 @@ export class GameLoop {
             this.trackManager.getLapLength(1),
             this.race.lapTimes2,
             wet,
+            challengeMult,
           )
         }
       } else {
@@ -853,6 +862,7 @@ export class GameLoop {
           this.trackManager.getLapLength(0),
           this.race.lapTimes,
           wet,
+          challengeMult,
         )
 
         // P2 独立更新（分屏时输入有效，否则零输入；圈长取 tracks[1]；圈速记录到 lapTimes2）
@@ -864,6 +874,7 @@ export class GameLoop {
           this.trackManager.getLapLength(1),
           this.race.lapTimes2,
           wet,
+          challengeMult,
         )
       }
 

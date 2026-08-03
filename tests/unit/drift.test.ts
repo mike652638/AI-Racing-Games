@@ -227,3 +227,26 @@ describe('漂移连击与得分上限', () => {
     expect(next.score).toBe(DRIFT_SCORE_MAX)
   })
 })
+
+describe('scoreMultiplier 加成（H1）', () => {
+  const cfg = createCarConfig({ maxSpeed: 6000 })
+  const state = { position: 0.5, speed: 6000 }
+  const steerInput = { throttle: 0, brake: false, steer: 1 }
+  /** 已激活（active=true）漂移态：避免新段重置 combo */
+  const activeDrift = (combo: number): DriftState =>
+    ({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo, comboTimer: 0 })
+
+  test('scoreMultiplier=1.5 时得分 = 基准 ×1.5（挑战加成透传）', () => {
+    const base = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0)
+    const bonus = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0, 1.5)
+    // dt=1 单帧：active 期间 combo 0→1（timer 满 0.5s），倍率 1.25，基准 = 6000*1*0.01*1.25 = 75
+    expect(base.score).toBeCloseTo(75, 6)
+    expect(bonus.score).toBeCloseTo(base.score * 1.5, 6)
+  })
+
+  test('默认不传与传 1 得分一致（默认参数保持行为不变）', () => {
+    const a = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0)
+    const b = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0, 1)
+    expect(a.score).toBeCloseTo(b.score, 6)
+  })
+})
