@@ -92,4 +92,22 @@ describe('updateLighting', () => {
     const clear = updateLighting(45 * 2, false, false)
     expect(rain.skyTop).not.toBe(clear.skyTop)
   })
+
+  it('night 模式 skyTop 色相 ∈ [200,260] 且亮度低于白天（l < 30）', () => {
+    const hslOf = (c: string): { h: number; l: number } => {
+      const m = c.match(/^hsl\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?)%, (\d+(?:\.\d+)?)%\)$/)
+      return m ? { h: Number(m[1]), l: Number(m[3]) } : { h: -1, l: -1 }
+    }
+    const night = updateLighting(45, false, false, true)
+    const { h, l } = hslOf(night.skyTop)
+    expect(h).toBeGreaterThanOrEqual(200)
+    expect(h).toBeLessThanOrEqual(260)
+    expect(l).toBeLessThan(30)
+  })
+
+  it('night 模式与同 timeSec 的 day 输出不同（颜色变暗）', () => {
+    const day = updateLighting(45, false, false, false)
+    const night = updateLighting(45, false, false, true)
+    expect(night.skyTop).not.toBe(day.skyTop)
+  })
 })

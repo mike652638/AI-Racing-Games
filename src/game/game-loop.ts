@@ -65,6 +65,7 @@ function viewFor(ctx: TrackContext): RenderView {
     curvePrefixSum: ctx.curvePrefixSum,
     spriteIndex: ctx.spriteIndex,
     traffic: ctx.traffic,
+    night: ctx.def.timeOfDay === 'night',
   }
 }
 

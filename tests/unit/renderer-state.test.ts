@@ -210,6 +210,30 @@ describe('Renderer 状态切换', () => {
     expect(rainStroke).toBeGreaterThan(clearStroke)
   })
 
+  it('night RenderView 渲染车灯光晕：不抛错且 arc 调用增量增加', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[4]) // canyon（夜晚赛道）
+    const traffic = createTraffic(2000)
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic,
+    }
+    const nightView: RenderView = { ...baseView, night: true }
+    // 预热一帧后，分别统计 day / night 渲染各自新增的 arc 次数（callCount 为累计值，须取增量）
+    renderer.render(0, [], 0, baseView)
+    const beforeNight = callCount(canvas.__ctx.__calls, 'arc')
+    expect(() => renderer.render(0, [], 0, nightView)).not.toThrow()
+    const afterNight = callCount(canvas.__ctx.__calls, 'arc')
+    renderer.render(0, [], 0, baseView)
+    const afterBase = callCount(canvas.__ctx.__calls, 'arc')
+    const nightIncrement = afterNight - beforeNight
+    const baseIncrement = afterBase - afterNight
+    // 同一场景下 night 多出车灯（每辆可见车 2 次 arc：外层光晕 + 核心），增量应高于 day
+    expect(nightIncrement).toBeGreaterThan(baseIncrement)
+  })
+
   it('带 view 的 renderRegion 与 setTrack 后默认路径的绘制调用序列一致', () => {
     // 默认路径：renderer 持有 trackB（setTrack 切换），render(0) 用 this 字段渲染
     const canvasA = createMockCanvas(800, 600)

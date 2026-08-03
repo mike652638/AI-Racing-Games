@@ -24,7 +24,22 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * Math.max(0, Math.min(1, t))
 }
 
-export function updateLighting(timeSec: number, overcast = false, raining = false): LightingColors {
+export function updateLighting(
+  timeSec: number,
+  overcast = false,
+  raining = false,
+  night = false,
+): LightingColors {
+  // 夜晚模式（赛道级）：锁定深暗蓝紫/暗绿色板，不随昼夜时段插值；其余路径与旧版逐字节一致
+  if (night) {
+    return {
+      skyTop: hsl(220, 55, 12),
+      skyBottom: hsl(210, 50, 8),
+      grass: hsl(120, 30, 12),
+      mountainFar: hsl(220, 30, 10),
+      mountainNear: hsl(220, 35, 8),
+    }
+  }
   // 非 overcast/raining 时 build === hsl，输出与历史版本逐字节一致；阴天/雨天降饱和压暗
   // （雨天复用阴天配色，仅语义区分，供 renderer 三态天气循环消费）
   const build = overcast || raining ? overcastHsl : hsl

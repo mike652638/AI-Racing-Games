@@ -30,6 +30,19 @@ describe('TRACK_DEFS 关卡配置', () => {
     const json = TRACK_DEFS.map((def) => JSON.stringify(def.controlPoints))
     expect(new Set(json).size).toBe(TRACK_DEFS.length)
   })
+
+  it('canyon 与 alpine 为夜晚赛道（timeOfDay night），其余赛道不设或为 day', () => {
+    const nightIds = TRACK_DEFS.filter((def) => def.timeOfDay === 'night').map((def) => def.id)
+    expect(nightIds).toContain('canyon')
+    expect(nightIds).toContain('alpine')
+    for (const def of TRACK_DEFS) {
+      if (def.id === 'canyon' || def.id === 'alpine') {
+        expect(def.timeOfDay).toBe('night')
+      } else {
+        expect(def.timeOfDay === undefined || def.timeOfDay === 'day').toBe(true)
+      }
+    }
+  })
 })
 
 describe('createTrackFromDef', () => {

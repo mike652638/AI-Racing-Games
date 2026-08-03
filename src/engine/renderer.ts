@@ -31,6 +31,8 @@ export interface RenderView {
   curvePrefixSum: Float64Array
   spriteIndex: Map<number, Sprite[]>
   traffic: TrafficCar[]
+  /** 夜晚模式（赛道级，F1）：切换夜晚色板 / 深色远山 / 车灯光晕 */
+  night?: boolean
 }
 
 interface MountainLayer {
@@ -105,6 +107,8 @@ export class Renderer {
   private opts: ProjectionOptions
   private camera = { x: 0, y: 1, z: 0 }
   private mountains: MountainLayer[]
+  /** 夜晚模式的深色远山缓存（night 赛道用，避免每帧重建离屏位图） */
+  private mountainsNight: MountainLayer[]
   /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
   private curvePrefixSum: Float64Array
   /** 路边景物段索引（键 = floor(z / SEGMENT_LENGTH)），drawSprites 用 O(候选段数) 查询替代线性扫描 */
@@ -123,7 +127,8 @@ export class Renderer {
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
-    this.mountains = this.buildMountains(width)
+    this.mountains = this.buildMountains(width, '#27425e', '#1f3046')
+    this.mountainsNight = this.buildMountains(width, '#101a2a', '#0a1220')
     this.curvePrefixSum = buildCurvePrefixSum(track)
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
     this.rainDrops = this.buildRainDrops()
@@ -133,14 +138,16 @@ export class Renderer {
   /** 更新视口尺寸（CSS 像素），并按 devicePixelRatio 缩放画布 */
   setViewport(canvas: HTMLCanvasElement, width: number, height: number, dpr = 1): void {
     this.opts = this.buildOpts(width, height)
-    this.mountains = this.buildMountains(width)
+    this.mountains = this.buildMountains(width, '#27425e', '#1f3046')
+    this.mountainsNight = this.buildMountains(width, '#101a2a', '#0a1220')
     this.applyCanvasSize(canvas, width, height, dpr)
   }
 
-  private buildMountains(width: number): MountainLayer[] {
+  /** 构建两层视差远山离屏位图（night 时用深色配色，见 mountainsNight） */
+  private buildMountains(width: number, colorFar: string, colorNear: string): MountainLayer[] {
     const layerDefs = [
-      { profile: generateMountainProfile(width, 2024), factor: 0.02, color: '#27425e', peak: 0.5 },
-      { profile: generateMountainProfile(width, 77), factor: 0.05, color: '#1f3046', peak: 0.35 },
+      { profile: generateMountainProfile(width, 2024), factor: 0.02, color: colorFar, peak: 0.5 },
+      { profile: generateMountainProfile(width, 77), factor: 0.05, color: colorNear, peak: 0.35 },
     ]
     return layerDefs.map((def) => ({
       ...def,
@@ -254,11 +261,13 @@ export class Renderer {
     const phase = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3
     const overcast = phase === 1
     const raining = phase === 2
-    const colors = updateLighting(timeSec, overcast, raining)
+    // 夜晚模式（赛道级）：view.night 缺省 false；夜晚锁定色板 + 深色远山 + 车灯
+    const night = view?.night ?? false
+    const colors = updateLighting(timeSec, overcast, raining, night)
 
     ctx.fillStyle = colors.skyTop
     ctx.fillRect(0, 0, opts.width, opts.horizon)
-    for (const layer of this.mountains) {
+    for (const layer of night ? this.mountainsNight : this.mountains) {
       drawMountainLayerCached(ctx, layer, cameraZ, opts)
     }
     ctx.fillStyle = colors.grass
@@ -306,7 +315,7 @@ export class Renderer {
       curveSum += segment.curve
     }
     this.drawSprites(cameraZ, opts, v)
-    this.drawTraffic(cameraZ, opts, v)
+    this.drawTraffic(cameraZ, opts, v, night)
     this.drawSmoke(smoke, cameraZ, opts)
     if (raining) {
       this.drawRain(timeSec, opts)
@@ -332,8 +341,13 @@ export class Renderer {
     }
   }
 
-  /** 绘制车流（车身 + 车窗，远→近）；数据取自视图 v */
-  private drawTraffic(cameraZ: number, opts: ProjectionOptions, v: RenderView): void {
+  /** 绘制车流（车身 + 车窗，远→近）；数据取自视图 v；night 时加车前灯光晕 */
+  private drawTraffic(
+    cameraZ: number,
+    opts: ProjectionOptions,
+    v: RenderView,
+    night: boolean,
+  ): void {
     const { ctx } = this
     for (const car of projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera)) {
       ctx.fillStyle = car.color
@@ -345,7 +359,27 @@ export class Renderer {
         car.width / 2,
         car.height * 0.4,
       )
+      if (night) {
+        this.drawHeadlight(car.bottom.x, car.top.y, car.width, car.height)
+      }
     }
+  }
+
+  /** 车前灯光晕（night 专用）：参考 drawLamp 双弧模式——外层半透明光晕 + 核心灯，位置在车头（画面上方） */
+  private drawHeadlight(cx: number, topY: number, width: number, height: number): void {
+    const { ctx } = this
+    // 车头 = 车身上部（行驶方向朝画面上方），半径随投影宽（scale）缩放
+    const hx = cx
+    const hy = topY + height * 0.25
+    const r = Math.max(width * 0.5, 2.5)
+    ctx.fillStyle = 'rgba(255, 235, 180, 0.35)'
+    ctx.beginPath()
+    ctx.arc(hx, hy, r * 1.6, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ffe08a'
+    ctx.beginPath()
+    ctx.arc(hx, hy, r, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   /** 绘制漂移烟雾（近大远小，透明度随存活衰减） */
