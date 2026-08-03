@@ -168,6 +168,17 @@ canvas {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+/* 漂移 TOP10 排行榜（#drift-top：菜单静态元素，GameLoop refreshDriftTop 刷新前 5 条；小字白 0.7 居中） */
+#drift-top {
+  margin: 12px auto 0;
+  max-width: 320px;
+  font-size: var(--hint-fs);
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  text-align: center;
+  white-space: pre-line;
+}
+
 #start-screen,
 #finish-screen,
 #pause-screen {

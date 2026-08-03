@@ -1,6 +1,6 @@
 import { Renderer, type RenderView } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
-import { TRACK_DEFS } from '../engine/tracks'
+import { TRACK_DEFS, getTrackDef } from '../engine/tracks'
 import { updateTraffic } from '../engine/traffic'
 import { createCarConfig, updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
@@ -9,7 +9,7 @@ import { MusicPlayer } from '../audio/music'
 import { updateHud, type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
-import { loadBestTime, loadBestTimeFor, recordWin, type WinStats } from '../ui/save'
+import { addDriftScore, loadBestTime, loadBestTimeFor, loadDriftTop, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic, type TrackContext } from './track-context'
@@ -239,7 +239,25 @@ export class GameLoop {
     window.addEventListener('keydown', this.onKeyDown)
     window.addEventListener('resize', this.resize)
     this.resize()
+    this.refreshDriftTop()
     requestAnimationFrame(this.frame)
+  }
+
+  /** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：取前 5 条渲染，无记录显示占位文本 */
+  private refreshDriftTop(): void {
+    const el = document.getElementById('drift-top')
+    if (!el) {
+      return
+    }
+    const top = loadDriftTop().slice(0, 5)
+    el.textContent =
+      top.length === 0
+        ? '暂无漂移记录'
+        : top
+            .map(
+              (e, i) => `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
+            )
+            .join('\n')
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
@@ -270,7 +288,8 @@ export class GameLoop {
           : 'P2'
         : null
     // 胜场统计：仅首次进入完赛时记录（finishShown 守卫防 ESC 重入重复计数）——
-    // 热座 round 2 按 P1/P2 用时比较（平手不记）、分屏双完赛复用 driftWinner、单人恒 null
+    // 热座 round 2 按 P1/P2 用时比较（平手不记）、分屏双完赛复用 driftWinner、单人恒 null；
+    // 漂移 TOP10 同守卫：各完赛玩家正分记录（热座 round 1 只记 P1、round 2 只记 P2，天然不重复）
     let winStats: WinStats | null = null
     if (newPhase === PHASE_FINISHED && !this.race.finishShown) {
       let winner: 'P1' | 'P2' | null = null
@@ -284,6 +303,23 @@ export class GameLoop {
       if (winner) {
         winStats = recordWin(this.hotseatMode ? 'hotseat' : 'split', winner)
       }
+      if (finishedP1 && Math.round(this.race.player1.driftState.score) > 0) {
+        addDriftScore({
+          player: 'P1',
+          trackId: this.trackManager.getTrackId(0),
+          score: Math.round(this.race.player1.driftState.score),
+          time: this.race.player1.raceTime,
+        })
+      }
+      if (finishedP2 && (this.splitMode || this.hotseatMode) && Math.round(this.race.player2.driftState.score) > 0) {
+        addDriftScore({
+          player: 'P2',
+          trackId: this.trackManager.getTrackId(1),
+          score: Math.round(this.race.player2.driftState.score),
+          time: this.race.player2.raceTime,
+        })
+      }
+      this.refreshDriftTop()
     }
     applyPhaseToScreens(
       this.screenElements,
@@ -305,7 +341,10 @@ export class GameLoop {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
       this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
     }
-    if (newPhase === PHASE_MENU) this.resetRace()
+    if (newPhase === PHASE_MENU) {
+      this.resetRace()
+      this.refreshDriftTop()
+    }
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {

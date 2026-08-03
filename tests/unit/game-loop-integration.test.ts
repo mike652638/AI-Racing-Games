@@ -556,4 +556,15 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       expect(winsEl.textContent).toMatch(/连胜 1/)
     }
   })
+
+  it('单人模式：菜单 #drift-top 显示暂无漂移记录，0 漂移完赛后渲染不崩溃', () => {
+    new GameLoop()
+    // 构造时 refreshDriftTop：无记录 → 占位文本（#drift-top 为菜单静态元素，默认可见）
+    expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
+    // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
+    env.fireKey('KeyW')
+    env.driveFrames(2500)
+    expect(env.phase()).toBe(PHASE_FINISHED)
+    expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
+  })
 })

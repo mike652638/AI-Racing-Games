@@ -6,6 +6,19 @@ const BEST_DRIFT_PREFIX = 'outrun-pseudo3d-best-drift-'
 /** 胜场统计存档 key 前缀（按模式分 key：热座/分屏各自独立累计） */
 export const WIN_STATS_PREFIX = 'outrun-pseudo3d-wins-'
 
+/** 漂移得分 TOP10 排行榜存档 key（跨玩家共享，按 score 降序） */
+export const DRIFT_TOP_KEY = 'outrun-pseudo3d-drift-top'
+/** 排行榜最大条目数 */
+export const DRIFT_TOP_MAX = 10
+
+/** 漂移得分排行榜条目：玩家、赛道、得分与完赛用时 */
+export interface DriftEntry {
+  player: 'P1' | 'P2'
+  trackId: string
+  score: number
+  time: number
+}
+
 /** 双人模式的胜场统计：各玩家胜场数与当前连胜（连胜玩家 + 连胜场次） */
 export interface WinStats {
   p1: number
@@ -198,4 +211,51 @@ export function recordWin(
     storage.setItem(winsKeyFor(mode), JSON.stringify(next))
   }
   return next
+}
+
+/** 读取漂移 TOP10：JSON 损坏/storage 不可用/非数组回退 []；解析成功按 score 降序返回 */
+export function loadDriftTop(storage: Storage | null = getStorage()): DriftEntry[] {
+  if (!storage) {
+    return []
+  }
+  const raw = storage.getItem(DRIFT_TOP_KEY)
+  if (raw === null) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    const entries = parsed.filter(
+      (e): e is DriftEntry =>
+        e !== null &&
+        typeof e === 'object' &&
+        (e.player === 'P1' || e.player === 'P2') &&
+        typeof e.trackId === 'string' &&
+        typeof e.score === 'number' &&
+        typeof e.time === 'number',
+    )
+    return entries.sort((a, b) => b.score - a.score)
+  }
+  catch {
+    // JSON 损坏回退空数组
+    return []
+  }
+}
+
+/** 插入一条漂移得分：读旧 → 追加 → score 降序（Array#sort 稳定，同分保持插入序）→ 截断 TOP_MAX → 写回。
+ *  entered = 新条目是否留在榜内（低分被挤出时为 false）；storage 不可用时仅返回内存榜单。 */
+export function addDriftScore(
+  entry: DriftEntry,
+  storage: Storage | null = getStorage(),
+): { top: DriftEntry[]; entered: boolean } {
+  const top = loadDriftTop(storage)
+  top.push(entry)
+  top.sort((a, b) => b.score - a.score)
+  const truncated = top.slice(0, DRIFT_TOP_MAX)
+  if (storage) {
+    storage.setItem(DRIFT_TOP_KEY, JSON.stringify(truncated))
+  }
+  return { top: truncated, entered: truncated.includes(entry) }
 }

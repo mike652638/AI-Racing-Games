@@ -13,6 +13,9 @@ import {
   loadWins,
   recordWin,
   winsKeyFor,
+  addDriftScore,
+  loadDriftTop,
+  DRIFT_TOP_KEY,
 } from '../../src/ui/save'
 
 function fakeStorage(): Storage {
@@ -206,5 +209,56 @@ describe('胜场统计（WinStats API）', () => {
     expect(r.p1).toBe(1)
     expect(r.streak).toBe(1)
     expect(r.streakPlayer).toBe('P1')
+  })
+})
+
+describe('漂移 TOP10（DriftEntry API）', () => {
+  it('addDriftScore 插入并降序排序', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 100, time: 30 }, s)
+    const r = addDriftScore({ player: 'P2', trackId: 'highway', score: 300, time: 40 }, s)
+    expect(r.top.map((e) => e.score)).toEqual([300, 100])
+    expect(r.entered).toBe(true)
+  })
+
+  it('超过 10 条截断且低分不入榜（entered=false）', () => {
+    const s = fakeStorage()
+    for (let i = 0; i < 10; i++) {
+      addDriftScore({ player: 'P1', trackId: 'classic', score: 100 + i, time: i }, s)
+    }
+    const r = addDriftScore({ player: 'P2', trackId: 'classic', score: 1, time: 999 }, s)
+    expect(r.top).toHaveLength(10)
+    expect(r.entered).toBe(false)
+    expect(r.top[0].score).toBe(109)
+    expect(r.top[9].score).toBe(100)
+  })
+
+  it('同分后插入者排后（稳定排序保持插入序）', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 50, time: 1 }, s)
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 50, time: 2 }, s)
+    const r = addDriftScore({ player: 'P2', trackId: 'classic', score: 50, time: 3 }, s)
+    expect(r.top.map((e) => e.time)).toEqual([1, 2, 3])
+  })
+
+  it('loadDriftTop JSON 损坏回退空数组', () => {
+    const s = fakeStorage()
+    s.setItem(DRIFT_TOP_KEY, '{broken json')
+    expect(loadDriftTop(s)).toEqual([])
+  })
+
+  it('持久化后可重新读取', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 123, time: 30.5 }, s)
+    const top = loadDriftTop(s)
+    expect(top).toHaveLength(1)
+    expect(top[0]).toEqual({ player: 'P1', trackId: 'classic', score: 123, time: 30.5 })
+  })
+
+  it('storage 不可用安全降级（返回内存榜单、不持久化）', () => {
+    expect(loadDriftTop(null)).toEqual([])
+    const r = addDriftScore({ player: 'P1', trackId: 'classic', score: 10, time: 1 }, null)
+    expect(r.top).toHaveLength(1)
+    expect(r.entered).toBe(true)
   })
 })
