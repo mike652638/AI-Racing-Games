@@ -26,7 +26,7 @@
    - M12 G4 boost 分支：`input.boost === true` 时 `speed = min(speed + acceleration × 0.6 × dt, maxSpeed × 1.15)`（突破 maxSpeed 但受 1.15× 上限约束）；
    - `position += steer × turnRate × (speed / maxSpeed) × dt`（转向灵敏度随速度线性缩放；`turnRateOverride` 注入的漂移有效转向率 ×1.5；M12 G3 wet 时有效转向率再 ×0.85）；
    - 若 `|position| > roadHalfWidth`（出界）：施加 `offRoadDeceleration` 减速并把位置夹紧回路缘内，返回 `true`。
-5. **玩家碰撞判定**：`game/collision.ts` 用 `collidePlayers(z1, x1, z2, x2, zTol=80, xTol=0.9)` 对两车纵向（z）与横向（x）距离做容差比较，命中即判碰撞。
+5. **玩家碰撞判定**：分屏升级为独立赛道世界后 P1-P2 互碰已删除，`collidePlayers`（原 car.ts 导出）随死代码清理移除，碰撞仅剩 `game/collision.ts` 的玩家-车流碰撞（`collideWithPlayer`）。
 6. **渲染消费**：`engine/smoke-render.ts` / `renderer.ts` 读取 `DriftState.smoke` 中的 `SmokeParticle` 绘制轮胎烟雾；`ui/hud.ts` 读取 `CarConfig` 展示车辆参数。
 
 ## Integration
@@ -35,7 +35,7 @@
   - `src/game/game-loop.ts`：`updatePlayerFrame` 主循环每帧串联 `updateDrift`（接收新状态；第 7 尾参 `scoreMultiplier` 挑战加成透传，默认 1）→ `driftSpeedFactor` → `updateCar(effectiveTurnRate, wet)`，管理 P1/P2 两套 `CarState` / `DriftState`（热座仅当前回合玩家更新）；`src/main.ts` 仅引导入口，不直接消费
   - `src/game/input.ts`：键盘输入 → `inputFromKeys` + 玩家按键映射
   - `src/game/state.ts`：持有 `CarState` / `DriftState` 并调用 `createDriftState`
-  - `src/game/collision.ts`：`collidePlayers` 双人碰撞检测
+  - `src/game/collision.ts`：`collideWithPlayer` 玩家-车流碰撞检测（`collidePlayers` 双人互碰已随死代码清理移除）
   - `src/ai/simulate.ts`、`src/ai/bot.ts`：复用 `updateCar` / `CarConfig` / `CarState` / `CarInput` 做 bot 跑圈模拟与校验
   - `src/engine/renderer.ts`、`src/engine/smoke-render.ts`：消费 `SmokeParticle` 渲染烟雾
   - `src/ui/hud.ts`、`src/ui/screens.ts`：读取 `CarConfig` 显示参数
@@ -43,8 +43,8 @@
 
 ## Files
 
-| File | Responsibility |
-|------|----------------|
-| `car.ts` | 车辆运动学核心：`CarConfig` / `CarInput`（M12 可选 `boost?`）/ `CarState` 接口、`DEFAULT_CAR_CONFIG` 默认值与 `createCarConfig` 工厂、`updateCar(dt, input, state, config, turnRateOverride?, wet = false)` 速度/转向/出界推进（含 `turnRateOverride` 漂移转向注入、M12 G3 wet 制动×0.7 与转向×0.85、G4 boost 分支突破 maxSpeed 至 1.15×）、`collidePlayers` 双人碰撞判定；BOOST 常量自 `src/game/constants` 导入 |
+| File       | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `car.ts`   | 车辆运动学核心：`CarConfig` / `CarInput`（M12 可选 `boost?`）/ `CarState` 接口、`DEFAULT_CAR_CONFIG` 默认值与 `createCarConfig` 工厂、`updateCar(dt, input, state, config, turnRateOverride?, wet = false)` 速度/转向/出界推进（含 `turnRateOverride` 漂移转向注入、M12 G3 wet 制动×0.7 与转向×0.85、G4 boost 分支突破 maxSpeed 至 1.15×）；`collidePlayers` 双人碰撞判定已随死代码清理移除（分屏独立世界后 src 无调用方）；BOOST 常量自 `src/game/constants` 导入         |
 | `drift.ts` | 漂移系统：`DriftState`（含 M10 P2 连击 `combo`/`comboTimer` 必填字段）/ `SmokeParticle`、`createDriftState` 工厂、纯函数 `updateDrift`（第 7 尾参 `scoreMultiplier = 1`，H1 挑战加成；不修改入参、返回新状态；激活期间累计连击——满 0.5s 窗口 combo+1、active 翻转重置——并按倍率 `1+combo*0.25` × `scoreMultiplier` 累计得分且 clamp 至 `DRIFT_SCORE_MAX`）、`effectiveTurnRate` 与 `driftSpeedFactor` 参数注入；漂移阈值/速度因子/得分上限常量自 `src/game/constants` 导入 |
-| `input.ts` | 输入规范化：`PlayerMapping`（M12 可选 `boost?`）、P1（WASD+Space）/P2（方向键+Enter）映射、`inputFromKeys`（M12 条件产出 boost 字段）、触屏四分区 `touchToCarInput`（含 `TouchPoint`，M12 恒产出 `boost:false`） |
+| `input.ts` | 输入规范化：`PlayerMapping`（M12 可选 `boost?`）、P1（WASD+Space）/P2（方向键+Enter）映射、`inputFromKeys`（M12 条件产出 boost 字段）、触屏四分区 `touchToCarInput`（含 `TouchPoint`，M12 恒产出 `boost:false`）                                                                                                                                                                                                                                                           |

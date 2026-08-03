@@ -11,6 +11,8 @@
 - **门面封装**：`engine/renderer.ts` 的 `Renderer` 类作为渲染门面，`render`/`renderRegion` 支持 `RenderView` 视图参数化（分屏双世界零重建），`drawDivider` 处理分屏分隔线。
 - **依赖方向**：`engine/` 与 `physics/` 处于底层；`game/` 依赖 `engine/` + `physics/`，并对 `ui/` 存在运行级调用（screens/hud）；`ui/` 类型依赖 `game/`（state/track-context/phase），构成受限双向环（有意的分层折衷）；`audio/` 仅依赖外部注入的 `AudioContext`；`ai/` 依赖 `engine/` + `physics/`。常量唯一真源 `game/constants.ts` 被 engine/physics 反向导入。
 - **可测试与可复现**：领域层纯函数、确定性生成器（`mulberry32`）、无头模拟器（`ai/simulate.ts`）、canvas mock 基建（`tests/__mocks__/canvas.ts`）共同支撑 Vitest 单测与 `npm run bot` 跑圈验证（`tests/bot/run-bot.ts` 自 0eb8b6e 起跑全 9 赛道矩阵回归）。
+- **M14 性能优化与 UI 增强**：`engine/road-strip.ts`（曲率段合并 `buildRoadStrips` + 离屏 canvas 预渲染 `renderRoadStripToCanvas`，`TrackContext` 预计算 `roadStrips` 供直道段切片 drawImage 加速）与 `ui/minimap.ts`（`Minimap` 类小地图/赛道进度指示器：构造预计算轨迹折线并归一化、每帧按 `cameraZ % lapLength` 重绘玩家位置点）为 M14 新增。
+- **测试辅助迁移（死代码清理）**：仅测试使用的导出 `createDefaultTrack`（原 `engine/track.ts`）与 `spritesInRange` 线性版（原 `engine/sprites.ts`）已迁移至 `tests/helpers/`（`tests/helpers/track.ts`、`tests/helpers/sprites.ts`），生产代码不再导出；`createStraightTrack` 因禁碰测试文件仍自 src 导入而保留并标注 `@deprecated`。
 
 ## Flow
 
@@ -37,19 +39,19 @@
 
 ## 子目录详细地图
 
-| 目录 | 详细地图 |
-|------|----------|
-| `src/engine/` | [src/engine/codemap.md](src/engine/codemap.md) |
+| 目录           | 详细地图                                         |
+| -------------- | ------------------------------------------------ |
+| `src/engine/`  | [src/engine/codemap.md](src/engine/codemap.md)   |
 | `src/physics/` | [src/physics/codemap.md](src/physics/codemap.md) |
-| `src/ai/` | [src/ai/codemap.md](src/ai/codemap.md) |
-| `src/game/` | [src/game/codemap.md](src/game/codemap.md) |
-| `src/ui/` | [src/ui/codemap.md](src/ui/codemap.md) |
-| `src/audio/` | [src/audio/codemap.md](src/audio/codemap.md) |
+| `src/ai/`      | [src/ai/codemap.md](src/ai/codemap.md)           |
+| `src/game/`    | [src/game/codemap.md](src/game/codemap.md)       |
+| `src/ui/`      | [src/ui/codemap.md](src/ui/codemap.md)           |
+| `src/audio/`   | [src/audio/codemap.md](src/audio/codemap.md)     |
 
 ## 根级文件
 
-| 文件 | 职责 |
-|------|------|
-| `src/main.ts` | 运行时入口（4 行）：`import './style.css'` + `initGame()` |
-| `src/style.css` | 全屏 Canvas、HUD 定位（含分屏左右对称布局）、启动/暂停/结算画面样式（9c57c8f 起 `#finish-screen` 加 `overflow-y: auto` 防内容溢出截断）、赛道选单双类高亮（selected/selected-p2）、移动端适配 |
-| `src/vite-env.d.ts` | Vite 客户端类型声明 |
+| 文件                | 职责                                                                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`       | 运行时入口（4 行）：`import './style.css'` + `initGame()`                                                                                                                                     |
+| `src/style.css`     | 全屏 Canvas、HUD 定位（含分屏左右对称布局）、启动/暂停/结算画面样式（9c57c8f 起 `#finish-screen` 加 `overflow-y: auto` 防内容溢出截断）、赛道选单双类高亮（selected/selected-p2）、移动端适配 |
+| `src/vite-env.d.ts` | Vite 客户端类型声明                                                                                                                                                                           |

@@ -37,7 +37,7 @@ OutRun 伪 3D 复刻赛车游戏。基于 TypeScript + Vite 构建，使用 Canv
 | `src/game/` | 游戏编排层：GameLoop 主循环、双玩家 TrackContext 赛道世界、RaceState、碰撞裁决、阶段 FSM、常量真源、挑战模式/热座/分屏支持 | [src/game/codemap.md](src/game/codemap.md) |
 | `src/ui/` | UI 表现层：双人 HUD、启动/暂停/结算画面（双人化）、格式化、玩家维度存档、虚拟摇杆、漂移连击倍率与 MAX 标记 | [src/ui/codemap.md](src/ui/codemap.md) |
 | `src/audio/` | WebAudio 程序化合成：引擎音效、环境音效（雨声/碰撞）、BOOST 氮气音效与 chiptune 背景音乐 | [src/audio/codemap.md](src/audio/codemap.md) |
-| `tests/` | 质量验证层：32 个 Vitest 单元测试（含 canvas mock 基建）+ bot 跑圈验收脚本（9 赛道矩阵回归） | [tests/codemap.md](tests/codemap.md) |
+| `tests/` | 质量验证层：34 个 Vitest 单元测试（含 canvas mock 基建）+ bot 跑圈验收脚本（9 赛道矩阵回归） | [tests/codemap.md](tests/codemap.md) |
 | `docs/` | 项目计划与演进档案：M1-M13 里程碑及扩展/优化实施方案 | [docs/codemap.md](docs/codemap.md) |
 | `src/` | 源代码根目录：渲染引擎、车辆物理、游戏逻辑编排、AI 决策与模拟、用户界面、程序化音频，以及运行时入口与全局样式 | [src/codemap.md](src/codemap.md) |
 
@@ -70,7 +70,8 @@ OutRun 伪 3D 复刻赛车游戏。基于 TypeScript + Vite 构建，使用 Canv
 - 游戏参数唯一真源为 `src/game/constants.ts`，engine/physics 反向导入常量避免魔法数字；车流密度经 `TrackDef.trafficCount` 赛道级调参，天气三态循环（晴/阴/雨各 45s）由 `updateLighting` 参数化。
 - 赛道注册表 `TRACK_DEFS` 现有 9 条赛道（含 `difficulty` 星级与菜单 ★ 显示；canyon/alpine 为夜晚赛道 `timeOfDay: 'night'`，深暗色板 + 车头灯光晕）；双人成绩持久化：胜场统计（热座/分屏两模式独立 key + 连胜）、漂移得分 TOP10 排行榜与分屏对局最近 10 局记录均存 localStorage（`save.ts`）；菜单另展示各赛道 BEST 汇总（`refreshBestSummary`）与对局榜（`refreshMatchTop`）。
 - 游戏性扩展：漂移连击/倍率系统（`combo` 累积 0.5s 窗口 + 得分 ×(1+combo×0.25) + `DRIFT_SCORE_MAX` clamp，HUD 得分触顶显示 `MAX`）、车流避让 AI（`updateTraffic` 玩家尾参触发变道 + 车灯随 shiftDir 转向）、雨天物理（`updateCar` wet 尾参制动 ×0.7/转向 ×0.85）、BOOST 氮气（漂移蓄力 `updateBoostCharge` + Space/Enter 激活突破 1.15×maxSpeed + 底部渐变条）、挑战模式（`?challenge=1` 限时 60s 刷分结算联动漂移 TOP10）、暂停菜单（总音量/音乐/音效三 slider 分轨持久化 + 重开 + 触屏 `#pause-btn`/`#pause-resume` 进入恢复）、环境音效（`RainSound` 雨段循环噪声 + `CollisionSound` 碰撞冲击音，80ms 防刷屏）。
-- 性能优化：远山离屏缓存（day/night 双套）、雨滴预渲染离屏 canvas（`buildRainCanvas` 双幅 drawImage 平铺）、曲率前缀和、sprites 空间索引、lapRef/lapRef2 复用（消除每帧包装对象分配）、MusicPlayer 调度纯函数化（`stepEvents`/`nextStep` 导出可单测）。
+- 性能优化：远山离屏缓存（day/night 双套）、雨滴预渲染离屏 canvas（`buildRainCanvas` 双幅 drawImage 平铺）、曲率前缀和、sprites 空间索引、lapRef/lapRef2 复用（消除每帧包装对象分配）、MusicPlayer 调度纯函数化（`stepEvents`/`nextStep` 导出可单测）；**M14 性能优化批次**——`src/engine/road-strip.ts` 按曲率差合并赛道分段为曲率段（`buildRoadStrips`，`TrackContext` 预计算 `roadStrips`，直道段可切片 drawImage 离屏缓存加速渲染）、`src/ui/minimap.ts` 小地图/赛道进度指示器（构造时预计算轨迹折线并归一化到画布，每帧按 `cameraZ % lapLength` 重绘玩家位置点）。
+- 死代码清理（本次）：`src/physics/car.ts` 的 `collidePlayers`（分屏独立世界后 src/ 内已无调用方，car.test.ts 用例同步删除）；仅测试使用的导出 `createDefaultTrack`、`spritesInRange`（线性版）迁移至 `tests/helpers/`（`tests/helpers/track.ts`、`tests/helpers/sprites.ts`），`createStraightTrack` 因禁碰测试文件仍自 src 导入而保留并标注 `@deprecated`。
 
 ## 延伸阅读
 

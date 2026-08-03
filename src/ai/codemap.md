@@ -43,7 +43,7 @@ Bot 自动驾驶控制器（决策层）与无头模拟器（验证层）的实�
 
 ## Files
 
-| File | Responsibility |
-|------|----------------|
-| `bot.ts` | Bot 配置（`BotConfig` / `DEFAULT_BOT_CONFIG` / `createBotConfig`）、决策上下文 `BotContext`、前瞻曲率求和 `aheadCurve`、控制指令决策 `decideBotInput`（转向纠偏 + 弯道限速） |
-| `simulate.ts` | 无头跑圈模拟：`LapOptions` / `LapResult` 契约、固定步长驱动循环 `simulateLaps`（逐帧调用 bot 决策与物理更新，统计里程、圈速、出界违规与时长） |
+| File          | Responsibility                                                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bot.ts`      | Bot 配置（`BotConfig` / `DEFAULT_BOT_CONFIG` / `createBotConfig`）、决策上下文 `BotContext`、前瞻曲率求和 `aheadCurve`、控制指令决策 `decideBotInput`（转向纠偏 + 弯道限速） |
+| `simulate.ts` | 无头跑圈模拟：`LapOptions` / `LapResult` 契约、固定步长驱动循环 `simulateLaps`（逐帧调用 bot 决策与物理更新，统计里程、圈速、出界违规与时长）                                |
