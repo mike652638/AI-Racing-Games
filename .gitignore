@@ -27,6 +27,8 @@ Thumbs.db
 /test-manual.py
 /night-bot-check.ts
 /screenshots/
+# 视觉验证产物（agent-browser 截图 + 临时分析脚本）
+tests/visual/
 
 # oh-my-opencode 插件缓存
 .slim/
