@@ -23,14 +23,15 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 
 ```
 src/
-  engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、玩家车渲染
+  engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、环境配置（environment.ts）、玩家车渲染
   physics/      # 车辆运动学（car）、漂移（drift）、双人按键映射（input）
-  game/         # 游戏核心（19 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、圈数、常量、音量、TOP 刷新
+  game/         # 游戏核心（20 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、常量、音量、TOP 刷新
   ai/           # bot 决策器（bot）、圈速模拟器（simulate）
-  ui/           # HUD、画面（screens）、存档（save）、格式化（format）、触屏摇杆（joystick）、小地图（minimap）、游戏状态（gamestate）
-  audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound）、背景音乐（music）
+  ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）、游戏状态（gamestate）
+  audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（41 文件 593 用例）
+  unit/         # Vitest 单测（44 文件 639 用例）
+  e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
   helpers/      # 测试辅助（仅测试导出）
@@ -62,6 +63,8 @@ docs/           # 计划档案、视觉分析、superpowers plans
 14. **M13**：H 系列打磨（挑战计分加成、BOOST 音效与尾焰粒子、漂移连击入榜、lastLap 直返、碰撞音强度、9 赛道 bot 矩阵回归）（✅ typecheck + test + bot 矩阵）
 15. **M14**：性能优化（road-strip 曲率段离屏缓存、小地图/赛道进度指示器、死代码清理）（✅ typecheck + test）
 16. **M15**：架构重构（game-loop 938→719 行，抽出 mode-strategy 策略对象 / finish-accounting / frame-update / frame-render 纯函数）、漂移摩擦声 DriftSound / 轻量胎噪 TireSound、PWA 离线发布（generateSW + autoUpdate）、菜单/结算动画升级、UI/UX 分析修复、CI 工程化（eslint/prettier/husky/lint-staged）（✅ typecheck + lint + 593 用例 + bot 9 赛道矩阵 0 违规 + build PWA 产物）
+17. **M16**：运行时实测修复（天空条纹、热座 P2 渲染/RAF 链、菜单光晕、移动端适配、操作提示与 README 同源 copy.ts、HUD 对比度）、碰撞反馈增强（屏幕红闪 vignette + HUD 碰撞计数 + 双层碰撞音 + 横向弹开防贴车）、道路视觉优化（路面 9 带渐变 + 颗粒噪点 + shadeColor）、帧循环调度纯函数化 shouldScheduleNextFrame、Playwright 视觉回归（`npm run test:e2e`，桌面/移动横屏双 project + CI e2e job）（✅ typecheck + lint + 600→628 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 13 通过）
+18. **M17**：环境差异化——TrackDef.environment 字段 + environment.ts 环境配置（9 种环境天空/草地/远山/景物色板）、差异化景物形状（SpriteKind 扩展 cactus/palm/snowpile + rotation 随机化 + 沙漠小仙人掌）、地形扩展（沙漠沙丘/海岸海面波浪/峡谷岩壁锯齿顶线）、远山缓存按环境懒重建（✅ typecheck + lint + 639 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 13 通过）
 
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
@@ -74,7 +77,8 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，41 文件 593 用例），失败即修复
+- `/test`：`npm test`（vitest run，44 文件 639 用例），失败即修复
+- `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）
 - `npm run bot`：tests/bot/run-bot.ts，9 赛道矩阵回归（0 违规）
@@ -89,6 +93,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 完整仓库代码地图见根目录 `codemap.md`，各子目录地图见对应 `codemap.md`。
 
 开工前应先阅读：
+
 - `codemap.md`：项目整体架构、技术栈、入口点、主循环数据流、验证优先级
 - `src/codemap.md`：源代码目录总览与分层依赖
 - 各子目录 `codemap.md`：模块职责、设计模式、数据流、集成点与文件清单

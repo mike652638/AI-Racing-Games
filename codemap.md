@@ -16,32 +16,32 @@ OutRun 伪 3D 复刻赛车游戏。基于 TypeScript + Vite 构建，使用 Canv
 
 ## 系统入口点
 
-| 文件 | 职责 |
-|------|------|
-| `index.html` | 单页 HTML 壳，定义 Canvas、HUD（含分屏 P2 与 P2 结算行）与菜单 DOM 结构（M15 起含 `.menu-bg` 多层背景/标题动画/榜单卡片与结算 `.finish-line` 动画结构）；`<head>` 含 PWA meta（theme-color、favicon、apple-touch-icon）；引入 `src/main.ts` |
-| `src/main.ts` | 运行时唯一入口（4 行）：导入样式并调用 `initGame()` 启动 `GameLoop` |
-| `src/game/game-loop.ts` | 主循环编排核心：DOM 组装、每帧更新/渲染分支、阶段切换、双玩家赛道管理、音频/调试钩子 |
-| `package.json` | 脚本：`dev` / `build` / `preview` / `typecheck` / `lint` / `test` / `bot`；devDependency 含 `vite-plugin-pwa@1.3.0`（M15 离线 PWA） |
-| `vite.config.ts` | Vite 配置：测试入口为 `tests/**/*.test.ts`，Node.js 环境；M15 起集成 `VitePWA`（registerType autoUpdate + manifest + workbox generateSW）产出离线 PWA |
-| `tsconfig.json` | ES2022 + bundler 模块解析，`strict` / `noUnusedLocals` / `noEmit` |
-| `eslint.config.js` | `typescript-eslint` 推荐规则，忽略 `dist/` |
-| `README.md` | 用户级快速开始、操作说明、里程碑状态 |
-| `AGENTS.md` | 项目规范：技术栈、验证优先级、目录结构、里程碑、语言约定 |
+| 文件                    | 职责                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`            | 单页 HTML 壳，定义 Canvas、HUD（含分屏 P2 与 P2 结算行）与菜单 DOM 结构（M15 起含 `.menu-bg` 多层背景/标题动画/榜单卡片与结算 `.finish-line` 动画结构）；`<head>` 含 PWA meta（theme-color、favicon、apple-touch-icon）；引入 `src/main.ts` |
+| `src/main.ts`           | 运行时唯一入口（4 行）：导入样式并调用 `initGame()` 启动 `GameLoop`                                                                                                                                                                         |
+| `src/game/game-loop.ts` | 主循环编排核心：DOM 组装、每帧更新/渲染分支、阶段切换、双玩家赛道管理、音频/调试钩子                                                                                                                                                        |
+| `package.json`          | 脚本：`dev` / `build` / `preview` / `typecheck` / `lint` / `test` / `bot`；devDependency 含 `vite-plugin-pwa@1.3.0`（M15 离线 PWA）                                                                                                         |
+| `vite.config.ts`        | Vite 配置：测试入口为 `tests/**/*.test.ts`，Node.js 环境；M15 起集成 `VitePWA`（registerType autoUpdate + manifest + workbox generateSW）产出离线 PWA                                                                                       |
+| `tsconfig.json`         | ES2022 + bundler 模块解析，`strict` / `noUnusedLocals` / `noEmit`                                                                                                                                                                           |
+| `eslint.config.js`      | `typescript-eslint` 推荐规则，忽略 `dist/`                                                                                                                                                                                                  |
+| `README.md`             | 用户级快速开始、操作说明、里程碑状态                                                                                                                                                                                                        |
+| `AGENTS.md`             | 项目规范：技术栈、验证优先级、目录结构、里程碑、语言约定                                                                                                                                                                                    |
 
 ## 目录地图
 
-| 目录 | 职责摘要 | 详细地图 |
-|------|----------|----------|
-| `src/engine/` | 伪 3D 渲染引擎层（Canvas 2D）：投影数学、赛道定义与生成、路面几何、景物系统、车流系统、漂移烟雾渲染、环境光照、RenderView 多 view 参数化、空间索引、确定性 PRNG | [src/engine/codemap.md](src/engine/codemap.md) |
-| `src/physics/` | 车辆运动学与玩家输入的领域层：速度/转向/出界、纯函数漂移系统（连击/倍率/得分）、多输入源规范化、雨天物理与 BOOST 氮气加速 | [src/physics/codemap.md](src/physics/codemap.md) |
-| `src/ai/` | Bot 自动驾驶决策器与无头跑圈模拟器 | [src/ai/codemap.md](src/ai/codemap.md) |
-| `src/game/` | 游戏编排层：GameLoop 主循环、双玩家 TrackContext 赛道世界、RaceState、碰撞裁决、阶段 FSM、常量真源、挑战模式/热座/分屏支持 | [src/game/codemap.md](src/game/codemap.md) |
-| `src/ui/` | UI 表现层：双人 HUD、启动/暂停/结算画面（双人化）、格式化、玩家维度存档、虚拟摇杆、漂移连击倍率与 MAX 标记 | [src/ui/codemap.md](src/ui/codemap.md) |
-| `src/audio/` | WebAudio 程序化合成：引擎音效、环境音效（雨声/碰撞）、BOOST 氮气音效与 chiptune 背景音乐 | [src/audio/codemap.md](src/audio/codemap.md) |
-| `public/` | PWA 静态资源（M15）：`icon.svg`/`pwa-192.png`/`pwa-512.png`/`maskable-512.png` 图标（零依赖 PNG 编码生成，maskable 版 scale 0.7 居中） | — |
-| `tests/` | 质量验证层：41 个 Vitest 单元测试 593 用例（含 canvas mock 基建）+ bot 跑圈验收脚本（9 赛道矩阵回归） | [tests/codemap.md](tests/codemap.md) |
-| `docs/` | 项目计划与演进档案：M1-M13 里程碑及扩展/优化实施方案 | [docs/codemap.md](docs/codemap.md) |
-| `src/` | 源代码根目录：渲染引擎、车辆物理、游戏逻辑编排、AI 决策与模拟、用户界面、程序化音频，以及运行时入口与全局样式 | [src/codemap.md](src/codemap.md) |
+| 目录           | 职责摘要                                                                                                                                                                     | 详细地图                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `src/engine/`  | 伪 3D 渲染引擎层（Canvas 2D）：投影数学、赛道定义与生成、路面几何、景物系统、车流系统、漂移烟雾渲染、环境光照、RenderView 多 view 参数化、空间索引、确定性 PRNG              | [src/engine/codemap.md](src/engine/codemap.md)   |
+| `src/physics/` | 车辆运动学与玩家输入的领域层：速度/转向/出界、纯函数漂移系统（连击/倍率/得分）、多输入源规范化、雨天物理与 BOOST 氮气加速                                                    | [src/physics/codemap.md](src/physics/codemap.md) |
+| `src/ai/`      | Bot 自动驾驶决策器与无头跑圈模拟器                                                                                                                                           | [src/ai/codemap.md](src/ai/codemap.md)           |
+| `src/game/`    | 游戏编排层：GameLoop 主循环、双玩家 TrackContext 赛道世界、RaceState、碰撞裁决与碰撞反馈（M16 collision-feedback.ts 红闪状态机）、阶段 FSM、常量真源、挑战模式/热座/分屏支持 | [src/game/codemap.md](src/game/codemap.md)       |
+| `src/ui/`      | UI 表现层：双人 HUD、启动/暂停/结算画面（双人化）、格式化、玩家维度存档、虚拟摇杆、漂移连击倍率与 MAX 标记                                                                   | [src/ui/codemap.md](src/ui/codemap.md)           |
+| `src/audio/`   | WebAudio 程序化合成：引擎音效、环境音效（雨声/碰撞）、BOOST 氮气音效与 chiptune 背景音乐                                                                                     | [src/audio/codemap.md](src/audio/codemap.md)     |
+| `public/`      | PWA 静态资源（M15）：`icon.svg`/`pwa-192.png`/`pwa-512.png`/`maskable-512.png` 图标（零依赖 PNG 编码生成，maskable 版 scale 0.7 居中）                                       | —                                                |
+| `tests/`       | 质量验证层：44 个 Vitest 单元测试 639 用例（含 canvas mock 基建）+ Playwright 视觉回归（M16）+ bot 跑圈验收脚本（9 赛道矩阵回归）                                            | [tests/codemap.md](tests/codemap.md)             |
+| `docs/`        | 项目计划与演进档案：M1-M13 里程碑及扩展/优化实施方案                                                                                                                         | [docs/codemap.md](docs/codemap.md)               |
+| `src/`         | 源代码根目录：渲染引擎、车辆物理、游戏逻辑编排、AI 决策与模拟、用户界面、程序化音频，以及运行时入口与全局样式                                                                | [src/codemap.md](src/codemap.md)                 |
 
 ## 主循环数据流
 
@@ -58,8 +58,9 @@ OutRun 伪 3D 复刻赛车游戏。基于 TypeScript + Vite 构建，使用 Canv
 1. `npm run typecheck` —— `tsc --noEmit`
 2. `npm run lint` —— `eslint .`
 3. `npm test` —— `vitest run`
-4. `npm run bot` —— `tsx tests/bot/run-bot.ts`（跑 3 圈，输出圈速与违规报告）
+4. `npm run bot` —— `tsx tests/bot/run-bot.ts`（9 赛道矩阵，输出圈速与违规报告）
 5. `npm run build` —— `tsc --noEmit && vite build`（M15 起经 vite-plugin-pwa 产出 `dist/sw.js`/`manifest.webmanifest`/`registerSW.js` 等离线 PWA 产物）
+6. `npm run test:e2e` —— Playwright 视觉回归（M16 起，桌面 1280×720 + 移动横屏 812×375 双 project；CI 独立 e2e job，失败上传 test-results 产物）
 
 ## 关键设计约束
 
