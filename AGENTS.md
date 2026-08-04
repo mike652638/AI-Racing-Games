@@ -6,7 +6,9 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 
 - TypeScript + Vite（构建与开发服务器）
 - Canvas 2D 伪 3D 渲染（不使用 Three.js / WebGL）
-- Vitest 单测 + bot 自动跑圈校验（模拟输入、断言圈速与碰撞）
+- Vitest 单测 + tsx（bot 脚本运行）+ bot 自动跑圈校验（模拟输入、断言圈速与碰撞）
+- ESLint（typescript-eslint）+ Prettier（格式化）+ husky/lint-staged（提交前检查）
+- vite-plugin-pwa@1.3.0（M15 引入：离线 PWA，generateSW + autoUpdate）
 
 ## 验证优先级（必须按此顺序）
 
@@ -21,24 +23,45 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 
 ```
 src/
-  engine/       # 游戏核心（伪3D投影、路面分段、精灵缩放）
-  physics/      # 车辆运动学（速度、加速度、转向、漂移）
-  track/        # 赛道数据（分段路点、曲线、障碍物）
-  ai/           # bot 控制器（跑圈、避障）
-  ui/           # HUD、菜单
-  audio/        # 音效（可选，无资源时用 WebAudio 合成）
+  engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、玩家车渲染
+  physics/      # 车辆运动学（car）、漂移（drift）、双人按键映射（input）
+  game/         # 游戏核心（19 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、圈数、常量、音量、TOP 刷新
+  ai/           # bot 决策器（bot）、圈速模拟器（simulate）
+  ui/           # HUD、画面（screens）、存档（save）、格式化（format）、触屏摇杆（joystick）、小地图（minimap）、游戏状态（gamestate）
+  audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测
-  bot/          # bot 自动跑圈校验脚本
+  unit/         # Vitest 单测（41 文件 593 用例）
+  bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
+  __mocks__/    # canvas mock
+  helpers/      # 测试辅助（仅测试导出）
+docs/           # 计划档案、视觉分析、superpowers plans
 ```
+
+## 架构要点
+
+- **纯函数领域层**：frame-update / frame-render / finish-accounting / frame-pure 为无副作用纯函数（状态进、状态/渲染指令出），game-loop.ts 仅做编排（938→719 行）；mode-strategy 以策略对象封装单屏/分屏/挑战等模式的差异，避免大 if 分支。
+- **常量唯一真源**：game/constants 为全局共享常量层（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE），engine/physics/ui 均反向导入，无循环初始化问题。
+- **确定性生成**：赛道、车流等由确定性随机种子生成，9 赛道 bot 矩阵回归（0 违规）可复现。
+- **依赖环（有意折衷）**：game↔ui 存在受限双向依赖环——game/ 对 ui/ 为运行级调用（hud/screens/joystick/save/minimap）；ui/ 对 game/ 的**业务类型依赖全部为 import type（RaceState/TrackContext）**，运行时依赖仅限 game/constants 常量值（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE）与 gamestate/format 的 re-export 兼容层；engine/physics 亦反向导入 game/constants——game/constants 实质是全局共享常量层（唯一真源），无循环初始化问题。彻底解环路径（如将常量层提升为独立共享模块）留作未来可选重构，当前不执行。
 
 ## 里程碑（分阶段推进，每阶段可运行可验证）
 
-1. **M1 渲染骨架**：Canvas 初始化、伪 3D 路面投影（分段条带）、简单直道滚动、60fps 循环
-2. **M2 车辆物理**：速度/加速度/转向模型、路缘限制、简单碰撞（出界即减速）
-3. **M3 赛道系统**：弯道生成（分段路点）、视差远山/天空、赛道数据可配置
-4. **M4 bot 跑圈**：bot 沿路点自动行驶，自动跑圈计时；`npm run bot` 输出圈速与违规报告
-5. **M5 打磨**：HUD（速度/计时）、音效合成、启动画面、胜利结算、发布构建
+1. **M1 渲染骨架**：Canvas 初始化、伪 3D 路面投影（分段条带）、简单直道滚动、60fps 循环（✅ typecheck + test）
+2. **M2 车辆物理**：速度/加速度/转向模型、路缘限制、简单碰撞（出界即减速）（✅ typecheck + test）
+3. **M3 赛道系统**：弯道生成（分段路点）、视差远山/天空、赛道数据可配置（✅ typecheck + test）
+4. **M4 bot 跑圈**：bot 沿路点自动行驶、自动跑圈计时；`npm run bot` 输出圈速与违规报告（✅ typecheck + test + bot 稳定输出）
+5. **M5 打磨**：HUD（速度/计时）、音效合成、启动画面、胜利结算、发布构建（✅ typecheck + test + build）
+6. **扩展**：平滑弯道（控制点插值）、路边景物（树木/路灯）、漂移系统、双人分屏、最佳圈速存档（✅ typecheck + test）
+7. **扩展 2**：车流与碰撞、漂移得分、关卡选单（3 赛道）、chiptune 背景音乐、移动端触控（✅ typecheck + test）
+8. **M6-M7**：GameLoop 重构（DOM/初始化/流程控制/每帧编排下沉 game 层）、阶段 FSM 下沉（✅ typecheck + test）
+9. **M8**：双人 HUD 扩展（单屏 P2 BEST、热座玩家标签）、赛道自定义车流密度（✅ typecheck + test）
+10. **M9**：9 条赛道 + 难度星级选单、胜场统计、漂移得分 TOP10 排行榜（✅ typecheck + test）
+11. **M10**：车流避让 AI、各赛道 BEST 汇总、主音量调节、漂移连击倍率（✅ typecheck + test）
+12. **M11**：夜晚赛道（车灯/尾灯）、分屏对局 TOP10、触屏暂停、雨声/碰撞音、雨滴离屏渲染、得分 MAX 标记（✅ typecheck + test）
+13. **M12**：挑战模式（60s 限时刷分）、雨天物理、BOOST 氮气、车灯随变道转向、音乐/音效分轨音量（✅ typecheck + test）
+14. **M13**：H 系列打磨（挑战计分加成、BOOST 音效与尾焰粒子、漂移连击入榜、lastLap 直返、碰撞音强度、9 赛道 bot 矩阵回归）（✅ typecheck + test + bot 矩阵）
+15. **M14**：性能优化（road-strip 曲率段离屏缓存、小地图/赛道进度指示器、死代码清理）（✅ typecheck + test）
+16. **M15**：架构重构（game-loop 938→719 行，抽出 mode-strategy 策略对象 / finish-accounting / frame-update / frame-render 纯函数）、漂移摩擦声 DriftSound / 轻量胎噪 TireSound、PWA 离线发布（generateSW + autoUpdate）、菜单/结算动画升级、UI/UX 分析修复、CI 工程化（eslint/prettier/husky/lint-staged）（✅ typecheck + lint + 593 用例 + bot 9 赛道矩阵 0 违规 + build PWA 产物）
 
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
@@ -51,9 +74,10 @@ tests/
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run），失败即修复
+- `/test`：`npm test`（vitest run，41 文件 593 用例），失败即修复
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）
+- `npm run bot`：tests/bot/run-bot.ts，9 赛道矩阵回归（0 违规）
 
 ## 输出与语言
 

@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 41 个 `.test.ts` 文件（591 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
+Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 41 个 `.test.ts` 文件（593 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
 
 ## Design
 
@@ -26,7 +26,7 @@ Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态�
 
 ## Integration
 
-- **测试目标**：`src/engine`（projection、road-geometry、track、tracks、traffic、traffic-render、sprites、scenery、smoke-render、lighting、renderer）、`src/physics`（car、drift、input）、`src/ai`（bot、simulate）、`src/ui`（format、gamestate、save、joystick、hud）、`src/audio`（engine、music）、`src/game`（state、constants、phase、player-state、track-context、track-manager、game-loop）下所有模块。
+- **测试目标**：`src/engine`（projection、road-geometry、track、tracks、traffic、traffic-render、sprites、scenery、smoke-render、lighting、renderer）、`src/physics`（car、drift、input）、`src/ai`（bot、simulate）、`src/ui`（format、gamestate、save、joystick、hud）、`src/audio`（engine、music）、`src/game`（state、constants、phase、player-state、track-context、track-manager、game-loop，M15 起含 mode-strategy / finish-accounting / frame-update / frame-render 四模块）下所有模块。
 - **依赖**：`vitest`（运行器）、`tsx`（间接用于 bot 脚本）、`tests/__mocks__/canvas.ts`（Canvas 测试替身）、`src/` 各被测模块。
 - **被调用方**：`package.json` 的 `test` 脚本；`tests/codemap.md` 的详细文件表。
 
