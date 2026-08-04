@@ -41,6 +41,7 @@ jobs:
 
   e2e:
     # M16：Playwright 视觉回归（菜单光晕/标题叠影/天空条纹/热座 HUD/移动端视口）
+    needs: [ci]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
