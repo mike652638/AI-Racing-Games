@@ -1,4 +1,4 @@
-import { DRIFT_CHARGE_THRESHOLD, DRIFT_SCORE_MAX, DRIFT_SPEED_FACTOR, DRIFT_STEER_THRESHOLD } from '../game/constants'
+import { DRIFT_CHARGE_THRESHOLD, DRIFT_SCORE_MAX, DRIFT_SPEED_FACTOR, DRIFT_STEER_THRESHOLD } from '../shared/constants'
 import type { CarConfig, CarInput, CarState } from './car'
 
 export interface SmokeParticle {

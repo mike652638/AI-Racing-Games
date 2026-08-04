@@ -1,4 +1,2 @@
-/** 行进距离 → 圈数（1 基）：game 层共用（主循环圈数记录与 HUD 圈数显示） */
-export function lapFromZ(cameraZ: number, lapLength: number): number {
-  return Math.floor(cameraZ / lapLength) + 1
-}
+/** 圈数计算：唯一真源已提升到 src/shared/lap（解环 game↔ui），此处 re-export 保持 game 内部消费方兼容 */
+export { lapFromZ } from '../shared/lap'

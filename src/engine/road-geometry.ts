@@ -1,4 +1,4 @@
-import { EDGE_WIDTH, RENDER_DRAW_DISTANCE, ROAD_HALF_WIDTH } from '../game/constants'
+import { EDGE_WIDTH, RENDER_DRAW_DISTANCE, ROAD_HALF_WIDTH } from '../shared/constants'
 import { project, type Projected, type ProjectionOptions, type Camera3D } from './projection'
 
 export { EDGE_WIDTH, ROAD_HALF_WIDTH }

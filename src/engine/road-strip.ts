@@ -1,5 +1,5 @@
 import { SEGMENT_LENGTH } from './track'
-import { EDGE_WIDTH, ROAD_HALF_WIDTH } from '../game/constants'
+import { EDGE_WIDTH, ROAD_HALF_WIDTH } from '../shared/constants'
 import { mulberry32 } from './scenery'
 import { roadColors, shouldDrawCenterLine } from './road-geometry'
 

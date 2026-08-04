@@ -1,5 +1,5 @@
 /** BOOST 氮气加速倍率（加速度 ×0.6）与速度上限倍率（1.15×maxSpeed），自 game/constants 导入 */
-import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT } from '../game/constants'
+import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT } from '../shared/constants'
 
 export interface CarConfig {
   maxSpeed: number
