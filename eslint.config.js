@@ -2,8 +2,8 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   // 忽略构建产物与不入库的临时脚本（night-bot-check.ts 已被 .gitignore 排除；
-  // .edgeone 为 EdgeOne Pages 部署产物，非源码）
-  { ignores: ['dist', 'night-bot-check.ts', '.edgeone'] },
+  // .edgeone 为 EdgeOne Pages 部署产物；.qoder 为 IDE 工具产物，均非源码）
+  { ignores: ['dist', 'night-bot-check.ts', '.edgeone', '.qoder'] },
   tseslint.configs.recommended,
   {
     rules: {
