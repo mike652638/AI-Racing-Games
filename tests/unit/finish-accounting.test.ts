@@ -160,11 +160,7 @@ describe('record=false：只计算不写入', () => {
 
 describe('record=true：按模式记账', () => {
   test('SINGLE 完赛正分：addDriftScore(P1) 参数正确（player/trackId/score/time/combo），无胜场记录', () => {
-    const r = call(
-      makeRace({ p1CameraZ: 4000, p1Score: 50, p1RaceTime: 30, p1Combo: 4 }),
-      SINGLE,
-      { record: true },
-    )
+    const r = call(makeRace({ p1CameraZ: 4000, p1Score: 50, p1RaceTime: 30, p1Combo: 4 }), SINGLE, { record: true })
     expect(mockedAddDriftScore).toHaveBeenCalledTimes(1)
     expect(mockedAddDriftScore).toHaveBeenCalledWith({
       player: 'P1',
@@ -190,9 +186,7 @@ describe('record=true：按模式记账', () => {
   test('CHALLENGE 未完赛正分：挑战模式放宽条件仍记 P1（限时刷分场景）', () => {
     const r = call(makeRace({ p1CameraZ: 0, p1Score: 50 }), CHALLENGE, { record: true })
     expect(mockedAddDriftScore).toHaveBeenCalledTimes(1)
-    expect(mockedAddDriftScore).toHaveBeenCalledWith(
-      expect.objectContaining({ player: 'P1', score: 50 }),
-    )
+    expect(mockedAddDriftScore).toHaveBeenCalledWith(expect.objectContaining({ player: 'P1', score: 50 }))
     // 挑战为单屏：P2 恒不参与记分
     expect(mockedAddDriftScore.mock.calls[0][0].player).toBe('P1')
     expect(r.driftWinner).toBeNull()

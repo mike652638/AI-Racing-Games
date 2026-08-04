@@ -81,6 +81,7 @@ function makeCtx(over: Partial<FrameRenderContext> = {}): FrameRenderContext {
     hotseatMode: false,
     hotseatPlayer: 1,
     boostActive: false,
+    collisionFlash: 0,
     steer1: 0,
     steer2: 0,
     ...over,
@@ -153,6 +154,52 @@ describe('比赛渲染分支', () => {
     expect(timeSec).toBe(4.5)
     expect(view.track).toBe(ctx.race.tracks[0].segments)
     expect(view.boostParticles).toBe(particles)
+    // M16：碰撞红闪经 ctx 透传 viewFor → renderer（默认 0）
+    expect(view.collisionFlash).toBe(0)
+  })
+
+  test('单屏比赛：碰撞红闪强度经 ctx 透传到 view（M16 视觉反馈数据链）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const renderer = makeRendererStub()
+    const ctx = makeCtx({ phase: PHASE_RACING, splitMode: false, renderer, collisionFlash: 0.8 })
+    ctx.race.player1.cameraZ = 123
+    ctx.race.player1.carState.position = 0.5
+    renderFrame(0.05, ctx)
+    const view = renderer.render.mock.calls[0][3] as RenderView
+    expect(view.collisionFlash).toBe(0.8)
+  })
+
+  test('热座 P2 回合单屏：渲染 player2 与 tracks[1]（P0 回归：不冻结在 P1）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const renderer = makeRendererStub()
+    const ctx = makeCtx({ phase: PHASE_RACING, splitMode: false, hotseatMode: true, hotseatPlayer: 2, renderer })
+    ctx.race.player1.cameraZ = 123
+    ctx.race.player1.raceTime = 4.5
+    ctx.race.player2.cameraZ = 456
+    ctx.race.player2.raceTime = 9.5
+    ctx.race.player2.carState.position = -0.5
+    renderFrame(0.05, ctx)
+    expect(renderer.render).toHaveBeenCalledTimes(1)
+    expect(renderer.setCameraX).toHaveBeenCalledWith(-0.5)
+    const [cameraZ, smoke, timeSec, view] = renderer.render.mock.calls[0] as [number, unknown[], number, RenderView]
+    expect(cameraZ).toBe(456)
+    expect(smoke).toBe(ctx.race.player2.driftState.smoke)
+    expect(timeSec).toBe(9.5)
+    expect(view.track).toBe(ctx.race.tracks[1].segments)
+  })
+
+  test('热座 P1 回合单屏：仍渲染 player1 与 tracks[0]', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const renderer = makeRendererStub()
+    const ctx = makeCtx({ phase: PHASE_RACING, splitMode: false, hotseatMode: true, hotseatPlayer: 1, renderer })
+    ctx.race.player1.cameraZ = 123
+    ctx.race.player1.carState.position = 0.5
+    ctx.race.player2.cameraZ = 456
+    renderFrame(0.05, ctx)
+    expect(renderer.render).toHaveBeenCalledTimes(1)
+    expect(renderer.setCameraX).toHaveBeenCalledWith(0.5)
+    const [cameraZ] = renderer.render.mock.calls[0] as [number, unknown[], number, RenderView]
+    expect(cameraZ).toBe(123)
   })
 
   test('分屏比赛：renderRegion ×2（P1 左/P2 右）+ drawDivider，render 不调用', () => {

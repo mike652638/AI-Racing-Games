@@ -52,6 +52,7 @@ function makeCtx(over: Partial<FrameUpdateContext> = {}): FrameUpdateContext {
     lastActivePlayer: 1,
     boostActive: false,
     lastCollisionCount: 0,
+    collisionFlash: 0,
     challengeTimer: null,
     challengeScore: null,
     boostBar: null,
@@ -214,6 +215,24 @@ describe('帧间状态写回', () => {
     ctx.race.collisionCount = 1
     const r = updateFrame(DT, ctx)
     expect(r.lastCollisionCount).toBe(1)
+  })
+
+  test('M16 碰撞命中 → collisionFlash 重置为速度比映射强度，未命中按 dt 衰减', () => {
+    stubDocument()
+    // 未命中：flash=0.8 经一帧衰减（exp(-6*DT)，DT 为测试常量）
+    const ctx = makeCtx({ lastCollisionCount: 0, collisionFlash: 0.8 })
+    const r = updateFrame(DT, ctx)
+    expect(r.collisionFlash).toBeLessThan(0.8)
+    expect(r.collisionFlash).toBeCloseTo(0.8 * Math.exp(-6 * DT), 5)
+    // 命中：让玩家车流碰撞（P1 位于车流位置，速度比 flashSeed(3000/6000)=0.5→flash=0.5）
+    const hitCtx = makeCtx({ lastCollisionCount: 0, collisionFlash: 0 })
+    hitCtx.race.player1.cameraZ = 1000
+    hitCtx.race.player1.carState.speed = 3000
+    hitCtx.race.player1.carState.position = 0.5
+    hitCtx.race.tracks[0].traffic = [{ z: 1040, offset: 0.5, speed: 2400, colorIndex: 0, shiftDir: 0 }]
+    const rh = updateFrame(DT, hitCtx)
+    expect(rh.collisionFlash).toBeGreaterThan(0.4)
+    expect(rh.lastCollisionCount).toBe(1)
   })
 })
 

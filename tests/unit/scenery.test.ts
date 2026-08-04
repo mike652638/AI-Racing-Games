@@ -29,6 +29,28 @@ describe('远山轮廓生成', () => {
     const min = Math.min(...profile)
     expect(max - min).toBeGreaterThan(0.05)
   })
+
+  test('轮廓平滑（相邻像素高度差有界，防高频条纹回归）', () => {
+    // P0 回归：原实现每像素随机频率导致 maxDelta≈0.98，天空渲染为密集条纹。
+    // 修复后相邻像素差必须 < 0.1（理论界约 0.06，留裕量）。
+    const profile = generateMountainProfile(1280, 42)
+    let maxDelta = 0
+    for (let i = 1; i < profile.length; i++) {
+      maxDelta = Math.max(maxDelta, Math.abs(profile[i] - profile[i - 1]))
+    }
+    expect(maxDelta).toBeLessThan(0.1)
+  })
+
+  test('任意种子轮廓都平滑（多 seed 回归）', () => {
+    for (const seed of [1, 7, 42, 99, 1234]) {
+      const profile = generateMountainProfile(320, seed)
+      let maxDelta = 0
+      for (let i = 1; i < profile.length; i++) {
+        maxDelta = Math.max(maxDelta, Math.abs(profile[i] - profile[i - 1]))
+      }
+      expect(maxDelta).toBeLessThan(0.1)
+    }
+  })
 })
 
 describe('视差偏移', () => {

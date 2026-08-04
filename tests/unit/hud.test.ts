@@ -181,6 +181,7 @@ describe('hud 热座玩家标签（hudPlayerTag）', () => {
     return {
       ...createMockHudElements(),
       hudPlayerTag: element() as unknown as HTMLDivElement,
+      hudBestP2: element() as unknown as HTMLDivElement,
     } as unknown as HudElements
   }
 
@@ -204,6 +205,41 @@ describe('hud 热座玩家标签（hudPlayerTag）', () => {
     expect(elements.hudPlayerTag!.textContent).toBe('P1 驾驶中')
     expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p1', true)
     expect(elements.hudPlayerTag!.classList.toggle).toHaveBeenCalledWith('p2', false)
+  })
+
+  it('热座 P2 回合主 HUD 显示 player2 数据（P0 回归：速度/圈数/计时/BEST 不冻结在 P1）', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    race.player1.cameraZ = 5000
+    race.player1.raceTime = 42
+    race.player1.carState.speed = 5000
+    race.player2.cameraZ = 50000
+    race.player2.raceTime = 88.5
+    race.player2.carState.speed = 6000
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', 12.34, 2)
+    // 主 HUD 文本取 player2：圈数按 tracks[1]（S 弯 2 圈）计算，时间为 P2 的 88.5s
+    expect(elements.hudSpeed.textContent).toBe('320')
+    expect(elements.hudLap.textContent).toBe(
+      `LAP ${Math.floor(50000 / TRACKS[1].lapLength) + 1}/${TRACKS[1].totalLaps}`,
+    )
+    expect(elements.hudTime.textContent).toBe('1:28.500')
+    expect(elements.hudBest.textContent).toBe('BEST 0:12.340')
+    expect(elements.hudBestP2!.hidden).toBe(true)
+  })
+
+  it('热座 P1 回合主 HUD 显示 player1 数据（tracks[0]）', () => {
+    const elements = withTag()
+    const race = createRaceState()
+    race.player1.cameraZ = 5000
+    race.player1.raceTime = 42
+    race.player1.carState.speed = 3000
+    race.player2.cameraZ = 50000
+    race.player2.raceTime = 88.5
+    updateHud(elements, race, createCarConfig(), 55.5, false, TRACKS, 'racing', 12.34, 1)
+    expect(elements.hudSpeed.textContent).toBe('160')
+    expect(elements.hudLap.textContent).toBe(`LAP ${Math.floor(5000 / TRACKS[0].lapLength) + 1}/${TRACKS[0].totalLaps}`)
+    expect(elements.hudTime.textContent).toBe('0:42.000')
+    expect(elements.hudBest.textContent).toBe('BEST 0:55.500')
   })
 
   it('非热座（第 9 参 null）隐藏玩家标签', () => {

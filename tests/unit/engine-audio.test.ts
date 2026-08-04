@@ -54,6 +54,7 @@ function mockCtx(): {
           setTargetAtTime: (): void => undefined,
           setValueAtTime: (): void => undefined,
           linearRampToValueAtTime: (): void => undefined,
+          exponentialRampToValueAtTime: (): void => undefined,
         },
         connect: (target: unknown): void => {
           connected = target
@@ -154,18 +155,22 @@ describe('CollisionSound 碰撞冲击音', () => {
     expect(cs.count).toBe(2)
   })
 
-  test('play(volume) 按强度缩放增益：play(0.5) 后 gain.value === 0.125', () => {
+  test('play(volume) 按强度缩放增益：play(0.5) 后 outGain.value === 0.16（M16 增强动态范围）', () => {
     const { ctx, getLastGain } = mockCtx()
     const cs = new CollisionSound(ctx)
-    // 构造默认增益 0.25
-    expect(getLastGain()?.gain.value).toBe(0.25)
+    // 构造默认增益 0.32
+    expect(getLastGain()?.gain.value).toBe(0.32)
     cs.play(0.5)
-    // 0.25 × clamp(0.5, 0.4, 1) = 0.125
-    expect(getLastGain()?.gain.value).toBe(0.125)
+    // 0.32 × clamp(0.5, 0.1, 1) = 0.16
+    expect(getLastGain()?.gain.value).toBe(0.16)
     // 推进 currentTime 越过 80ms 防刷屏窗口后，测试低于下限的 clamp
     ;(ctx as unknown as { currentTime: number }).currentTime = 0.5
-    cs.play(0.2) // 低于下限 0.4 → clamp 到 0.4 → 0.25 × 0.4 = 0.1
-    expect(getLastGain()?.gain.value).toBe(0.1)
+    cs.play(0.05) // 低于下限 0.1 → clamp 到 0.1 → 0.32 × 0.1 = 0.032
+    expect(getLastGain()?.gain.value).toBe(0.032)
+    // 高速撞击：clamp 到 1 → 0.32
+    ;(ctx as unknown as { currentTime: number }).currentTime = 1
+    cs.play(2)
+    expect(getLastGain()?.gain.value).toBe(0.32)
   })
 })
 

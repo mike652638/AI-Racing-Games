@@ -4,6 +4,7 @@ import {
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
   resolvePerformanceConfig,
+  shouldScheduleNextFrame,
   updateBoostCharge,
   updatePlayerFrame,
   viewFor,
@@ -309,5 +310,23 @@ describe('PerformanceConfig（Task 8）', () => {
     expect(cfg.skipSmoke).toBe(true)
     expect(cfg.skipBoostParticles).toBe(true)
     expect(cfg.skipRain).toBe(true)
+  })
+})
+
+describe('shouldScheduleNextFrame（M16 帧循环调度契约）', () => {
+  test('shouldRender=true 时继续调度下一帧（比赛/菜单正常帧循环）', () => {
+    expect(shouldScheduleNextFrame(true)).toBe(true)
+  })
+
+  test('shouldRender=false 时停止调度（完赛/挑战限时触发 finish，等价旧帧内 return）', () => {
+    expect(shouldScheduleNextFrame(false)).toBe(false)
+  })
+
+  test('热座 P2 回合的帧循环依赖 shouldRender=true 持续自续（P0 回归锚点）', () => {
+    // 热座交棒后 P2 回合 updateFrame 正常返回 shouldRender=true；
+    // 若返回 false 则 RAF 链断裂（此前 P2 画面/HUD 永久冻结的根因），
+    // 断言契约：mustRender 语义下调度决策唯一依赖 shouldRender
+    expect(shouldScheduleNextFrame(true)).toBe(true)
+    expect(shouldScheduleNextFrame(false)).toBe(false)
   })
 })

@@ -370,6 +370,33 @@ describe('Renderer 状态切换', () => {
     expect(afterBoostRect - beforeRect).toBeGreaterThan(afterBaseRect - afterBoostRect)
   })
 
+  it('M16 碰撞红色 vignette：collisionFlash>0 时 createRadialGradient/fillRect 增量高于 0（红闪反馈）', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[0])
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+      collisionFlash: 0,
+    }
+    const flashView: RenderView = { ...baseView, collisionFlash: 0.8 }
+    renderer.render(0, [], 0, baseView)
+    const beforeGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const beforeRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, flashView)
+    const afterFlashGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const afterFlashRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, baseView)
+    const afterBaseGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const afterBaseRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    // 红闪触发时额外绘制一次径向渐变 + 全屏填充（fillRect 增量显著高于无闪帧）
+    expect(afterFlashGrad - beforeGrad).toBeGreaterThan(afterBaseGrad - afterFlashGrad)
+    expect(afterFlashRect - beforeRect).toBeGreaterThan(afterBaseRect - afterFlashRect)
+    // 无闪帧（base）本身无红闪径向渐变增量
+    expect(afterBaseGrad - afterFlashGrad).toBe(0)
+  })
+
   it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4])

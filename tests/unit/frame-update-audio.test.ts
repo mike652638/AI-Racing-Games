@@ -65,6 +65,7 @@ function makeCtx(over: Partial<FrameUpdateContext> = {}): FrameUpdateContext {
     lastActivePlayer: 1,
     boostActive: false,
     lastCollisionCount: 0,
+    collisionFlash: 0,
     challengeTimer: null,
     challengeScore: null,
     boostBar: null,

@@ -148,6 +148,49 @@ describe('applyTrafficCollision', () => {
     expect(second.cooldown).toBeGreaterThan(0)
   })
 
+  it('碰撞返回 impact（0-1 速度比，供声音/红闪分级）', () => {
+    // 高速碰撞：速度比 3000/6000=0.5
+    const s = car(0.5, 3000)
+    const r = applyTrafficCollision(s, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(r.hit).toBe(true)
+    expect(r.impact).toBeCloseTo(0.5, 5)
+    // 低速碰撞：速度比 600/6000=0.1
+    const s2 = car(0.5, 600)
+    const r2 = applyTrafficCollision(s2, 1000, [trafficCar(1040)], 0, 0.016)
+    expect(r2.hit).toBe(true)
+    expect(r2.impact).toBeCloseTo(0.1, 5)
+    // 无碰撞时 impact=0
+    const r3 = applyTrafficCollision(car(0.5, 100), 2000, [trafficCar(1040)], 0, 0.016)
+    expect(r3.impact).toBe(0)
+  })
+
+  it('impact 随 maxSpeed 归一化（自定义 maxSpeed）', () => {
+    const s = car(0.5, 3000)
+    const r = applyTrafficCollision(s, 1000, [trafficCar(1040)], 0, 0.016, 12000)
+    expect(r.impact).toBeCloseTo(0.25, 5)
+    // 超过 maxSpeed（BOOST）clamp 到 1
+    const s2 = car(0.5, 15000)
+    const r2 = applyTrafficCollision(s2, 1000, [trafficCar(1040)], 0, 0.016, 10000)
+    expect(r2.impact).toBe(1)
+  })
+
+  it('碰撞时轻微横向弹开（远离碰撞车，防贴车反复触发）', () => {
+    // 玩家在 0.5（车流右侧），车流在 0.5 → 弹开向左侧（-0.12）
+    const s = car(0.5, 3000)
+    applyTrafficCollision(s, 1000, [trafficCar(1040, 0.5)], 0, 0.016)
+    expect(s.position).toBeCloseTo(0.38, 5)
+    // 玩家在 -0.5（车流左侧），车流在 -0.5 → 弹开向右侧（+0.12）
+    const s2 = car(-0.5, 3000)
+    applyTrafficCollision(s2, 1000, [trafficCar(1040, -0.5)], 0, 0.016)
+    expect(s2.position).toBeCloseTo(-0.38, 5)
+  })
+
+  it('横向与车流错开时不弹开（无碰撞无位移）', () => {
+    const s = car(0.5, 3000)
+    applyTrafficCollision(s, 1000, [trafficCar(1040, -0.5)], 0, 0.016)
+    expect(s.position).toBe(0.5)
+  })
+
   it('不同冷却值互不影响（独立冷却）', () => {
     const a = car(0.5, 100)
     const b = car(0.5, 100)
