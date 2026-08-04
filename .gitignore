@@ -7,6 +7,13 @@ dist/
 # 验证截图等临时产物
 shots/
 
+# Playwright e2e 产物（测试结果/截图/trace）
+test-results/
+playwright-report/
+
+# EdgeOne Pages 部署产物（MCP 生成，非源码）
+.edgeone/
+
 # 日志
 *.log
 npm-debug.log*
@@ -33,3 +40,10 @@ tests/visual/
 
 # oh-my-opencode 插件缓存
 .slim/
+
+# 本地环境变量（可含部署密钥，不入库）
+.env
+.env.local
+
+# CodeBuddy 工作记忆与本地截图/临时输出（非源码）
+.codebuddy/

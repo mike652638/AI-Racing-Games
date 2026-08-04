@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
-    <title>OutRun 伪 3D 复刻</title>
+    <title>像素狂飙 - OutRun 伪 3D 街机赛车</title>
+    <meta name="description" content="像素狂飙：网页版 OutRun 伪 3D 街机赛车游戏，9 条赛道、漂移连击、氮气加速、双人分屏与热座对战，无需安装即点即玩。" />
+    <!-- 微信分享卡片：OG 协议（微信/QQ 抓取用，og:image 需绝对 URL，部署后由 CI 注入正式域名） -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="像素狂飙" />
+    <meta property="og:title" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
+    <meta property="og:description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
+    <meta property="og:image" content="https://early-english-learning-6irvhqpz.edgeone.cool/share-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <!-- 微信专用：确保分享卡片使用大图（640×300 以上） -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
+    <meta property="twitter:description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
+    <meta property="twitter:image" content="https://early-english-learning-6irvhqpz.edgeone.cool/share-card.png" />
     <!-- PWA：SVG 图标（favicon 与 manifest 通用） -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <!-- PWA：manifest link 由 vite-plugin-pwa 构建时自动注入（避免重复），此处不手写 -->
@@ -27,6 +41,7 @@
       <div id="hud-time">0:00.000</div>
       <div id="drift-indicator" hidden>DRIFT! +<span id="drift-score-value">0</span></div>
       <div id="drift-combo" hidden>COMBO x1.00</div>
+      <div id="hud-collision" hidden>碰撞 ×0</div>
       <div id="challenge-timer" hidden></div>
       <div id="challenge-score" hidden></div>
       <canvas id="hud-minimap" width="110" height="110" hidden></canvas>
@@ -153,11 +168,7 @@
     <!-- 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（放在 #start-screen 外面，避免被父元素 hidden 连带隐藏） -->
     <div id="countdown-overlay" hidden aria-hidden="true">
       <div class="countdown-number"></div>
-      <div class="countdown-hints">
-        <p>WASD / 方向键 驾驶</p>
-        <p>空格 氮气加速</p>
-        <p>Shift 漂移</p>
-      </div>
+      <div class="countdown-hints"></div>
     </div>
     <div id="finish-screen" hidden>
       <div class="finish-bg" aria-hidden="true">

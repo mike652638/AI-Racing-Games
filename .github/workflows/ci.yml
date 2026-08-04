@@ -1,4 +1,4 @@
-# 持续集成：typecheck → lint → format:check → test → bot → build
+# 持续集成：typecheck → lint → format:check → test → bot → build → e2e 视觉回归
 name: CI
 
 on:
@@ -38,3 +38,33 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    # M16：Playwright 视觉回归（菜单光晕/标题叠影/天空条纹/热座 HUD/移动端视口）
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E visual regression
+        run: npm run test:e2e
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: test-results/
+          retention-days: 7
