@@ -485,7 +485,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
     // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
     expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
-  })
+    // 2500 帧分屏模拟整文件并行时可能超出默认 5000ms（E2-E5 记录的既有脆弱性），显式放宽超时
+  }, 15000)
 
   it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
     const splitEnv = stubEnvironment(true)
@@ -507,7 +508,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
     // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
     expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
-  })
+  }, 15000)
 
   // 4000 帧双人模拟在整文件并行时实际耗时 5.8-7.1s，超出默认 5000ms（E2-E5 记录过的既有脆弱性），
   // 此处显式放宽超时上限（单跑约 2.3s），不影响断言语义
@@ -533,7 +534,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(banner.hidden).toBe(false)
     expect(banner.textContent).toContain('P1 获胜')
     expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
-  }, 15000)
+  }, 30000)
 
   it('F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）', () => {
     const splitEnv = stubEnvironment(true)
@@ -550,7 +551,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(top.startsWith('1. ')).toBe(true)
     expect(top).toContain('胜 ·')
     expect(top).toContain('经典赛道')
-  }, 15000)
+  }, 30000)
 
   it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
@@ -611,7 +612,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(hotEnv.getElement('finish-hint').textContent)
     // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）
     expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
-  })
+  }, 15000)
 
   it('热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
@@ -635,7 +636,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 10 帧推进量 = speed*dt 累计 960-1440 单位，远小于圈长无回绕），z 必然变化
     hotEnv.driveFrames(10)
     expect(hotEnv.debugValue('p2TrafficZ')).not.toBe(v0)
-  })
+  }, 15000)
 
   it('热座双人完赛后结算显示胜场统计（P2 回合多预热 10 帧 → P1 更快 → P1 胜场 1 连胜 1）', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
@@ -661,7 +662,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       expect(winsEl.textContent).toMatch(/P1 \d : \d P2/)
       expect(winsEl.textContent).toMatch(/连胜 1/)
     }
-  })
+    // 双段 2500 帧热座模拟并行时可能超出默认 5000ms，显式放宽超时（与既有 15000ms 先例一致）
+  }, 15000)
 
   it('单人模式：菜单 #drift-top 显示暂无漂移记录，0 漂移完赛后渲染不崩溃', () => {
     new GameLoop()
@@ -672,7 +674,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     env.driveFrames(2500)
     expect(env.phase()).toBe(PHASE_FINISHED)
     expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
-  })
+  }, 15000)
 
   it('P3（P3）：构造后菜单 BEST 汇总全无记录时显示占位文本', () => {
     new GameLoop()
