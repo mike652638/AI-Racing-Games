@@ -475,15 +475,18 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.getElement('p2-track-name').hidden).toBe(true)
   })
 
-  it('分屏模式：P1 全油门跑完 3 圈（classic）进入结算，P2 静止不污染判定', () => {
+  it('分屏模式：P1 全油门跑完 2 圈（forest）进入结算，P2 静止不污染判定', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
+    // P1 选 forest（Digit7，2 圈短赛道，较 classic 3 圈减少约 40% 帧数；
+    // 脆弱性优化：短赛道使本用例回到默认 5000ms 超时内，无需放宽）
+    splitEnv.fireKey('Digit7')
+    expect(splitEnv.debugValue('selectedTrack')).toBe('forest')
     // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
     // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
-    // classic 3 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）满油门
-    splitEnv.driveFrames(1075)
+    splitEnv.driveFrames(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     // C3 双人结算：P1 完赛填 P1 行（E1：分屏加 'P1 ' 前缀），P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
     expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
@@ -493,18 +496,19 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
     // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
     expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
-    // 2500 帧分屏模拟整文件并行时可能超出默认 5000ms（E2-E5 记录的既有脆弱性），显式放宽超时
-  }, 15000)
+  })
 
-  it('分屏模式：P2 全油门跑完 s-curve 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
+  it('分屏模式：P2 全油门跑完 forest 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
+    // P2 选 forest（Shift+Digit7，短赛道降帧数；断言语义与赛道无关）
+    splitEnv.fireKey('Digit7', true)
+    expect(splitEnv.debugValue('selectedTrack2')).toBe('forest')
     // Enter 开始比赛（P1/P2 均不触发方向键），随后 ArrowUp 驱动 P2 全油门；
     // P1 无输入保持静止（raceTime 仍随帧递增，但 cameraZ=0 不跨圈 → 未完赛）
     splitEnv.fireKey('Enter')
     splitEnv.fireKey('ArrowUp')
-    // s-curve 2 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）满油门
-    splitEnv.driveFrames(1075)
+    splitEnv.driveFrames(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     const time2 = splitEnv.getElement('finish-time-2')
     expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
@@ -517,21 +521,22 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
     // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
     expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
-  }, 15000)
+  })
 
-  // 1075 帧双人模拟在整文件并行时实际耗时约 1.5-2s，超出默认 5000ms（E2-E5 记录过的既有脆弱性），
-  // 此处显式放宽超时上限（单跑约 0.7s），不影响断言语义
   it('分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
+    // 双人同选 forest（Digit7 / Shift+Digit7）：短赛道 2 圈将帧数从 1075 降至 700，
+    // 回到默认 5000ms 超时内（原 15000/30000ms 放宽已消除）
+    splitEnv.fireKey('Digit7')
+    splitEnv.fireKey('Digit7', true)
     // KeyW 驱动 P1（P1 键盘映射）、ArrowUp 驱动 P2（P2 键盘映射）同时全油门零转向。
     // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
     // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
-    // classic 3 圈实测最小通过 975 帧，1075 帧（×1.1 安全余量）远超所需（原 4000 帧过度富余）。
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
-    splitEnv.driveFrames(1075)
+    splitEnv.driveFrames(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     // E1：分屏结算 P1 行加 'P1 ' 前缀（与 P2 行对称，圈速行除外）
     expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
@@ -544,26 +549,28 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(banner.hidden).toBe(false)
     expect(banner.textContent).toContain('P1 获胜')
     expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
-  }, 30000)
+  })
 
   it('F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
     expect(splitEnv.getElement('match-top').textContent).toBe('暂无对局记录')
-    // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛（与既有双完赛用例同轨迹）
+    // 双人同选 forest（短赛道降帧数），与横幅用例同轨迹双完赛
+    splitEnv.fireKey('Digit7')
+    splitEnv.fireKey('Digit7', true)
+    // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
-    // classic 3 圈实测最小通过 975 帧，1075 帧（×1.1 安全余量，与横幅用例同档位）
-    splitEnv.driveFrames(1075)
+    splitEnv.driveFrames(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 经典赛道`（零漂移得分平局归 P1）
+    // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 森林穿梭`（零漂移得分平局归 P1）
     const top = splitEnv.getElement('match-top').textContent
     expect(top.startsWith('1. ')).toBe(true)
     expect(top).toContain('胜 ·')
-    expect(top).toContain('经典赛道')
-  }, 30000)
+    expect(top).toContain('森林穿梭')
+  })
 
   it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
     const hotEnv = stubEnvironment('?hotseat=1')
