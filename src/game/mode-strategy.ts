@@ -168,7 +168,7 @@ const SINGLE: ModeStrategy = {
   splitMode: false,
   hotseatMode: false,
   challengeMode: false,
-  menuHint: 'WASD / 方向键驾驶 · 1-9 选赛道 · 按任意键开始',
+  menuHint: '空格键开始 · 1-9 / 方向键 切换赛道',
   getInputs(ctx) {
     return routeInputs(ctx, true)
   },
@@ -197,7 +197,7 @@ const SPLIT: ModeStrategy = {
   splitMode: true,
   hotseatMode: false,
   challengeMode: false,
-  menuHint: 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 按任意键开始',
+  menuHint: 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, false)
   },
@@ -226,7 +226,7 @@ const HOTSEAT: ModeStrategy = {
   splitMode: false,
   hotseatMode: true,
   challengeMode: false,
-  menuHint: 'P1 先跑 · 完成按回车交棒 P2 · 双人同赛道 · 1-9 选赛道 · 按任意键开始',
+  menuHint: 'P1 先跑 · 完成按回车交棒 P2 · 双人同赛道 · 1-9 选赛道 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
   },
@@ -255,7 +255,7 @@ const CHALLENGE: ModeStrategy = {
   splitMode: false,
   hotseatMode: false,
   challengeMode: true,
-  menuHint: '60 秒限时刷分 · 目标 5000 · WASD / 方向键驾驶 · 按任意键开始',
+  menuHint: '60 秒限时刷分 · 目标 5000 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
   },

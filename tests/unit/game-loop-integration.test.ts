@@ -8,6 +8,7 @@ import { createRoadsideSprites, spritesInRangeIndexed, type Sprite } from '../..
 import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { DRIFT_TOP_KEY } from '../../src/ui/save'
+import { refreshBestSummary } from '../../src/game/top-refresh'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
 /** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
@@ -302,13 +303,13 @@ describe('GameLoop 主循环集成冒烟测试', () => {
 
   it('按键输入后从菜单进入比赛阶段', () => {
     new GameLoop()
-    env.fireKey('KeyW')
+    env.fireKey('Space')
     expect(env.phase()).toBe(PHASE_RACING)
   })
 
   it('Escape 在比赛与暂停间往返切换', () => {
     new GameLoop()
-    env.fireKey('KeyW')
+    env.fireKey('Space')
     env.fireKey('Escape')
     expect(env.phase()).toBe(PHASE_PAUSED)
     env.fireKey('Escape')
@@ -317,7 +318,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
 
   it('比赛阶段驱动帧推进车辆并点亮 HUD', () => {
     new GameLoop()
-    env.fireKey('KeyW')
+    env.fireKey('Space')
     env.driveFrames(60) // 3 秒满油门：速度达到上限，HUD 应显示速度
     const hudSpeed = env.getElement('hud-speed')
     expect(hudSpeed.hidden).toBe(false)
@@ -327,6 +328,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
 
   it('全油门跑完总圈数后进入结算阶段', () => {
     new GameLoop()
+    env.fireKey('Space')
     env.fireKey('KeyW')
     // 经典赛道 3 圈 ≈ 276000 世界单位；实测最小通过 975 帧，1075 帧×50ms ≈ 53.75s
     // 满油门（最小通过值 ×1.1 安全余量，覆盖碰撞减速与首帧 dt 偏差）
@@ -351,7 +353,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(menuDivider).toBeGreaterThan(0)
 
     // 进入比赛分屏后每帧同样绘制分隔线
-    splitEnv.fireKey('KeyW')
+    splitEnv.fireKey('Space')
     splitEnv.driveFrames(2)
     expect(countDivider()).toBeGreaterThan(menuDivider)
     expect(splitEnv.phase()).toBe(PHASE_RACING)
@@ -391,7 +393,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.debugValue('selectedTrack')).toBe('s-curve')
     expect(env.phase()).toBe(PHASE_MENU)
     // 非数字键仍可开始比赛
-    env.fireKey('KeyW')
+    env.fireKey('Space')
     expect(env.phase()).toBe(PHASE_RACING)
   })
 
@@ -444,7 +446,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     env.fireKey('ControlLeft')
     expect(env.phase()).toBe(PHASE_MENU)
     // 非修饰键仍可开始
-    env.fireKey('KeyW')
+    env.fireKey('Space')
     expect(env.phase()).toBe(PHASE_RACING)
   })
 
@@ -478,6 +480,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     new GameLoop()
     // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
     // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
+    splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     // classic 3 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）满油门
     splitEnv.driveFrames(1075)
@@ -525,6 +528,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
     // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
     // classic 3 圈实测最小通过 975 帧，1075 帧（×1.1 安全余量）远超所需（原 4000 帧过度富余）。
+    splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
     splitEnv.driveFrames(1075)
@@ -548,6 +552,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
     expect(splitEnv.getElement('match-top').textContent).toBe('暂无对局记录')
     // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛（与既有双完赛用例同轨迹）
+    splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
     // classic 3 圈实测最小通过 975 帧，1075 帧（×1.1 安全余量，与横幅用例同档位）
@@ -680,6 +685,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 构造时 refreshDriftTop：无记录 → 占位文本（#drift-top 为菜单静态元素，默认可见）
     expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
     // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
+    env.fireKey('Space')
     env.fireKey('KeyW')
     // classic 3 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）满油门
     env.driveFrames(1075)
@@ -694,16 +700,16 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(summary.textContent).toBe('暂无最佳成绩')
   })
 
-  it('P3（P3）：预设 9 条赛道存档后 BEST 汇总渲染齐全且对应行含格式化时间', () => {
+  it('P3（P3）：预设 9 条赛道存档后 BEST 汇总收起态渲染前 5 条且对应行含格式化时间', () => {
     // 注入全部 9 条赛道的 P1 best（key: outrun-pseudo3d-best-<id>，P1 无后缀）
     const storage = Object.fromEntries(TRACK_DEFS.map((def) => [`outrun-pseudo3d-best-${def.id}`, '42.5']))
     const env2 = stubEnvironment('', storage)
     new GameLoop()
     const summary = env2.getElement('best-summary')
-    // 9 行渲染，每行含赛道名；遍历 TRACK_DEFS 动态断言全部出现
+    // 收起态（stub 无 closest → isCardExpanded false）：仅渲染前 5 条
     const lines = summary.textContent.split('\n')
-    expect(lines.length).toBe(TRACK_DEFS.length)
-    for (const def of TRACK_DEFS) {
+    expect(lines.length).toBe(5)
+    for (const def of TRACK_DEFS.slice(0, 5)) {
       expect(summary.textContent).toContain(def.name)
     }
     // 首行（TRACK_DEFS[0] = classic）格式：`1. 经典赛道  P1 0:42.500`（formatTime(42.5) → '0:42.500'）
@@ -711,6 +717,23 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(lines[0]).toContain('P1 0:42.500')
     // 未注入 P2 存档 → P2 部分不出现（t2 null 时无 '· P2' 后缀）
     expect(lines[0]).not.toContain('P2')
+  })
+
+  it('P3（P3）：BEST 汇总展开态渲染全部 9 条赛道（卡片 expanded 时 refreshBestSummary 全量输出）', () => {
+    const storage = Object.fromEntries(TRACK_DEFS.map((def) => [`outrun-pseudo3d-best-${def.id}`, '42.5']))
+    const env2 = stubEnvironment('', storage)
+    new GameLoop()
+    const summary = env2.getElement('best-summary')
+    // 模拟展开态：注入 closest 返回含 expanded 的 .lb-card 假对象（isCardExpanded → true）
+    ;(summary as unknown as { closest: () => { classList: { contains: () => boolean } } }).closest = () => ({
+      classList: { contains: () => true },
+    })
+    refreshBestSummary()
+    const lines = summary.textContent.split('\n')
+    expect(lines.length).toBe(TRACK_DEFS.length)
+    for (const def of TRACK_DEFS) {
+      expect(summary.textContent).toContain(def.name)
+    }
   })
 
   it('P6（P6）：暂停菜单 PAUSED 阶段按 R 返回菜单且 startScreen 可见', () => {
@@ -818,7 +841,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     new GameLoop()
     // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写；Batch 3 文案格式：[限时说明] · 驾驶 · 开始）
     expect(chEnv.getElement('menu-hint').textContent).toContain('限时刷分')
-    chEnv.fireKey('Enter')
+    chEnv.fireKey('Space')
+    // P1 全油门（KeyW 作为油门输入，非开始命令）
     chEnv.fireKey('KeyW')
     // 首帧挑战剩余时间 60s（raceTime 0）
     const first = chEnv.debugValue('challengeTimeLeft')

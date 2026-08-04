@@ -53,6 +53,11 @@ export class TrackManager {
     return this.contexts[playerIndex].def.id
   }
 
+  /** 获取指定玩家的赛道下标（菜单方向键导航用） */
+  getSelectedIndex(playerIndex: 0 | 1): number {
+    return this.selectedIndexes[playerIndex]
+  }
+
   /**
    * 切换指定玩家的赛道：重建该玩家 TrackContext（含渲染预计算与车流）、
    * 触发 resetRace 回调并刷新选单高亮。另一玩家不受影响。
@@ -71,6 +76,10 @@ export class TrackManager {
     this.deps.trackOptions.forEach((option, i) => {
       option.classList.toggle('selected', i === this.selectedIndexes[0])
       option.classList.toggle('selected-p2', this.deps.splitMode && i === this.selectedIndexes[1])
+      // a11y：aria-pressed 与选中态同步（测试 stub 元素无 setAttribute 时跳过）
+      if (typeof option.setAttribute === 'function') {
+        option.setAttribute('aria-pressed', String(i === this.selectedIndexes[0]))
+      }
     })
   }
 }

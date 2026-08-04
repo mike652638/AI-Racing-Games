@@ -495,7 +495,7 @@ canvas {
   width: 100%;
   max-height: 100vh;
   overflow-y: auto;
-  padding: 32px 0;
+  padding: 16px 0 20px;
   animation: content-fade-in 0.9s ease-out both;
 }
 
@@ -506,7 +506,7 @@ canvas {
 
 .title-wrap {
   position: relative;
-  margin: 0 0 18px;
+  margin: 0 0 10px;
   animation: title-bounce 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -514,6 +514,19 @@ canvas {
   0% { opacity: 0; transform: scale(0.7) translateY(0); }
   60% { transform: scale(1.05) translateY(6px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.title-sub {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 2.4vw, 14px);
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.78);
+  text-transform: uppercase;
+  margin: -8px 0 6px;
+  padding: 0 16px;
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  animation: content-fade-in 0.9s ease-out 0.35s both;
 }
 
 .title-main {
@@ -582,21 +595,21 @@ canvas {
 
 #track-select {
   display: flex;
-  gap: 20px;
+  gap: 14px;
   justify-content: center;
-  margin: 12px auto 10px;
+  margin: 8px auto 6px;
   flex-wrap: wrap;
   max-width: 560px;
   padding: 0 12px;
 }
 
 .track-option {
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 8px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
   border-radius: 12px;
   cursor: pointer;
   user-select: none;
-  opacity: 0.75;
+  opacity: 0.9;
   font-size: var(--hint-fs);
   min-height: 48px;
   display: flex;
@@ -612,7 +625,7 @@ canvas {
   min-width: 120px;
   flex: 1 1 120px;
   max-width: 160px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   position: relative;
   z-index: 10;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -620,39 +633,81 @@ canvas {
   overflow: hidden;
 }
 
-.track-icon-wrap {
+/* 序号徽章：统一赛道按钮图标语言（方案A 移除各异 SVG 图标） */
+.track-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.track-icon {
-  width: 24px;
-  height: 24px;
-  vertical-align: middle;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
   margin-right: 8px;
-  opacity: 0.85;
-  color: rgba(255, 255, 255, 0.85);
-  transition: opacity 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .track-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   white-space: nowrap;
 }
 
-.track-option:hover .track-icon,
-.track-option.selected .track-icon,
-.track-option.selected-p2 .track-icon {
-  opacity: 1;
+.track-name {
+  line-height: 1.2;
+  color: inherit;
 }
 
-.track-option.selected .track-icon {
+.track-stars {
+  font-size: calc(var(--hint-fs) - 3px);
+  letter-spacing: 1px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.85);
+  transition: color 0.2s ease;
+}
+
+/* 难度星级颜色编码：1★ 绿 / 2★ 金 / 3★ 粉红（JS 按 TrackDef.difficulty 添加 diff-N 类） */
+.track-stars.diff-1 {
+  color: #7ee787;
+}
+
+.track-stars.diff-2 {
   color: var(--accent);
 }
 
-.track-option.selected-p2 .track-icon {
-  color: #4ade80;
+.track-stars.diff-3 {
+  color: var(--menu-pink);
+}
+
+.track-option:hover .track-num,
+.track-option.selected .track-num,
+.track-option.selected-p2 .track-num {
+  border-color: currentColor;
+}
+
+.track-option.selected .track-num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #2d1b4e;
+  box-shadow: 0 0 10px rgba(255, 215, 94, 0.6);
+}
+
+.track-option.selected-p2 .track-num {
+  background: #4ade80;
+  border-color: #4ade80;
+  color: #052e16;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
 }
 
 .track-option::before {
@@ -686,22 +741,36 @@ canvas {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(255, 215, 94, 0.2);
+  transform: translateY(-2px);
   box-shadow:
-    0 0 12px rgba(255, 215, 94, 0.35),
-    inset 0 0 12px rgba(255, 215, 94, 0.15);
+    0 0 18px rgba(255, 215, 94, 0.45),
+    inset 0 0 16px rgba(255, 215, 94, 0.2);
   animation: selected-pulse 2s ease-in-out infinite;
 }
 
+/* 选中指示条：左侧金色竖条（overflow hidden 内不受裁剪影响） */
+.track-option.selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 215, 94, 0.8);
+}
+
 @keyframes selected-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(255, 215, 94, 0.35), inset 0 0 12px rgba(255, 215, 94, 0.15); }
-  50% { box-shadow: 0 0 22px rgba(255, 215, 94, 0.55), inset 0 0 18px rgba(255, 215, 94, 0.25); }
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 215, 94, 0.45), inset 0 0 16px rgba(255, 215, 94, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(255, 215, 94, 0.65), inset 0 0 22px rgba(255, 215, 94, 0.3); }
 }
 
 .track-option.selected:hover {
   background: rgba(255, 215, 94, 0.35);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 0 28px rgba(255, 215, 94, 0.5), inset 0 0 18px rgba(255, 215, 94, 0.3);
+  box-shadow: 0 0 32px rgba(255, 215, 94, 0.6), inset 0 0 22px rgba(255, 215, 94, 0.35);
 }
 
 .track-option.selected:active {
@@ -714,15 +783,28 @@ canvas {
   border-color: #4ade80;
   color: #4ade80;
   background: rgba(74, 222, 128, 0.18);
+  transform: translateY(-2px);
   box-shadow:
-    0 0 12px rgba(74, 222, 128, 0.35),
-    inset 0 0 12px rgba(74, 222, 128, 0.15);
+    0 0 18px rgba(74, 222, 128, 0.45),
+    inset 0 0 16px rgba(74, 222, 128, 0.2);
   animation: selected-pulse-p2 2s ease-in-out infinite;
 }
 
+.track-option.selected-p2::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.8);
+}
+
 @keyframes selected-pulse-p2 {
-  0%, 100% { box-shadow: 0 0 12px rgba(74, 222, 128, 0.35), inset 0 0 12px rgba(74, 222, 128, 0.15); }
-  50% { box-shadow: 0 0 22px rgba(74, 222, 128, 0.55), inset 0 0 18px rgba(74, 222, 128, 0.25); }
+  0%, 100% { box-shadow: 0 0 18px rgba(74, 222, 128, 0.45), inset 0 0 16px rgba(74, 222, 128, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.65), inset 0 0 22px rgba(74, 222, 128, 0.3); }
 }
 
 .track-option.selected-p2:hover {
@@ -734,6 +816,44 @@ canvas {
 
 .track-option.selected-p2:active {
   transform: scale(0.95);
+}
+
+/* 键盘导航焦点指示器：青色外环，仅键盘触发（:focus-visible） */
+.track-option:focus-visible {
+  outline: 2px solid var(--menu-cyan);
+  outline-offset: 2px;
+  border-color: rgba(0, 217, 255, 0.6);
+}
+
+/* 赛道缩略图预览（中央信息区）：由 controlPoints 积分生成的 SVG 轨迹 */
+.track-preview-wrap {
+  margin: 4px auto 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#track-preview {
+  width: 160px;
+  height: 48px;
+  overflow: visible;
+}
+
+#track-preview path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 5px rgba(255, 215, 94, 0.55));
+  animation: track-name-pop 0.4s ease-out;
+}
+
+#track-preview circle {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 4px rgba(255, 215, 94, 0.8));
 }
 
 #track-name {
@@ -761,9 +881,9 @@ canvas {
 #keyboard-hint,
 #touch-hint {
   font-size: var(--hint-fs);
-  opacity: 0.85;
+  opacity: 0.9;
   margin: 3px 0;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 #touch-hint {
@@ -772,9 +892,9 @@ canvas {
 
 .leaderboard-cards {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
-  margin: 14px auto 0;
+  margin: 8px auto 0;
   flex-wrap: wrap;
   max-width: 720px;
   padding: 0 12px;
@@ -784,10 +904,10 @@ canvas {
   flex: 1 1 180px;
   min-width: 160px;
   max-width: 220px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
@@ -821,15 +941,56 @@ canvas {
   padding-bottom: 6px;
 }
 
+/* 可点击统计卡片：点击展开/收起完整榜单（漂移榜单/对局战绩） */
+.lb-card-clickable {
+  cursor: pointer;
+}
+
+.lb-card-clickable .lb-card-head::after {
+  content: '展开 ▾';
+  float: right;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--menu-cyan);
+  opacity: 0.75;
+  margin-left: 6px;
+  text-shadow: 0 0 8px rgba(0, 217, 255, 0.35);
+  transition: opacity 0.15s ease;
+}
+
+.lb-card-clickable:hover .lb-card-head::after {
+  opacity: 1;
+}
+
+.lb-card-clickable.expanded {
+  border-color: rgba(0, 217, 255, 0.55);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 217, 255, 0.28);
+}
+
+.lb-card-clickable.expanded .lb-card-head::after {
+  content: '收起 ▴';
+}
+
+/* 展开态：内容区衬底加深，强化「已展开」的层次反馈（结构：head + 内容 div） */
+.lb-card-clickable.expanded > div:last-child {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 217, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
 #start-btn {
-  margin-top: 14px;
-  padding: 12px 40px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  padding: 10px 36px;
   border: 2px solid #ffd75e;
   border-radius: 12px;
   background: rgba(255, 215, 94, 0.12);
   color: #ffd75e;
   font-family: var(--font-mono);
-  font-size: clamp(16px, 4vw, 22px);
+  font-size: clamp(15px, 3.8vw, 20px);
+  line-height: 1.4;
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -840,6 +1001,7 @@ canvas {
   position: relative;
   overflow: hidden;
   z-index: 10;
+  min-height: 44px;
 }
 
 #start-btn::before {
@@ -866,6 +1028,19 @@ canvas {
 
 #start-btn:active {
   transform: translateY(0) scale(0.98);
+}
+
+/* 开始按钮加载态：防重复点击（JS 短暂置灰） */
+#start-btn.loading {
+  opacity: 0.55;
+  cursor: wait;
+  pointer-events: none;
+  transform: translateY(0) scale(0.99);
+}
+
+#start-btn:focus-visible {
+  outline: 2px solid var(--menu-cyan);
+  outline-offset: 3px;
 }
 
 #start-screen .hint,
@@ -1344,7 +1519,7 @@ canvas {
 
   /* 触屏友好：赛道按钮增大点击热区 */
   .track-option {
-    min-height: 48px;
+    min-height: 52px;
     padding: 8px 14px;
   }
 }
@@ -1387,14 +1562,30 @@ canvas {
   }
 
   #track-select {
-    gap: 12px;
+    gap: 10px;
+    max-width: 420px;
   }
 
+  /* 移动端 2 列网格：最后一项奇数时居中 */
   .track-option {
-    padding: 6px 12px;
-    min-width: 100px;
-    flex: 1 1 100px;
-    max-width: 140px;
+    padding: 8px 10px;
+    min-width: 0;
+    flex: 1 1 42%;
+    max-width: none;
+    min-height: 52px;
+  }
+
+  .track-option:nth-child(odd):last-child {
+    margin: 0 auto;
+  }
+
+  .track-preview-wrap {
+    height: 52px;
+  }
+
+  #track-preview {
+    width: 160px;
+    height: 52px;
   }
 
   .leaderboard-cards {
@@ -1402,8 +1593,8 @@ canvas {
   }
 
   .lb-card {
-    flex: 1 1 130px;
-    min-width: 120px;
+    flex: 1 1 100%;
+    min-width: 0;
     max-width: 100%;
     padding: 10px 12px;
   }
@@ -1483,4 +1674,62 @@ canvas {
   0% { transform: scale(1); }
   40% { transform: scale(1.45); }
   100% { transform: scale(1); }
+}
+
+/* ===== 赛道主题背景色（切换赛道时通过 .menu-bg 子类切换渐变色调） ===== */
+.menu-bg.track-classic .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 56, 100, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 55%), linear-gradient(180deg, #0b0518 0%, #1a0b2e 50%, #2d1b4e 100%); }
+.menu-bg.track-highway .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 180, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 215, 94, 0.15) 0%, transparent 55%), linear-gradient(180deg, #04101e 0%, #0b2840 50%, #124060 100%); }
+.menu-bg.track-s-curve .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 220, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #10081e 0%, #201040 50%, #382060 100%); }
+.menu-bg.track-island .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 200, 160, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #041818 0%, #0b3030 50%, #124848 100%); }
+.menu-bg.track-canyon .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 100, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 200, 50, 0.15) 0%, transparent 55%), linear-gradient(180deg, #1a0800 0%, #301808 50%, #482810 100%); }
+.menu-bg.track-desert .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 50, 0.15) 0%, transparent 55%), linear-gradient(180deg, #1a1200 0%, #302008 50%, #483010 100%); }
+.menu-bg.track-forest .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(50, 200, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 100, 0.15) 0%, transparent 55%), linear-gradient(180deg, #041804 0%, #083008 50%, #0c480c 100%); }
+.menu-bg.track-coast .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 150, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 255, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #021020 0%, #042040 50%, #063060 100%); }
+.menu-bg.track-alpine .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180, 200, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 55%), linear-gradient(180deg, #0a0e18 0%, #142030 50%, #203048 100%); }
+
+/* ===== 起步倒计时覆盖层 ===== */
+#countdown-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  pointer-events: none;
+}
+
+#countdown-overlay .countdown-number {
+  font-family: var(--font-display);
+  font-size: clamp(80px, 20vw, 160px);
+  color: #ffd75e;
+  text-shadow: 0 0 40px rgba(255, 215, 94, 0.8), 0 0 80px rgba(255, 56, 100, 0.5);
+  animation: countdown-pop 0.5s ease-out;
+  line-height: 1;
+}
+
+#countdown-overlay .countdown-hints {
+  margin-top: 24px;
+  text-align: center;
+}
+
+#countdown-overlay .countdown-hints p {
+  font-family: var(--font-mono);
+  font-size: clamp(14px, 3vw, 18px);
+  color: rgba(255, 255, 255, 0.9);
+  margin: 6px 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes countdown-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ===== 菜单阶段隐藏虚拟摇杆（右下角圆环） ===== */
+#start-screen ~ .joystick-base,
+body:not(.racing) .joystick-base {
+  display: none !important;
 }

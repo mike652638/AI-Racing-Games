@@ -69,6 +69,40 @@ const MODIFIER_KEYS = [
   'MetaRight',
 ]
 
+/** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
+const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+
+/** 赛道难度星级 title 提示文案（下标即难度） */
+const DIFFICULTY_HINT: Record<number, string> = { 1: '入门', 2: '进阶', 3: '挑战' }
+
+/**
+ * 由赛道控制点积分生成轨迹点列（伪 3D 曲率 → 平面 x/z 曲线）：
+ * angle += curve*dz；x += sin(angle)*dz。总采样约 160 点，段内按曲率线性插值。
+ */
+function integrateControlPoints(controlPoints: { z: number; curve: number }[]): { x: number; z: number }[] {
+  const totalZ = controlPoints.reduce((sum, p) => sum + p.z, 0)
+  const points: { x: number; z: number }[] = []
+  let x = 0
+  let z = 0
+  let angle = 0
+  for (let i = 0; i < controlPoints.length; i++) {
+    const seg = controlPoints[i]
+    const steps = Math.max(1, Math.round((160 * seg.z) / totalZ))
+    const dz = seg.z / steps
+    for (let s = 0; s < steps; s++) {
+      // 段内曲率线性插值（与下一段衔接平滑）
+      const next = controlPoints[i + 1]
+      const t = next ? s / steps : 1
+      const curve = seg.curve + (next ? (next.curve - seg.curve) * t : 0)
+      angle += curve * dz
+      x += Math.sin(angle) * dz
+      z += dz
+      points.push({ x, z })
+    }
+  }
+  return points
+}
+
 /**
  * 游戏主循环：迁移自 main.ts 的全部运行时职责——DOM 引用、初始化、
  * 赛道切换、流程控制、事件监听、每帧更新/渲染编排、音频与调试钩子。
@@ -213,8 +247,13 @@ export class GameLoop {
     this.input = createInputManager(window)
     this.joystick = new JoystickUI()
     this.joystick.attach(this.canvas)
+    // 菜单阶段隐藏虚拟摇杆（右下角圆环），比赛阶段再显示
+    this.updateJoystickVisibility(false)
     this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
     this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
+
+    // 赛道主题背景色（初始赛道 0）
+    this.updateTrackBackground(0)
 
     this.installDebugSinks()
 
@@ -318,17 +357,37 @@ export class GameLoop {
     const trackOptions = Array.from({ length: TRACK_DEFS.length }, (_, i) => $(`track-option-${i}`) as HTMLDivElement)
     trackOptions.forEach((option, i) => {
       const def = TRACK_DEFS[i]
-      // m4：按钮文本写入 .track-label，避免清空内嵌 SVG 图标
+      // m4：优先写入结构化 .track-label（序号徽章 + 名称 + 星级 span），缺失时回退纯文本
       const label = option.querySelector('.track-label')
+      const nameEl = label?.querySelector<HTMLElement>('.track-name')
+      const starsEl = label?.querySelector<HTMLElement>('.track-stars')
       const text = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
-      if (label) label.textContent = text
+      if (nameEl && starsEl) {
+        nameEl.textContent = def.name
+        starsEl.textContent = '★'.repeat(def.difficulty) + '☆'.repeat(3 - def.difficulty)
+        // 星级颜色编码（diff-1 绿 / diff-2 金 / diff-3 粉红）+ 难度 title 提示
+        starsEl.className = `track-stars diff-${def.difficulty}`
+        starsEl.title = DIFFICULTY_HINT[def.difficulty]
+        if (typeof starsEl.setAttribute === 'function') {
+          starsEl.setAttribute('aria-label', `难度：${DIFFICULTY_HINT[def.difficulty]}`)
+        }
+      } else if (label) label.textContent = text
       else option.textContent = text
       // 菜单点击选赛道（触屏/鼠标均可）：等价于键盘 1-9；热座双人同步 P2 世界
       option.addEventListener('click', () => {
         if (this.phase !== PHASE_MENU) return
         this.selectP1Track(i)
       })
+      // 键盘可访问性：聚焦按钮上 Enter/Space 等效点击（菜单阶段）
+      option.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.code === 'Enter' || e.code === 'Space') && this.phase === PHASE_MENU) {
+          e.preventDefault()
+          this.selectP1Track(i)
+        }
+      })
     })
+    // 低优①：中央信息区赛道缩略图（controlPoints 积分生成 SVG 轨迹，初始显示 0 号赛道）
+    this.refreshTrackPreview(0)
     return trackOptions
   }
 
@@ -360,17 +419,76 @@ export class GameLoop {
 
   /** 绑定全局事件：开始按钮 click（菜单阶段等价任意键开始）与 resize 视口同步 */
   private bindGlobalEvents(): void {
-    // 开始按钮点击事件（支持鼠标/触屏）：菜单阶段点击"开始游戏"等价于按任意键开始
+    // 开始按钮点击事件（支持鼠标/触屏）：菜单阶段点击"开始游戏"等价于按任意键开始；
+    // 加载中（loading 态）忽略重复点击，防双触发
     const startBtn = document.getElementById('start-btn')
     if (startBtn) {
       startBtn.addEventListener('click', () => {
-        if (this.phase === PHASE_MENU) {
-          this.startGame()
-        }
+        if (this.phase !== PHASE_MENU || startBtn.classList.contains('loading')) return
+        this.setStartBtnLoading(startBtn, true)
+        this.startGame()
+        // 短暂加载态后恢复（进入 RACING 后面板已隐藏，恢复仅影响返回菜单时）
+        window.setTimeout(() => this.setStartBtnLoading(startBtn, false), 600)
       })
     }
+    this.bindLeaderboardCards()
     window.addEventListener('resize', this.resize)
     this.resize()
+  }
+
+  /** 开始按钮加载态：禁用点击 + 文案切换（dataset 缺失元素安全跳过） */
+  private setStartBtnLoading(btn: HTMLElement, loading: boolean): void {
+    btn.classList.toggle('loading', loading)
+    if (loading) {
+      if (typeof btn.dataset === 'object' && btn.dataset !== null) {
+        btn.dataset.originalText = btn.textContent ?? '开始游戏'
+      }
+      btn.textContent = '开始中…'
+    } else {
+      const original = typeof btn.dataset === 'object' && btn.dataset !== null ? btn.dataset.originalText : null
+      btn.textContent = original ?? '开始游戏'
+    }
+  }
+
+  /** 绑定统计卡片展开交互（点击卡片在 前5条 / 全部10条 间切换，展开态由 .expanded 标记） */
+  private bindLeaderboardCards(): void {
+    const cards = document.querySelectorAll?.('.lb-card-clickable') ?? []
+    cards.forEach((card) => {
+      card.addEventListener('click', () => {
+        card.classList.toggle('expanded')
+        const target = card.getAttribute?.('data-target')
+        if (target === 'drift-top') refreshDriftTop()
+        else if (target === 'match-top') refreshMatchTop()
+        else if (target === 'best-summary') refreshBestSummary()
+      })
+    })
+  }
+
+  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过） */
+  private refreshTrackPreview(trackIndex: number): void {
+    const preview = document.getElementById('track-preview')
+    if (!preview) return
+    const def = TRACK_DEFS[trackIndex]
+    if (!def) return
+    const W = 200
+    const H = 64
+    const pad = 8
+    const pts = integrateControlPoints(def.controlPoints)
+    if (pts.length === 0) return
+    // 归一化到 viewBox：x 按全段跨度、z 按总长纵向铺满
+    let minX = Infinity
+    let maxX = -Infinity
+    let maxZ = -Infinity
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x
+      if (p.x > maxX) maxX = p.x
+      if (p.z > maxZ) maxZ = p.z
+    }
+    const spanX = maxX - minX || 1
+    const sx = (x: number): number => pad + ((x - minX) / spanX) * (W - 2 * pad)
+    const sy = (z: number): number => pad + (z / maxZ) * (H - 2 * pad)
+    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)} ${sy(p.z).toFixed(1)}`).join(' ')
+    preview.innerHTML = `<path d="${d}" fill="none" stroke="#ffd75e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${sx(pts[0].x).toFixed(1)}" cy="${pad}" r="4" fill="#ffd75e"/>`
   }
 
   /**
@@ -514,6 +632,8 @@ export class GameLoop {
     }
     if (newPhase === PHASE_MENU) {
       this.resetRace()
+      // 菜单阶段隐藏虚拟摇杆（右下角圆环）
+      this.updateJoystickVisibility(false)
       refreshDriftTop()
       refreshBestSummary()
       refreshMatchTop()
@@ -528,6 +648,21 @@ export class GameLoop {
     // P6（P6）：暂停菜单按 R 重新开始（回菜单；applyPhase MENU 块自动 resetRace + 榜单刷新）
     if (this.phase === PHASE_PAUSED && e.code === 'KeyR') {
       this.applyPhase(PHASE_MENU)
+      return
+    }
+    // 菜单选赛道：方向键 3x3 网格导航（左右 ±1、上下 ±3），焦点跟随；方向键在 RACING 阶段
+    // 是 P2 油门/转向（帧循环采集），菜单阶段复用无冲突
+    if (this.phase === PHASE_MENU && ARROW_KEYS.includes(e.code)) {
+      if (typeof e.preventDefault === 'function') e.preventDefault()
+      const cols = 3
+      const cur = this.trackManager.getSelectedIndex(0)
+      const move = e.code === 'ArrowLeft' ? -1 : e.code === 'ArrowRight' ? 1 : e.code === 'ArrowUp' ? -cols : cols
+      const next = Math.min(TRACK_DEFS.length - 1, Math.max(0, cur + move))
+      if (next !== cur) {
+        this.selectP1Track(next)
+        const opt = document.getElementById(`track-option-${next}`)
+        if (opt && typeof opt.focus === 'function') opt.focus()
+      }
       return
     }
     // 菜单选赛道：P1 用 1-9（左侧），分屏时 P2 用 Shift+1-9（右侧；原 7/8/9 键位废弃）
@@ -558,7 +693,7 @@ export class GameLoop {
       return
     }
     // 热座交棒：P1 回合完赛后回车/R 交棒 P2（绕过 nextPhase 直接赋值 RACING，Phase 保持四态）。
-    // 位置在"任意键回菜单"之前：hotseatPlayer===2 或非 Enter/R 键时走既有 FINISHED→MENU 逻辑
+    // 位置在"空格键开始"之前：hotseatPlayer===2 或非 Enter/R 键时走既有 FINISHED→MENU 逻辑
     if (
       this.phase === PHASE_FINISHED &&
       this.mode.hotseatMode &&
@@ -571,6 +706,14 @@ export class GameLoop {
       // resetRaceState 已重置 finishShown=false（state.ts 确认），P2 回合结算可再次填充
       this.race.phase = PHASE_RACING
       this.applyPhase(PHASE_RACING)
+      return
+    }
+    // 菜单阶段仅空格/回车键开始游戏（其余键吞掉，防误触）
+    if (this.phase === PHASE_MENU) {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        if (typeof e.preventDefault === 'function') e.preventDefault()
+        this.startGame()
+      }
       return
     }
     this.startGame()
@@ -611,6 +754,14 @@ export class GameLoop {
       this.driftSound = new DriftSound(ctx, sfxGain)
       this.tireSound = new TireSound(ctx, sfxGain)
     }
+    // 菜单阶段隐藏摇杆，比赛阶段显示
+    this.updateJoystickVisibility(true)
+    // 起步倒计时覆盖层（3→2→1→GO，同时显示操作提示）——仅菜单阶段真正开始游戏时触发一次；
+    // onKeyDown 末尾兜底在 RACING/FINISHED 阶段按任意键也会调用 startGame（原有"任意键开始"行为），
+    // 若无条件调用会致驾驶中按键反复弹出倒计时覆盖层，故以 phase === PHASE_MENU 守卫
+    if (this.phase === PHASE_MENU) {
+      this.startCountdown()
+    }
     this.applyPhase(
       nextPhase(
         this.phase,
@@ -644,6 +795,11 @@ export class GameLoop {
     this.trackManager.selectTrack(playerIndex, trackIndex)
     this.race.tracks[playerIndex] = this.trackManager.getContext(playerIndex)
     this.previewCameraZ[playerIndex] = initialPreviewCameraZ(trackIndex, this.race.tracks[playerIndex].lapLength)
+    // 低优①：P1 选赛道时同步刷新中央缩略图（分屏 P2 选赛道不覆盖 P1 预览）
+    if (playerIndex === 0) {
+      this.refreshTrackPreview(trackIndex)
+      this.updateTrackBackground(trackIndex)
+    }
     // Task A 缓存激活：赛道切换后重建道路段离屏缓存（race.tracks 引用已更新，
     // 传新 TrackContext 的预计算字段使 viewFor 的 track 与 renderer.cachedTrack 同引用）
     this.syncRendererTrack(playerIndex)
@@ -758,6 +914,62 @@ export class GameLoop {
     this.minimap = rr.minimap
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
     requestAnimationFrame(this.frame)
+  }
+
+  /** 更新菜单背景色类（赛道主题：切换赛道时 .menu-bg 追加 track-xxx 类） */
+  private updateTrackBackground(trackIndex: number): void {
+    const menuBg =
+      typeof document.querySelector === 'function' ? (document.querySelector('.menu-bg') as HTMLElement | null) : null
+    if (!menuBg) return
+    const def = TRACK_DEFS[trackIndex]
+    if (!def) return
+    // 移除所有 track-* 类，再添加当前赛道类
+    menuBg.className = 'menu-bg'
+    menuBg.classList.add(`track-${def.id}`)
+  }
+
+  /** 控制虚拟摇杆显隐：菜单阶段隐藏（防右下角圆环残留），比赛阶段显示 */
+  private updateJoystickVisibility(isRacing: boolean): void {
+    const base =
+      typeof document.querySelector === 'function'
+        ? (document.querySelector('.joystick-base') as HTMLElement | null)
+        : null
+    if (base) {
+      base.hidden = !isRacing
+    }
+    if (typeof document.body?.classList?.toggle === 'function') {
+      document.body.classList.toggle('racing', isRacing)
+    }
+  }
+
+  /** 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（3→2→1→GO） */
+  private startCountdown(): void {
+    const overlay = document.getElementById('countdown-overlay')
+    const numberEl = overlay?.querySelector('.countdown-number') as HTMLElement | null
+    if (!overlay || !numberEl) return
+    overlay.hidden = false
+    let count = 3
+    const showNumber = (n: number): void => {
+      numberEl.textContent = n > 0 ? String(n) : 'GO!'
+      // 重置动画
+      numberEl.style.animation = 'none'
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      numberEl.offsetHeight // 触发 reflow
+      numberEl.style.animation = ''
+    }
+    showNumber(count)
+    const timer = window.setInterval(() => {
+      count--
+      if (count > 0) {
+        showNumber(count)
+      } else {
+        showNumber(0)
+        window.clearInterval(timer)
+        window.setTimeout(() => {
+          overlay.hidden = true
+        }, 500)
+      }
+    }, 800)
   }
 }
 
