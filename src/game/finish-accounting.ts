@@ -48,8 +48,7 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
   const { race, trackManager, mode, hotseatPlayer, prevP1Time, record } = args
 
   // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
-  const finishedP1 =
-    lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
+  const finishedP1 = lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
   const finishedP2 =
     (mode.splitMode || mode.hotseatMode) &&
     lapFromZ(race.player2.cameraZ, trackManager.getLapLength(1)) > trackManager.getTotalLaps(1)

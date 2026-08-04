@@ -16,6 +16,7 @@ declare global {
       readonly bestTime2: number | null
       readonly trafficCount: number
       readonly collisions: number
+      readonly collisionFlash: number
       readonly selectedTrack: string
       readonly selectedTrack2: string
       readonly touchActive: boolean
@@ -41,6 +42,8 @@ export interface DebugHookSources {
   bestTime2: () => number | null
   trafficCount: () => number
   collisions: () => number
+  /** M16：碰撞红闪强度（0-1，调试/测试观察碰撞视觉反馈） */
+  collisionFlash: () => number
   selectedTrack: () => string
   selectedTrack2: () => string
   touchActive: () => boolean
@@ -88,6 +91,9 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get collisions() {
       return sources.collisions()
+    },
+    get collisionFlash() {
+      return sources.collisionFlash()
     },
     get selectedTrack() {
       return sources.selectedTrack()

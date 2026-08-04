@@ -4,6 +4,7 @@ import type { BoostParticle } from '../engine/renderer'
 import type { CarConfig, CarInput } from '../physics/car'
 import type { RainSound, BoostSound, CollisionSound, DriftSound, TireSound } from '../audio/engine'
 import { updateCollisions } from './collision'
+import { flashSeedFromSpeedRatio, updateCollisionFlash, type CollisionFlashState } from './collision-feedback'
 import { CHALLENGE_SECONDS } from './constants'
 import { updateBoostCharge } from './frame-pure'
 import type { ModeStrategy } from './mode-strategy'
@@ -36,6 +37,8 @@ export interface FrameUpdateContext {
   boostActive: boolean
   /** 上次碰撞计数快照（对比增长即触发碰撞音） */
   lastCollisionCount: number
+  /** 碰撞红闪强度（0-1，上一帧结束值；本帧命中重置/未命中衰减后写回） */
+  collisionFlash: CollisionFlashState
   /** 挑战倒计时 HUD 元素缓存（惰性获取；元素缺失时为 null） */
   challengeTimer: HTMLDivElement | null
   /** 挑战实时得分 HUD 元素缓存（惰性获取；元素缺失时为 null） */
@@ -70,6 +73,8 @@ export interface FrameUpdateResult {
   boostActive: boolean
   /** 碰撞计数快照（写回供下帧对比） */
   lastCollisionCount: number
+  /** 碰撞红闪强度（写回供渲染段使用，下一帧继续衰减） */
+  collisionFlash: CollisionFlashState
   /** 挑战倒计时 HUD 元素（可能惰性获取后非 null，写回缓存） */
   challengeTimer: HTMLDivElement | null
   /** 挑战实时得分 HUD 元素（可能惰性获取后非 null，写回缓存） */
@@ -97,6 +102,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       lastActivePlayer: ctx.lastActivePlayer,
       boostActive: ctx.boostActive,
       lastCollisionCount: ctx.lastCollisionCount,
+      collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
       boostBar: ctx.boostBar,
@@ -214,17 +220,25 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   )
 
   // 碰撞检测：分屏双人全检；热座仅当前回合玩家参与——P2 回合检 player2 与 P2 世界车流，
-  // P1 回合 player2 静止不参与（保持 M8 热座语义，避免起点车流误撞静止 P2）
-  updateCollisions(race, dt, mode.collisionIncludesP2(ctx.hotseatPlayer))
+  // P1 回合 player2 静止不参与（保持 M8 热座语义，避免起点车流误撞静止 P2）。
+  // M16：返回 hit/impact（0-1 速度比）供声音响度与红闪分级。
+  const { hit: collisionHit, impact: collisionImpact } = updateCollisions(
+    race,
+    dt,
+    mode.collisionIncludesP2(ctx.hotseatPlayer),
+    carConfig.maxSpeed,
+  )
+  // M16：碰撞红闪状态——命中时以速度比 seed 重置（低速轻微、高速满格），未命中按 dt 指数衰减（渲染段读）
+  const collisionFlash = updateCollisionFlash(
+    ctx.collisionFlash,
+    collisionHit ? flashSeedFromSpeedRatio(collisionImpact) : null,
+    dt,
+  )
   // F4（F4）：碰撞计数增长 → 触发碰撞冲击音（CollisionSound 内部 80ms 防刷屏）；
-  // H6（H6）：强度 = 双玩家速度比取较快者（单屏 player2 speed=0 自然取 P1），高速撞击更响
+  // H6（H6）：强度 = 碰撞瞬间速度比（updateCollisions 返回，高速撞击更响）
   let lastCollisionCount = ctx.lastCollisionCount
   if (race.collisionCount > lastCollisionCount) {
-    const impact = Math.max(
-      race.player1.carState.speed / carConfig.maxSpeed,
-      race.player2.carState.speed / carConfig.maxSpeed,
-    )
-    ctx.collisionSound?.play(impact)
+    ctx.collisionSound?.play(collisionImpact)
     lastCollisionCount = race.collisionCount
   }
 
@@ -253,6 +267,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       lastActivePlayer,
       boostActive,
       lastCollisionCount,
+      collisionFlash,
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
       boostBar: ctx.boostBar,
@@ -264,6 +279,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     lastActivePlayer,
     boostActive,
     lastCollisionCount,
+    collisionFlash,
     challengeTimer: ctx.challengeTimer,
     challengeScore: ctx.challengeScore,
     boostBar: ctx.boostBar,

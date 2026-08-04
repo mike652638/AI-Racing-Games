@@ -2,6 +2,7 @@ import { buildRoadStrips, type RoadStrip } from '../engine/road-strip'
 import { SEGMENT_LENGTH, type Segment } from '../engine/track'
 import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites, type Sprite } from '../engine/sprites'
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
+import { getEnvironmentProfile } from '../engine/environment'
 import { createTraffic, type TrafficCar } from '../engine/traffic'
 import { TRAFFIC_DEFAULT_COUNT } from './constants'
 
@@ -35,7 +36,14 @@ export interface TrackContext {
 /** 按赛道定义创建完整赛道上下文（含渲染预计算与车流） */
 export function createTrackContext(def: TrackDef): TrackContext {
   const segments = createTrackFromDef(def)
-  const sprites = createRoadsideSprites(segments)
+  // M17：按赛道环境驱动路边景物密度/树色（spacing、treeRatio、treeColor）
+  const env = getEnvironmentProfile(def.environment)
+  const sprites = createRoadsideSprites(segments, 1234, env.spacing, {
+    spriteKind: env.spriteKind,
+    treeRatio: env.treeRatio,
+    treeColor: env.treeColor,
+    treeColorLight: env.treeColorLight,
+  })
   // 道路段预计算（按曲率分段，创建时完成，运行时零重建）
   const roadStrips = buildRoadStrips(segments)
   const lapLength = segments.length * SEGMENT_LENGTH

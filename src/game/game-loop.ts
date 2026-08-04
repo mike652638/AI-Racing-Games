@@ -4,6 +4,7 @@ import { TRACK_DEFS } from '../engine/tracks'
 import { createCarConfig, type CarConfig } from '../physics/car'
 import { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
+import { COUNTDOWN_HINTS } from '../ui/copy'
 import { type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { Minimap } from '../ui/minimap'
@@ -41,6 +42,7 @@ import {
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
   resolvePerformanceConfig,
+  shouldScheduleNextFrame,
   updateBoostCharge,
   updatePlayerFrame,
   viewFor,
@@ -51,6 +53,7 @@ export {
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
   resolvePerformanceConfig,
+  shouldScheduleNextFrame,
   updateBoostCharge,
   updatePlayerFrame,
   viewFor,
@@ -159,6 +162,8 @@ export class GameLoop {
   private boostParticles: BoostParticle[] = []
   /** 上次碰撞计数快照（帧循环对比，增长即触发碰撞音） */
   private lastCollisionCount = 0
+  /** 碰撞红闪强度（0-1，frame-update 每帧更新/写回；渲染段驱动屏幕红色 vignette） */
+  private collisionFlash = 0
   /** 主音量节点（音频惰性创建时建立，EngineSound/MusicPlayer 均注入；暂停菜单 slider 调节） */
   private masterGain: GainNode | null = null
   /** 音乐分轨增益（G7：MusicPlayer 注入此节点，各连 masterGain，独立于音效调节） */
@@ -285,6 +290,7 @@ export class GameLoop {
       driftIndicator: $('drift-indicator') as HTMLDivElement,
       driftScoreValue: $('drift-score-value') as HTMLSpanElement,
       driftCombo: $('drift-combo') as HTMLDivElement,
+      hudCollision: $('hud-collision') as HTMLDivElement,
       pauseBtn: $('pause-btn') as HTMLButtonElement,
     }
   }
@@ -406,6 +412,7 @@ export class GameLoop {
       bestTime2: () => this.bestTime2,
       trafficCount: () => this.race.tracks[0].traffic.length,
       collisions: () => this.race.collisionCount,
+      collisionFlash: () => this.collisionFlash,
       selectedTrack: () => this.trackManager.getTrackId(0),
       selectedTrack2: () => this.trackManager.getTrackId(1),
       touchActive: () => this.joystick.isActive(),
@@ -706,6 +713,10 @@ export class GameLoop {
       // resetRaceState 已重置 finishShown=false（state.ts 确认），P2 回合结算可再次填充
       this.race.phase = PHASE_RACING
       this.applyPhase(PHASE_RACING)
+      // P0 修复（热座 P2）：P1 完赛时 frame() 因 shouldRender=false 直接 return，
+      // 未自续 RAF；P2 回合直接进入 RACING 后 RAF 链已断——此处主动重启帧循环，
+      // 否则 P2 画面/HUD 永远冻结在 P1 状态（frame() 永不调用）
+      requestAnimationFrame(this.frame)
       return
     }
     // 菜单阶段仅空格/回车键开始游戏（其余键吞掉，防误触）
@@ -851,6 +862,7 @@ export class GameLoop {
       lastActivePlayer: this.lastActivePlayer,
       boostActive: this.boostActive,
       lastCollisionCount: this.lastCollisionCount,
+      collisionFlash: this.collisionFlash,
       challengeTimer: this.challengeTimer,
       challengeScore: this.challengeScore,
       boostBar: this.boostBar,
@@ -864,15 +876,17 @@ export class GameLoop {
       joystick: this.joystick,
       onFinish: () => this.applyPhase(PHASE_FINISHED),
     })
-    // 帧间状态写回（lastActivePlayer/boostActive/lastCollisionCount 与惰性 DOM 元素缓存）
+    // 帧间状态写回（lastActivePlayer/boostActive/lastCollisionCount/collisionFlash 与惰性 DOM 元素缓存）
     this.lastActivePlayer = ur.lastActivePlayer
     this.boostActive = ur.boostActive
     this.lastCollisionCount = ur.lastCollisionCount
+    this.collisionFlash = ur.collisionFlash
     this.challengeTimer = ur.challengeTimer
     this.challengeScore = ur.challengeScore
     this.boostBar = ur.boostBar
-    if (!ur.shouldRender) {
+    if (!shouldScheduleNextFrame(ur.shouldRender)) {
       // 完赛/挑战限时触发 finish：等价旧帧内 return（跳过渲染与 rAF 自续）
+      // M16：决策下沉 frame-pure 纯函数（frame-pure.test.ts 锁定 shouldRender 契约）
       return
     }
 
@@ -908,6 +922,7 @@ export class GameLoop {
       hotseatMode: this.mode.hotseatMode,
       hotseatPlayer: this.hotseatPlayer,
       boostActive: this.boostActive,
+      collisionFlash: this.collisionFlash,
       steer1,
       steer2,
     })
@@ -947,6 +962,11 @@ export class GameLoop {
     const overlay = document.getElementById('countdown-overlay')
     const numberEl = overlay?.querySelector('.countdown-number') as HTMLElement | null
     if (!overlay || !numberEl) return
+    // M16：操作提示文案与 README 同源（copy.ts 常量填充，index.html 为空容器）
+    const hintsEl = overlay.querySelector('.countdown-hints') as HTMLElement | null
+    if (hintsEl) {
+      hintsEl.innerHTML = COUNTDOWN_HINTS.map((hint) => `<p>${hint}</p>`).join('')
+    }
     overlay.hidden = false
     let count = 3
     const showNumber = (n: number): void => {

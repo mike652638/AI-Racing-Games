@@ -31,6 +31,8 @@ export interface HudElements {
   driftScoreValue: HTMLSpanElement
   /** 漂移连击倍率显示（active 且 combo≥1 时显示，如 COMBO x1.25） */
   driftCombo?: HTMLDivElement
+  /** M16 碰撞计数（#hud-collision，比赛阶段 collisionCount>0 时显示"碰撞 ×N"） */
+  hudCollision?: HTMLDivElement
   /** 触屏暂停按钮（#pause-btn，RACING 阶段显示；click 由 GameLoop 构造器绑定） */
   pauseBtn?: HTMLButtonElement
   /** 挑战倒计时（#challenge-timer，G1：显隐/文本由 game-loop 帧块处理，本模块不干预） */
@@ -78,6 +80,7 @@ export function updateHud(
     if (elements.hudPlayerTag) elements.hudPlayerTag.hidden = true
     elements.driftIndicator.hidden = true
     if (elements.driftCombo) elements.driftCombo.hidden = true
+    if (elements.hudCollision) elements.hudCollision.hidden = true
     return
   }
 
@@ -85,13 +88,20 @@ export function updateHud(
   if (elements.hudSpeedUnit) elements.hudSpeedUnit.hidden = false
   elements.hudLap.hidden = false
   elements.hudTime.hidden = false
-  elements.hudSpeed.textContent = formatSpeed(race.player1.carState.speed, carConfig.maxSpeed)
-  elements.hudLap.textContent = formatLap(lapFromZ(race.player1.cameraZ, tracks[0].lapLength), tracks[0].totalLaps)
-  elements.hudTime.textContent = formatTime(race.player1.raceTime)
+  // P0 修复（热座 P2）：主 HUD 数据源按当前回合玩家切换——热座 P2 回合显示
+  // player2 的速度/圈数/计时与 tracks[1] 赛道参数（否则 HUD 冻结在 P1 状态）
+  const hotseatP2 = hotseatPlayer === 2
+  const primary = hotseatP2 ? race.player2 : race.player1
+  const primaryTrack = hotseatP2 ? tracks[1] : tracks[0]
+  elements.hudSpeed.textContent = formatSpeed(primary.carState.speed, carConfig.maxSpeed)
+  elements.hudLap.textContent = formatLap(lapFromZ(primary.cameraZ, primaryTrack.lapLength), primaryTrack.totalLaps)
+  elements.hudTime.textContent = formatTime(primary.raceTime)
 
-  elements.hudBest.hidden = bestTime === null
-  if (bestTime !== null) {
-    elements.hudBest.textContent = `BEST ${formatTime(bestTime)}`
+  // P0 修复（热座 P2）：主 HUD BEST 在 P2 回合显示 P2 的存档（bestTime2）
+  const primaryBest = hotseatP2 ? bestTime2 : bestTime
+  elements.hudBest.hidden = primaryBest === null
+  if (primaryBest !== null) {
+    elements.hudBest.textContent = `BEST ${formatTime(primaryBest)}`
   }
 
   // P2 元素显隐由 updateHud 统一处理：非分屏隐藏、分屏显示
@@ -139,9 +149,18 @@ export function updateHud(
     }
   }
 
-  // 单屏 P2 BEST：热座数据复用 bestTime2，但分屏时隐藏（单屏专用元素）
+  // M16：碰撞计数——比赛阶段且 collisionCount>0 时显示"碰撞 ×N"（0 时隐藏，避免常态噪音）
+  if (elements.hudCollision) {
+    elements.hudCollision.hidden = race.collisionCount === 0
+    if (race.collisionCount > 0) {
+      elements.hudCollision.textContent = `碰撞 ×${race.collisionCount}`
+    }
+  }
+
+  // 单屏 P2 BEST：热座数据复用 bestTime2，但分屏时隐藏（单屏专用元素）；
+  // P0 修复：热座 P2 回合主 BEST 已显示 bestTime2，此处隐藏避免重复展示
   if (elements.hudBestP2) {
-    elements.hudBestP2.hidden = splitMode || bestTime2 === null
+    elements.hudBestP2.hidden = splitMode || hotseatP2 || bestTime2 === null
     if (bestTime2 !== null && !elements.hudBestP2.hidden) {
       elements.hudBestP2.textContent = `P2 BEST ${formatTime(bestTime2)}`
     }

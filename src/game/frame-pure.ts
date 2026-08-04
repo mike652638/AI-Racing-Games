@@ -7,6 +7,17 @@ import { lapFromZ } from './lap'
 import type { PlayerState } from './player-state'
 import type { TrackContext } from './track-context'
 
+/**
+ * 是否调度下一帧（M16 纯函数化，替代 frame() 内 `if (!ur.shouldRender) return` 裸判断）：
+ * updateFrame 返回 shouldRender=false（完赛/挑战限时触发 finish）时不再自续 RAF，
+ * 等价旧帧内 return（跳过渲染段与 rAF 自续，保持既有行为）。
+ * 提取为纯函数便于单测锁定「shouldRender=false 时帧循环停止、true 时继续」的契约，
+ * 防止未来重构再次引入热座交棒后 RAF 链断裂（P0 回归）类问题。
+ */
+export function shouldScheduleNextFrame(shouldRender: boolean): boolean {
+  return shouldRender
+}
+
 /** 圈数记录包装已移除（H5）：updatePlayerFrame 现返回新 lastLap，调用方直接赋值 race.lastLap */
 
 /**
@@ -132,17 +143,22 @@ export function viewFor(
   speedRatio = 0,
   boosting = false,
   steer = 0,
+  collisionFlash = 0,
 ): RenderView {
   _viewCache.track = ctx.segments
   _viewCache.curvePrefixSum = ctx.curvePrefixSum
   _viewCache.spriteIndex = ctx.spriteIndex
   _viewCache.traffic = ctx.traffic
   _viewCache.night = ctx.def.timeOfDay === 'night'
+  // M17：环境场景（驱动天空/草地色相与远山配色；由 TrackDef.environment 透传）
+  _viewCache.environment = ctx.def.environment
   // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
   _viewCache.boostParticles = boostParticles
   // M8：速度线与 BOOST 金色 vignette 参数
   _viewCache.speedRatio = speedRatio
   _viewCache.boosting = boosting
+  // M16：碰撞红闪强度（碰撞后指数衰减，驱动屏幕红色 vignette）
+  _viewCache.collisionFlash = collisionFlash
   // 玩家实时转向输入（-1..1，比赛渲染传 ctx.steer1/steer2；菜单预览缺省 0）：驱动车辆转向倾斜
   _viewCache.steer = steer
   return _viewCache

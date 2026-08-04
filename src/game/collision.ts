@@ -7,7 +7,9 @@ import type { RaceState } from './state'
  * 单个玩家与车流的碰撞检测 + 惩罚。
  * cooldown 为数字字段（调用方持有的 PlayerState.collisionCooldown）：每帧随 dt 衰减，
  * 命中后重置为 COLLISION_COOLDOWN 并施加速度惩罚；冷却期内不再重复触发。
- * @returns 是否发生碰撞（hit）与衰减/重置后的冷却值（cooldown，由调用方写回）
+ * @param maxSpeed 玩家车最大速度（用于碰撞强度归一化，取 carConfig.maxSpeed）
+ * @returns 是否发生碰撞（hit）、碰撞强度（impact 0-1 速度比，供声音/视觉分级）、
+ *           与衰减/重置后的冷却值（cooldown，由调用方写回）
  */
 export function applyTrafficCollision(
   carState: CarState,
@@ -15,18 +17,26 @@ export function applyTrafficCollision(
   traffic: TrafficCar[],
   cooldown: number,
   dt: number,
-): { hit: boolean; cooldown: number } {
+  maxSpeed = 6000,
+): { hit: boolean; impact: number; cooldown: number } {
   cooldown = Math.max(cooldown - dt, 0)
   if (cooldown > 0) {
-    return { hit: false, cooldown }
+    return { hit: false, impact: 0, cooldown }
   }
   const collision = collideWithPlayer(traffic, cameraZ, carState.position)
   if (collision) {
+    // M16：碰撞强度 = 碰撞瞬间速度比（0-1），供声音响度与红闪分级（高速撞击更剧烈）
+    const impact = Math.max(0, Math.min(1, carState.speed / maxSpeed))
     carState.speed *= COLLISION_SPEED_FACTOR
+    // M16：轻微横向弹开（远离碰撞车方向），避免贴车冷却结束后反复触发同一辆 NPC
+    if (Math.abs(carState.position - collision.offset) < 0.1) {
+      const push = collision.offset >= 0 ? -0.12 : 0.12
+      carState.position = Math.max(-1, Math.min(1, carState.position + push))
+    }
     cooldown = COLLISION_COOLDOWN
-    return { hit: true, cooldown }
+    return { hit: true, impact: Math.max(0, Math.min(1, impact)), cooldown }
   }
-  return { hit: false, cooldown }
+  return { hit: false, impact: 0, cooldown }
 }
 
 /**
@@ -37,17 +47,27 @@ export function applyTrafficCollision(
  * 独立的赛道世界（各持 TrackContext），跨世界碰撞无意义。PlayerState.collisionCooldown
  * 单一字段仅用于各自世界内的车流碰撞冷却。
  */
-export function updateCollisions(race: RaceState, dt: number, splitMode: boolean): void {
+export function updateCollisions(
+  race: RaceState,
+  dt: number,
+  splitMode: boolean,
+  maxSpeed = 6000,
+): { hit: boolean; impact: number } {
+  let hit = false
+  let impact = 0
   const r1 = applyTrafficCollision(
     race.player1.carState,
     race.player1.cameraZ,
     race.tracks[0].traffic,
     race.player1.collisionCooldown,
     dt,
+    maxSpeed,
   )
   race.player1.collisionCooldown = r1.cooldown
   if (r1.hit) {
     race.collisionCount++
+    hit = true
+    impact = Math.max(impact, r1.impact)
   }
 
   if (splitMode) {
@@ -57,10 +77,14 @@ export function updateCollisions(race: RaceState, dt: number, splitMode: boolean
       race.tracks[1].traffic,
       race.player2.collisionCooldown,
       dt,
+      maxSpeed,
     )
     race.player2.collisionCooldown = r2.cooldown
     if (r2.hit) {
       race.collisionCount++
+      hit = true
+      impact = Math.max(impact, r2.impact)
     }
   }
+  return { hit, impact }
 }

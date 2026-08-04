@@ -36,6 +36,8 @@ export interface FrameRenderContext {
   hotseatPlayer: 1 | 2
   /** M8：BOOST 激活状态（任一玩家），用于渲染金色 vignette */
   boostActive: boolean
+  /** M16：碰撞红闪强度（0-1，frame-update 更新后写回；驱动屏幕红色 vignette） */
+  collisionFlash: number
   /** 玩家实时转向输入（-1..1，P1；菜单阶段传 0）：经 viewFor 透传 renderer 驱动车辆转向倾斜 */
   steer1: number
   /** 玩家实时转向输入（-1..1，P2；单屏/热座/菜单阶段传 0） */
@@ -86,7 +88,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player1.driftState.smoke,
       race.player1.raceTime,
-      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting, ctx.steer1),
+      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
     )
     renderer.setCameraX(race.player2.carState.position)
     renderer.renderRegion(
@@ -95,18 +97,24 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player2.driftState.smoke,
       race.player2.raceTime,
-      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2),
+      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2, ctx.collisionFlash),
     )
     // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
     // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
     renderer.drawDivider(w / 2)
   } else {
-    renderer.setCameraX(race.player1.carState.position)
+    // P0 修复（热座 P2）：单屏渲染必须按当前回合玩家切换数据源——
+    // 热座 P2 回合渲染 player2 与 tracks[1]（否则画面冻结在 P1 完赛瞬间）。
+    // steer 取 ctx.steer1（热座输入经 routeInputs 合并到 input1，steer2 恒 0）。
+    const activePlayer = ctx.hotseatMode && ctx.hotseatPlayer === 2 ? race.player2 : race.player1
+    const activeTrack = ctx.hotseatMode && ctx.hotseatPlayer === 2 ? race.tracks[1] : race.tracks[0]
+    const activeSpeedRatio = ctx.hotseatMode && ctx.hotseatPlayer === 2 ? p2SpeedRatio : p1SpeedRatio
+    renderer.setCameraX(activePlayer.carState.position)
     renderer.render(
-      race.player1.cameraZ,
-      race.player1.driftState.smoke,
-      race.player1.raceTime,
-      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting, ctx.steer1),
+      activePlayer.cameraZ,
+      activePlayer.driftState.smoke,
+      activePlayer.raceTime,
+      viewFor(activeTrack, ctx.boostParticles, activeSpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
     )
   }
 
@@ -119,7 +127,9 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
     const showMinimap = ctx.phase === PHASE_RACING && !ctx.splitMode
     minimap.canvas.hidden = !showMinimap
     if (showMinimap) {
-      minimap.update(race.player1.cameraZ)
+      // 热座 P2 回合小地图跟随当前回合玩家（与单屏渲染数据源一致）
+      const activeCameraZ = ctx.hotseatMode && ctx.hotseatPlayer === 2 ? race.player2.cameraZ : race.player1.cameraZ
+      minimap.update(activeCameraZ)
     }
   }
 

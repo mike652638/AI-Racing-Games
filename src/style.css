@@ -62,14 +62,15 @@ canvas {
 
 #hud-speed-unit {
   font-size: var(--hint-fs);
-  opacity: 0.7;
+  opacity: 0.85;
   margin-bottom: 8px;
 }
 
 #hud-lap,
 #hud-time {
   font-size: var(--hud-fs);
-  opacity: 0.9;
+  opacity: 1;
+  color: #f5f5f5;
   text-shadow:
     0 1px 6px rgba(0, 0, 0, 0.8),
     0 0 2px rgba(0, 0, 0, 0.9);
@@ -126,8 +127,13 @@ canvas {
 }
 
 @keyframes rotate-phone {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(90deg); }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
 }
 
 /* 分屏模式：P2 位于右半区域，HUD 从左下移到右上（左右对称） */
@@ -161,14 +167,15 @@ canvas {
 
 #hud-speed-unit-2 {
   font-size: var(--hint-fs);
-  opacity: 0.7;
+  opacity: 0.85;
   margin-bottom: 8px;
 }
 
 #hud-lap-2,
 #hud-time-2 {
   font-size: var(--hud-fs);
-  opacity: 0.9;
+  opacity: 1;
+  color: #f5f5f5;
   text-shadow:
     0 1px 6px rgba(0, 0, 0, 0.8),
     0 0 2px rgba(0, 0, 0, 0.9);
@@ -194,6 +201,16 @@ canvas {
 
 #drift-score-value.score-pop {
   animation: score-pulse 0.25s ease-out;
+}
+
+/* M16 碰撞计数（#hud-collision：比赛阶段碰撞次数，红色警示色，出现时轻微抖动提示） */
+#hud-collision {
+  margin-top: 4px;
+  font-size: clamp(12px, 2.6vw, 15px);
+  font-weight: 700;
+  color: #ff5252;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 /* 漂移连击倍率（#drift-combo：active 且 combo≥1 时由 updateHud 显示；黄绿加粗随漂移指示） */
@@ -237,8 +254,13 @@ canvas {
 }
 
 @keyframes timer-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* 小地图 / 赛道进度指示器（#hud-minimap：Batch 6 单屏比赛阶段显示；canvas 像素内容由 src/ui/minimap.ts 每帧绘制。
@@ -409,8 +431,12 @@ canvas {
 }
 
 @keyframes menu-breathe {
-  0% { filter: hue-rotate(0deg); }
-  100% { filter: hue-rotate(18deg); }
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(18deg);
+  }
 }
 
 .menu-grid {
@@ -429,26 +455,36 @@ canvas {
 }
 
 @keyframes grid-scroll {
-  0% { background-position: 0 0; }
-  100% { background-position: 0 40px; }
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 40px;
+  }
 }
 
-  .menu-sun {
+.menu-sun {
   position: absolute;
   left: 50%;
-  bottom: 32%;
-  width: min(40vw, 260px);
-  height: min(40vw, 260px);
+  bottom: 8%;
+  width: min(22vw, 160px);
+  height: min(22vw, 160px);
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 50%, rgba(255, 56, 100, 0) 70%);
-  box-shadow: 0 0 80px 20px rgba(255, 56, 100, 0.4);
+  box-shadow: 0 0 48px 14px rgba(255, 56, 100, 0.35);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
 
 @keyframes sun-pulse {
-  0% { transform: translateX(-50%) scale(1); opacity: 0.9; }
-  100% { transform: translateX(-50%) scale(1.05); opacity: 1; }
+  0% {
+    transform: translateX(-50%) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(-50%) scale(1.05);
+    opacity: 1;
+  }
 }
 
 .menu-stars {
@@ -468,8 +504,14 @@ canvas {
 }
 
 @keyframes stars-twinkle {
-  0% { opacity: 0.7; transform: translateY(0); }
-  100% { opacity: 1; transform: translateY(-6px); }
+  0% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(-6px);
+  }
 }
 
 .menu-light {
@@ -481,8 +523,15 @@ canvas {
 }
 
 @keyframes light-sweep {
-  0%, 100% { opacity: 0; transform: translateX(-120%); }
-  50% { opacity: 1; transform: translateX(120%); }
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(120%);
+  }
 }
 
 .menu-content {
@@ -500,8 +549,14 @@ canvas {
 }
 
 @keyframes content-fade-in {
-  0% { opacity: 0; transform: translateY(18px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .title-wrap {
@@ -511,9 +566,17 @@ canvas {
 }
 
 @keyframes title-bounce {
-  0% { opacity: 0; transform: scale(0.7) translateY(0); }
-  60% { transform: scale(1.05) translateY(6px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(0);
+  }
+  60% {
+    transform: scale(1.05) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .title-sub {
@@ -547,8 +610,12 @@ canvas {
 }
 
 @keyframes title-shimmer {
-  0% { background-position: 0 0; }
-  100% { background-position: 0 200%; }
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 200%;
+  }
 }
 
 .title-stroke,
@@ -573,8 +640,14 @@ canvas {
 }
 
 @keyframes stroke-flicker {
-  0% { opacity: 0.85; -webkit-text-stroke-color: rgba(255, 56, 100, 0.85); }
-  100% { opacity: 1; -webkit-text-stroke-color: rgba(0, 217, 255, 0.85); }
+  0% {
+    opacity: 0.85;
+    -webkit-text-stroke-color: rgba(255, 56, 100, 0.85);
+  }
+  100% {
+    opacity: 1;
+    -webkit-text-stroke-color: rgba(0, 217, 255, 0.85);
+  }
 }
 
 .title-glow {
@@ -589,8 +662,14 @@ canvas {
 }
 
 @keyframes glow-pulse {
-  0% { opacity: 0.7; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1.04); }
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
 }
 
 #track-select {
@@ -762,15 +841,26 @@ canvas {
 }
 
 @keyframes selected-pulse {
-  0%, 100% { box-shadow: 0 0 18px rgba(255, 215, 94, 0.45), inset 0 0 16px rgba(255, 215, 94, 0.2); }
-  50% { box-shadow: 0 0 30px rgba(255, 215, 94, 0.65), inset 0 0 22px rgba(255, 215, 94, 0.3); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 18px rgba(255, 215, 94, 0.45),
+      inset 0 0 16px rgba(255, 215, 94, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(255, 215, 94, 0.65),
+      inset 0 0 22px rgba(255, 215, 94, 0.3);
+  }
 }
 
 .track-option.selected:hover {
   background: rgba(255, 215, 94, 0.35);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 0 32px rgba(255, 215, 94, 0.6), inset 0 0 22px rgba(255, 215, 94, 0.35);
+  box-shadow:
+    0 0 32px rgba(255, 215, 94, 0.6),
+    inset 0 0 22px rgba(255, 215, 94, 0.35);
 }
 
 .track-option.selected:active {
@@ -803,15 +893,26 @@ canvas {
 }
 
 @keyframes selected-pulse-p2 {
-  0%, 100% { box-shadow: 0 0 18px rgba(74, 222, 128, 0.45), inset 0 0 16px rgba(74, 222, 128, 0.2); }
-  50% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.65), inset 0 0 22px rgba(74, 222, 128, 0.3); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 18px rgba(74, 222, 128, 0.45),
+      inset 0 0 16px rgba(74, 222, 128, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(74, 222, 128, 0.65),
+      inset 0 0 22px rgba(74, 222, 128, 0.3);
+  }
 }
 
 .track-option.selected-p2:hover {
   background: rgba(74, 222, 128, 0.32);
   border-color: #4ade80;
   color: #fff;
-  box-shadow: 0 0 28px rgba(74, 222, 128, 0.5), inset 0 0 18px rgba(74, 222, 128, 0.3);
+  box-shadow:
+    0 0 28px rgba(74, 222, 128, 0.5),
+    inset 0 0 18px rgba(74, 222, 128, 0.3);
 }
 
 .track-option.selected-p2:active {
@@ -866,8 +967,14 @@ canvas {
 }
 
 @keyframes track-name-pop {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 #p2-track-name {
@@ -911,22 +1018,39 @@ canvas {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
   animation: card-rise 0.8s ease-out both;
 }
 
-.lb-card:nth-child(1) { animation-delay: 0.2s; }
-.lb-card:nth-child(2) { animation-delay: 0.35s; }
-.lb-card:nth-child(3) { animation-delay: 0.5s; }
+.lb-card:nth-child(1) {
+  animation-delay: 0.2s;
+}
+.lb-card:nth-child(2) {
+  animation-delay: 0.35s;
+}
+.lb-card:nth-child(3) {
+  animation-delay: 0.5s;
+}
 
 @keyframes card-rise {
-  0% { opacity: 0; transform: translateY(20px) scale(0.96); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .lb-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 215, 94, 0.15);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(255, 215, 94, 0.15);
   border-color: rgba(255, 215, 94, 0.35);
 }
 
@@ -965,7 +1089,9 @@ canvas {
 
 .lb-card-clickable.expanded {
   border-color: rgba(0, 217, 255, 0.55);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 217, 255, 0.28);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(0, 217, 255, 0.28);
 }
 
 .lb-card-clickable.expanded .lb-card-head::after {
@@ -1072,13 +1198,13 @@ canvas {
 .finish-sun {
   position: absolute;
   left: 50%;
-  bottom: 38%;
-  width: min(50vw, 320px);
-  height: min(50vw, 320px);
+  bottom: 6%;
+  width: min(26vw, 180px);
+  height: min(26vw, 180px);
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 45%, rgba(255, 56, 100, 0) 70%);
-  box-shadow: 0 0 100px 30px rgba(255, 56, 100, 0.35);
+  box-shadow: 0 0 60px 18px rgba(255, 56, 100, 0.3);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
 
@@ -1123,8 +1249,14 @@ canvas {
 }
 
 @keyframes finish-title-in {
-  0% { opacity: 0; transform: scale(0.6) translateY(-40px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(-40px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .finish-card {
@@ -1141,7 +1273,9 @@ canvas {
 
 .finish-card.p2-card {
   border-color: rgba(74, 222, 128, 0.25);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(74, 222, 128, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 0 12px rgba(74, 222, 128, 0.08);
 }
 
 .finish-line {
@@ -1154,20 +1288,48 @@ canvas {
   animation: finish-line-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-#finish-screen:not([hidden]) .finish-line:nth-child(1) { animation-delay: 0.1s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(2) { animation-delay: 0.18s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(3) { animation-delay: 0.26s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(4) { animation-delay: 0.34s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(5) { animation-delay: 0.42s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(6) { animation-delay: 0.5s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(7) { animation-delay: 0.58s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(8) { animation-delay: 0.66s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(9) { animation-delay: 0.74s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(10) { animation-delay: 0.82s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(11) { animation-delay: 0.9s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(12) { animation-delay: 0.98s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(13) { animation-delay: 1.06s; }
-#finish-screen:not([hidden]) .finish-line:nth-child(14) { animation-delay: 1.14s; }
+#finish-screen:not([hidden]) .finish-line:nth-child(1) {
+  animation-delay: 0.1s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(2) {
+  animation-delay: 0.18s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(3) {
+  animation-delay: 0.26s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(4) {
+  animation-delay: 0.34s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(5) {
+  animation-delay: 0.42s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(6) {
+  animation-delay: 0.5s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(7) {
+  animation-delay: 0.58s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(8) {
+  animation-delay: 0.66s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(9) {
+  animation-delay: 0.74s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(10) {
+  animation-delay: 0.82s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(11) {
+  animation-delay: 0.9s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(12) {
+  animation-delay: 0.98s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(13) {
+  animation-delay: 1.06s;
+}
+#finish-screen:not([hidden]) .finish-line:nth-child(14) {
+  animation-delay: 1.14s;
+}
 
 @keyframes finish-line-in {
   0% {
@@ -1235,8 +1397,12 @@ canvas {
 }
 
 @keyframes finish-banner-glow {
-  0% { box-shadow: 0 0 12px rgba(255, 215, 94, 0.25); }
-  100% { box-shadow: 0 0 24px rgba(255, 215, 94, 0.55); }
+  0% {
+    box-shadow: 0 0 12px rgba(255, 215, 94, 0.25);
+  }
+  100% {
+    box-shadow: 0 0 24px rgba(255, 215, 94, 0.55);
+  }
 }
 
 .finish-banner.p1 {
@@ -1619,38 +1785,92 @@ canvas {
 
 /* 横屏手机（高度受限）：压缩标题与屏幕间距 */
 @media (max-height: 480px) {
+  /* P1 修复：标题由 .title-main（div）渲染，必须覆盖 --title-fs 变量本身（原规则只命中 h1 无效） */
+  :root {
+    --title-fs: clamp(18px, 5vw, 30px);
+    --subtitle-fs: clamp(11px, 2.6vw, 15px);
+  }
+
   #start-screen h1,
   #finish-screen h1,
   #pause-screen h1 {
-    font-size: clamp(24px, 6vw, 40px);
-    margin: 0 0 8px;
+    font-size: clamp(18px, 5vw, 30px);
+    margin: 0 0 6px;
+  }
+
+  /* 副标题负上边距在低高度下与标题挤压成叠影，压缩标题整体占高 */
+  .title-wrap {
+    margin-bottom: 2px;
+  }
+
+  .title-sub {
+    margin: 0 0 2px;
+    font-size: clamp(10px, 2.2vw, 12px);
   }
 
   #start-screen .hint,
   #finish-screen .hint,
   #pause-screen .hint {
-    margin-top: 16px;
+    margin-top: 10px;
   }
 
   #track-select {
-    margin: 8px 0 4px;
+    margin: 4px 0 2px;
+    gap: 8px;
   }
 
+  /* 横屏低高度：缩小赛道卡片与预览区，保证开始按钮不被挤出视口 */
+  .track-option {
+    min-height: 32px;
+    padding: 3px 8px;
+  }
+
+  /* 低高度下隐藏中央赛道缩略图预览（节省 40px，卡片 3×3 网格本身已含赛道信息） */
+  .track-preview-wrap {
+    display: none;
+  }
+
+  /* 榜单卡片强制单行（三卡并排），避免 812px 下换行成两行挤压开始按钮 */
   .leaderboard-cards {
-    margin: 8px auto 0;
+    margin: 2px auto 0;
+    gap: 6px;
+    flex-wrap: nowrap;
   }
 
   .lb-card {
-    padding: 8px 10px;
+    padding: 3px 8px;
+    min-width: 0;
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  .lb-card-head {
+    font-size: clamp(10px, 2vw, 12px);
   }
 
   #start-btn {
-    margin-top: 12px;
-    padding: 8px 28px;
+    margin-top: 6px;
+    padding: 6px 24px;
+  }
+
+  /* 低高度下隐藏键盘提示（横屏手机以触屏为主，menu-hint-touch 已单独提示） */
+  #start-screen #menu-hint {
+    display: none;
   }
 
   .menu-content {
-    padding: 12px 0;
+    padding: 6px 0;
+    /* 低高度内容紧凑后即使溢出也可滚动到开始按钮 */
+    justify-content: flex-start;
+  }
+
+  /* 低高度：光晕进一步缩小并贴地（底部 8% 在 375px 高度下仍会与赛道卡片重叠） */
+  .menu-sun,
+  .finish-sun {
+    bottom: 2%;
+    width: min(14vw, 96px);
+    height: min(14vw, 96px);
+    box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.25);
   }
 }
 
@@ -1671,21 +1891,72 @@ canvas {
 }
 
 @keyframes score-pulse {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.45); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ===== 赛道主题背景色（切换赛道时通过 .menu-bg 子类切换渐变色调） ===== */
-.menu-bg.track-classic .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 56, 100, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 55%), linear-gradient(180deg, #0b0518 0%, #1a0b2e 50%, #2d1b4e 100%); }
-.menu-bg.track-highway .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 180, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 215, 94, 0.15) 0%, transparent 55%), linear-gradient(180deg, #04101e 0%, #0b2840 50%, #124060 100%); }
-.menu-bg.track-s-curve .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 220, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #10081e 0%, #201040 50%, #382060 100%); }
-.menu-bg.track-island .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 200, 160, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #041818 0%, #0b3030 50%, #124848 100%); }
-.menu-bg.track-canyon .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 100, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 200, 50, 0.15) 0%, transparent 55%), linear-gradient(180deg, #1a0800 0%, #301808 50%, #482810 100%); }
-.menu-bg.track-desert .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 50, 0.15) 0%, transparent 55%), linear-gradient(180deg, #1a1200 0%, #302008 50%, #483010 100%); }
-.menu-bg.track-forest .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(50, 200, 50, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 100, 0.15) 0%, transparent 55%), linear-gradient(180deg, #041804 0%, #083008 50%, #0c480c 100%); }
-.menu-bg.track-coast .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 150, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 255, 200, 0.15) 0%, transparent 55%), linear-gradient(180deg, #021020 0%, #042040 50%, #063060 100%); }
-.menu-bg.track-alpine .menu-gradient { background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180, 200, 255, 0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 55%), linear-gradient(180deg, #0a0e18 0%, #142030 50%, #203048 100%); }
+.menu-bg.track-classic .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 56, 100, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #0b0518 0%, #1a0b2e 50%, #2d1b4e 100%);
+}
+.menu-bg.track-highway .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 180, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 215, 94, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #04101e 0%, #0b2840 50%, #124060 100%);
+}
+.menu-bg.track-s-curve .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 220, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #10081e 0%, #201040 50%, #382060 100%);
+}
+.menu-bg.track-island .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 200, 160, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #041818 0%, #0b3030 50%, #124848 100%);
+}
+.menu-bg.track-canyon .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 100, 50, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 200, 50, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #1a0800 0%, #301808 50%, #482810 100%);
+}
+.menu-bg.track-desert .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 50, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #1a1200 0%, #302008 50%, #483010 100%);
+}
+.menu-bg.track-forest .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(50, 200, 50, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 100, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #041804 0%, #083008 50%, #0c480c 100%);
+}
+.menu-bg.track-coast .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 150, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 255, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #021020 0%, #042040 50%, #063060 100%);
+}
+.menu-bg.track-alpine .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180, 200, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #0a0e18 0%, #142030 50%, #203048 100%);
+}
 
 /* ===== 起步倒计时覆盖层 ===== */
 #countdown-overlay {
@@ -1704,7 +1975,9 @@ canvas {
   font-family: var(--font-display);
   font-size: clamp(80px, 20vw, 160px);
   color: #ffd75e;
-  text-shadow: 0 0 40px rgba(255, 215, 94, 0.8), 0 0 80px rgba(255, 56, 100, 0.5);
+  text-shadow:
+    0 0 40px rgba(255, 215, 94, 0.8),
+    0 0 80px rgba(255, 56, 100, 0.5);
   animation: countdown-pop 0.5s ease-out;
   line-height: 1;
 }
@@ -1723,9 +1996,17 @@ canvas {
 }
 
 @keyframes countdown-pop {
-  0% { transform: scale(0.3); opacity: 0; }
-  60% { transform: scale(1.1); }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ===== 菜单阶段隐藏虚拟摇杆（右下角圆环） ===== */
