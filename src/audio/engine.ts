@@ -122,24 +122,36 @@ export class RainSound {
   }
 }
 
-/** 碰撞冲击音：0.15s 白噪声 burst → lowpass 300Hz → gain 0.25 → output（80ms 防刷屏） */
+/** 碰撞冲击音（M16 增强）：白噪声 burst → lowpass 300Hz + 低频正弦冲击层（sine 55Hz 指数衰减 0.12s），
+ *  两者混合输出；动态范围扩大（增益 = 0.32 × clamp(volume, 0.1, 1)）——低速轻微、高速重击（80ms 防刷屏） */
 export class CollisionSound {
   private ctx: AudioContext
   private filter: BiquadFilterNode
-  private gain: GainNode
+  private noiseGain: GainNode
+  private thumpGain: GainNode
+  private outGain: GainNode
   private buffer: AudioBuffer
   private lastPlayTime = -Infinity
   private playCount = 0
 
   constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
     this.ctx = ctx
+    // 噪声层：白噪声 → lowpass 300Hz（碰撞"砰"的冲击质感）
     this.filter = ctx.createBiquadFilter()
     this.filter.type = 'lowpass'
     this.filter.frequency.value = 300
-    this.gain = ctx.createGain()
-    this.gain.gain.value = 0.25
-    this.filter.connect(this.gain)
-    this.gain.connect(output)
+    this.noiseGain = ctx.createGain()
+    this.noiseGain.gain.value = 1
+    this.filter.connect(this.noiseGain)
+    // 低频冲击层：正弦波 → gain（碰撞"咚"的物理重击，低速时几乎无声）
+    this.thumpGain = ctx.createGain()
+    this.thumpGain.gain.value = 0
+    // 混合输出
+    this.outGain = ctx.createGain()
+    this.outGain.gain.value = 0.32
+    this.noiseGain.connect(this.outGain)
+    this.thumpGain.connect(this.outGain)
+    this.outGain.connect(output)
     // 0.15s 白噪声 burst buffer
     const length = Math.floor(ctx.sampleRate * 0.15)
     const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
@@ -156,17 +168,30 @@ export class CollisionSound {
   }
 
   /** 触发碰撞音（每次重建 BufferSource；80ms 内重复触发跳过，防连续碰撞刷屏）。
-   *  volume 为碰撞强度（0-1 速度比），增益 = 0.25 × clamp(volume, 0.4, 1)（高速撞击更响） */
+   *  volume 为碰撞强度（0-1 速度比），总增益 = 0.32 × clamp(volume, 0.1, 1)；
+   *  低频冲击层增益 = 0.5 × clamp(volume, 0.15, 1)（高速撞击"咚"感更重，低速几乎纯噪声） */
   play(volume = 1): void {
     const now = this.ctx.currentTime
     if (now - this.lastPlayTime < 0.08) return
     this.lastPlayTime = now
     this.playCount++
-    this.gain.gain.value = 0.25 * Math.min(Math.max(volume, 0.4), 1)
+    const v = Math.min(Math.max(volume, 0.1), 1)
+    this.outGain.gain.value = 0.32 * v
+    // 白噪声 burst
     const source = this.ctx.createBufferSource()
     source.buffer = this.buffer
     source.connect(this.filter)
     source.start(0)
+    // 低频冲击层：55Hz 正弦，gain 指数衰减 0.12s（重击质感）
+    const osc = this.ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 55
+    const thump = Math.min(Math.max(volume, 0.15), 1) * 0.5
+    this.thumpGain.gain.setValueAtTime(thump, now)
+    this.thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12)
+    osc.connect(this.thumpGain)
+    osc.start(now)
+    osc.stop(now + 0.15)
   }
 }
 

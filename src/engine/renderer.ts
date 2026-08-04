@@ -13,12 +13,13 @@ import {
 import { drawPlayerCar } from './player-car'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
-import { updateLighting, WEATHER_CYCLE_SECONDS } from './lighting'
+import { updateLighting, WEATHER_CYCLE_SECONDS, type LightingEnvironment } from './lighting'
 import { mulberry32 } from './scenery'
+import { getEnvironmentProfile } from './environment'
 import { DRAW_DISTANCE, projectSegmentQuad, roadColors, shouldDrawCenterLine, type Quad } from './road-geometry'
 import { projectTraffic } from './traffic-render'
 import { projectSmoke } from './smoke-render'
-import { renderRoadStripToCanvas, type RoadStrip } from './road-strip'
+import { renderRoadStripToCanvas, shadeColor, type RoadStrip } from './road-strip'
 
 export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
@@ -54,12 +55,16 @@ export interface RenderView {
   traffic: TrafficCar[]
   /** 夜晚模式（赛道级，F1）：切换夜晚色板 / 深色远山 / 车灯光晕 */
   night?: boolean
+  /** M17 环境场景（赛道级）：驱动天空/草地色相与远山配色；缺省 plains 与旧版一致 */
+  environment?: LightingEnvironment
   /** BOOST 尾焰粒子（H2：game 层维护、渲染层投影，缺省无粒子） */
   boostParticles?: BoostParticle[]
   /** M8：当前玩家速度比（speed / maxSpeed），用于速度线 alpha 与显示阈值 */
   speedRatio?: number
   /** M8：BOOST 激活状态，用于金色 vignette 屏幕特效 */
   boosting?: boolean
+  /** M16：碰撞红闪强度（0-1，碰撞后指数衰减），用于屏幕红色 vignette */
+  collisionFlash?: number
   /** 玩家实时转向输入（-1..1，game 层 CarInput.steer 透传）：驱动车辆转向倾斜；
    *  缺省 undefined 时 drawPlayerCar 回退 laneOffset 推导（无延迟的即时响应） */
   steer?: number
@@ -171,6 +176,11 @@ function drawQuad(
   fillQuadCoords(ctx, a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y, color)
 }
 
+/** 线性插值（fallback 段路面横向渐变分带用，帧内零分配） */
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
 export class Renderer {
   private ctx: CanvasRenderingContext2D
   private opts: ProjectionOptions
@@ -178,6 +188,8 @@ export class Renderer {
   private mountains: MountainLayer[]
   /** 夜晚模式的深色远山缓存（night 赛道用，避免每帧重建离屏位图） */
   private mountainsNight: MountainLayer[]
+  /** M17 当前环境（懒重建远山缓存用：环境切换时才重建离屏位图，运行时零成本） */
+  private currentEnv: LightingEnvironment = 'plains'
   /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
   private curvePrefixSum: Float64Array
   /** 路边景物段索引（键 = floor(z / SEGMENT_LENGTH)），drawSprites 用 O(候选段数) 查询替代线性扫描 */
@@ -410,13 +422,23 @@ export class Renderer {
       traffic: this.traffic,
     }
     this.camera.z = cameraZ
+    // M17：按环境懒重建远山离屏缓存（不同环境配色不同；切换赛道时重建一次，运行时稳定复用）
+    const envForMountains = (view?.environment ?? 'plains') as LightingEnvironment
+    if (envForMountains !== this.currentEnv) {
+      this.currentEnv = envForMountains
+      const env = getEnvironmentProfile(envForMountains)
+      this.mountains = this.buildMountains(this.opts.width, env.mountainFar, env.mountainNear)
+      this.mountainsNight = this.buildMountains(this.opts.width, env.mountainFarNight, env.mountainNearNight)
+    }
     // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
     const phase = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3
     const overcast = phase === 1
     const raining = phase === 2
     // 夜晚模式（赛道级）：view.night 缺省 false；夜晚锁定色板 + 深色远山 + 车灯
     const night = view?.night ?? false
-    const colors = updateLighting(timeSec, overcast, raining, night)
+    // M17：环境（缺省 plains 与旧版一致）驱动天空/草地色相
+    const environment = view?.environment ?? 'plains'
+    const colors = updateLighting(timeSec, overcast, raining, night, environment)
 
     // 天空纵向渐变（P1）：skyTop → skyBottom 两段渐变填充至地平线，替代单色天空（消除山脊硬切感）；
     // 夜晚赛道锁定深暗色板，渐变仍保持暗色氛围（top 略亮、bottom 更暗）
@@ -430,6 +452,8 @@ export class Renderer {
     }
     ctx.fillStyle = colors.grass
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
+    // M17 地形装饰（沙漠沙丘/海岸海面/峡谷岩壁）：在草地层之上、道路之前绘制（俯视地面的远景纹理）
+    this.drawTerrain(ctx, opts, environment, night)
 
     const baseIndex = trackIndexForCameraZ(v.track, cameraZ)
     const baseZ = Math.floor(cameraZ / SEGMENT_LENGTH) * SEGMENT_LENGTH
@@ -462,6 +486,8 @@ export class Renderer {
     // M8：速度线（高速感）与 BOOST 金色 vignette（激活时）——最上层轻量特效
     this.drawSpeedLines(ctx, opts, v.speedRatio ?? 0)
     this.drawBoostVignette(ctx, opts, v.boosting ?? false)
+    // M16：碰撞红色 vignette——碰撞后屏幕边缘红闪，强度随速度比衰减
+    this.drawCollisionVignette(ctx, opts, v.collisionFlash)
   }
 
   /** M8：速度线——速度 > 0.7×maxSpeed 时屏幕边缘 8 条径向条纹，alpha 0.0→0.6 */
@@ -501,6 +527,25 @@ export class Renderer {
     const grad = ctx.createRadialGradient(cx, cy, r1, cx, cy, r2)
     grad.addColorStop(0, 'rgba(255, 180, 80, 0)')
     grad.addColorStop(1, 'rgba(255, 180, 80, 0.4)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, opts.width, opts.height)
+  }
+
+  /** M16：碰撞红色 vignette——碰撞后 0.35s 屏幕边缘红色暗角，强度随 flash 衰减（0-1），
+   *  alpha = 0.45 × flash（高速撞击更明显）；与 BOOST 金色 vignette 同屏共存时红色优先感知 */
+  private drawCollisionVignette(
+    ctx: CanvasRenderingContext2D,
+    opts: ProjectionOptions,
+    flash: number | undefined,
+  ): void {
+    if (!flash || flash <= 0) return
+    const cx = opts.width * 0.5
+    const cy = opts.height * 0.5
+    const r1 = Math.min(opts.width, opts.height) * 0.35
+    const r2 = Math.max(opts.width, opts.height) * 0.85
+    const grad = ctx.createRadialGradient(cx, cy, r1, cx, cy, r2)
+    grad.addColorStop(0, 'rgba(255, 40, 40, 0)')
+    grad.addColorStop(1, `rgba(255, 40, 40, ${0.45 * flash})`)
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, opts.width, opts.height)
   }
@@ -645,14 +690,40 @@ export class Renderer {
     }
   }
 
-  /** 回退段绘制：路面 + 左右路缘三连 drawQuad（与原逐段绘制调用序列一致） */
+  /** 回退段绘制：路面（中央亮/边缘暗 3 带横向渐变）+ 左右路缘。
+   *  与缓存纹理的横向渐变视觉一致（fallback 仅为缓存不可用时的降级，三带近似足够）。
+   *  保持原有调用序列（先路面后双路缘），fill/quad 计数与原实现一致（路面 3 次 → 与原 1 次等价结构）。 */
   private drawFallbackSegment(
     ctx: CanvasRenderingContext2D,
     cur: Quad,
     next: Quad,
     colors: { road: string; side: string },
   ): void {
-    drawQuad(ctx, cur.l1, cur.r1, next.r1, next.l1, colors.road)
+    // 路面按横向 3 带渐变：边缘暗(0.97) → 中央亮(1.02) → 边缘暗(0.97)
+    const bands = [
+      { t0: 0, t1: 0.22, factor: 0.97 },
+      { t0: 0.22, t1: 0.78, factor: 1.02 },
+      { t0: 0.78, t1: 1, factor: 0.97 },
+    ]
+    for (const band of bands) {
+      const lx0 = lerp(cur.l1.x, cur.r1.x, band.t0)
+      const lx1 = lerp(cur.l1.x, cur.r1.x, band.t1)
+      const nx0 = lerp(next.l1.x, next.r1.x, band.t0)
+      const nx1 = lerp(next.l1.x, next.r1.x, band.t1)
+      fillQuadCoords(
+        ctx,
+        lx0,
+        cur.l1.y,
+        lx1,
+        cur.r1.y,
+        nx1,
+        next.r1.y,
+        nx0,
+        next.l1.y,
+        shadeColor(colors.road, band.factor),
+      )
+    }
+    // 左/右路缘
     drawQuad(ctx, cur.l2, cur.l1, next.l1, next.l2, colors.side)
     drawQuad(ctx, cur.r1, cur.r2, next.r2, next.r1, colors.side)
   }
@@ -811,6 +882,98 @@ export class Renderer {
     }
   }
 
+  /** M17 地形装饰：在草地层上叠加与赛道名称关联的地形视觉（沙漠沙丘/海岸海面/峡谷岩壁）。
+   *  均为视口固定的俯视纹理（不随 cameraZ 滚动，渲染成本恒定），仅在对应 environment 时绘制，
+   *  非目标环境（plains 等）零开销零改动。 */
+  private drawTerrain(
+    ctx: CanvasRenderingContext2D,
+    opts: ProjectionOptions,
+    environment: string,
+    night: boolean,
+  ): void {
+    const profile = getEnvironmentProfile(environment as Parameters<typeof getEnvironmentProfile>[0])
+    const terrain = profile.terrain
+    if (!terrain) return
+    const w = opts.width
+    const h = opts.height
+    const horizon = opts.horizon
+    const roadCenter = w / 2
+    const roadHalf = w * 0.14 // 路面在视口中的近似半宽（装饰不与路面重叠，绘制在路面两侧之外）
+    if (terrain === 'dunes') {
+      // 沙漠沙丘：路面两侧叠加 2 道半透明深黄弧形条带（近大远小），模拟起伏沙丘
+      const duneColors = night ? 'rgba(60, 40, 15, 0.35)' : 'rgba(120, 85, 35, 0.3)'
+      // 左侧沙丘
+      for (let i = 0; i < 3; i++) {
+        const y0 = horizon + (h - horizon) * (0.25 + i * 0.24)
+        const y1 = y0 + (h - horizon) * 0.16
+        const x0 = roadCenter - roadHalf * (2.6 - i * 0.6) - w * 0.1 * (i + 1)
+        const x1 = roadCenter - roadHalf * (1.8 - i * 0.4)
+        ctx.fillStyle = duneColors
+        ctx.beginPath()
+        ctx.ellipse((x0 + x1) / 2, y0, (x1 - x0) / 2, (y1 - y0) / 2, 0, Math.PI, 0)
+        ctx.fill()
+      }
+    } else if (terrain === 'sea') {
+      // 海岸海面：道路右侧整片海蓝（从地平线到近处），左侧保持草地/沙滩
+      const seaColor = night ? 'rgba(20, 60, 90, 0.85)' : 'rgba(60, 150, 210, 0.75)'
+      ctx.fillStyle = seaColor
+      ctx.beginPath()
+      ctx.moveTo(roadCenter + roadHalf * 1.4, horizon)
+      ctx.lineTo(w, horizon)
+      ctx.lineTo(w, h)
+      ctx.lineTo(roadCenter + roadHalf * 0.9, h)
+      ctx.closePath()
+      ctx.fill()
+      // M17 增强：白色波浪纹理——海面右侧叠加 3 道半透明白色椭圆弧线（近大远小）
+      const waveColor = night ? 'rgba(220, 235, 245, 0.35)' : 'rgba(255, 255, 255, 0.45)'
+      ctx.fillStyle = waveColor
+      for (let i = 0; i < 3; i++) {
+        const y0 = horizon + (h - horizon) * (0.3 + i * 0.25)
+        const waveLen = w * (0.28 - i * 0.05)
+        const waveH = (h - horizon) * (0.06 - i * 0.01)
+        ctx.beginPath()
+        ctx.ellipse(w * (0.72 - i * 0.03), y0, waveLen, waveH, 0, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    } else if (terrain === 'rock') {
+      // 峡谷岩壁：道路两侧叠加暗红棕竖条（近处高、远处低），模拟峡谷壁体
+      const rockColor = night ? 'rgba(45, 20, 10, 0.5)' : 'rgba(140, 70, 40, 0.35)'
+      const rockEdge = night ? 'rgba(70, 35, 18, 0.6)' : 'rgba(180, 100, 60, 0.5)'
+      for (let i = 0; i < 3; i++) {
+        const yTop = horizon + (h - horizon) * (0.3 + i * 0.2)
+        const yBot = h
+        const sideW = w * (0.16 - i * 0.04)
+        // 左侧岩壁
+        ctx.fillStyle = rockColor
+        ctx.fillRect(0, yTop, sideW, yBot - yTop)
+        // 右侧岩壁
+        ctx.fillRect(w - sideW, yTop, sideW, yBot - yTop)
+        // M17 增强：不规则锯齿顶线（左右两侧沿顶边画 3 段斜线，模拟岩石断裂边缘）
+        const segs = 5
+        const segW = sideW / segs
+        ctx.fillStyle = rockEdge
+        for (let s = 0; s < segs; s++) {
+          const sx = s * segW
+          const spike = (s % 2 === 0 ? 1 : -1) * (h - horizon) * 0.03
+          // 左顶线（从顶边向下凸出锯齿）
+          ctx.beginPath()
+          ctx.moveTo(sx, yTop)
+          ctx.lineTo(sx + segW / 2, yTop + spike)
+          ctx.lineTo(sx + segW, yTop)
+          ctx.closePath()
+          ctx.fill()
+          // 右顶线（镜像）
+          ctx.beginPath()
+          ctx.moveTo(w - sx, yTop)
+          ctx.lineTo(w - sx - segW / 2, yTop + spike)
+          ctx.lineTo(w - sx - segW, yTop)
+          ctx.closePath()
+          ctx.fill()
+        }
+      }
+    }
+  }
+
   /** 绘制路边景物（远→近）；数据取自视图 v；maxK 为降级后的可视段数（Task 9，视距 = maxK × SEGMENT_LENGTH） */
   private drawSprites(cameraZ: number, opts: ProjectionOptions, v: RenderView, maxK: number): void {
     const count = spritesInRangeIndexed(
@@ -833,22 +996,39 @@ export class Renderer {
         continue
       }
       const hpx = clampSpriteHeight(sprite.kind, sprite.height * bottom.scale * opts.height * 0.5)
-      if (sprite.kind === 'tree') {
-        this.drawTree(bottom.x, bottom.y, hpx)
-      } else {
-        this.drawLamp(bottom.x, bottom.y, hpx)
+      switch (sprite.kind) {
+        case 'lamp':
+          this.drawLamp(bottom.x, bottom.y, hpx)
+          break
+        case 'cactus':
+          // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸
+          this.drawCactus(bottom.x, bottom.y, hpx, sprite.treeColor, sprite.scale)
+          break
+        case 'palm':
+          // 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；rotation 随机化弯曲方向
+          this.drawPalm(bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight, sprite.rotation)
+          break
+        case 'snowpile':
+          // 雪堆：圆顶 + 树冠覆雪（山岳冷色）
+          this.drawSnowpile(bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+          break
+        case 'tree':
+        default:
+          // M17：环境树色由 sprite 携带（createRoadsideSprites 按 environment 注入），缺省回退内置色
+          this.drawTree(bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+          break
       }
     }
   }
 
-  /** 树：树干 + 两层三角树冠 */
-  private drawTree(x: number, y: number, hpx: number): void {
+  /** 树：树干 + 两层三角树冠（M17 环境树色由 sprite 携带，缺省回退内置 #2d5a27/#3a7a35） */
+  private drawTree(x: number, y: number, hpx: number, treeColor?: string, treeColorLight?: string): void {
     const { ctx } = this
     const trunkW = Math.max(hpx * 0.12, 2)
     const trunkH = hpx * 0.35
     ctx.fillStyle = '#5a3a22'
     ctx.fillRect(x - trunkW / 2, y - trunkH, trunkW, trunkH)
-    ctx.fillStyle = '#2d5a27'
+    ctx.fillStyle = treeColor ?? '#2d5a27'
     const crownBase = y - trunkH
     const crownW = hpx * 0.9
     ctx.beginPath()
@@ -857,11 +1037,88 @@ export class Renderer {
     ctx.lineTo(x + crownW / 2, crownBase)
     ctx.closePath()
     ctx.fill()
-    ctx.fillStyle = '#3a7a35'
+    ctx.fillStyle = treeColorLight ?? '#3a7a35'
     ctx.beginPath()
     ctx.moveTo(x, crownBase - hpx * 0.55)
     ctx.lineTo(x - crownW * 0.62, crownBase)
     ctx.lineTo(x + crownW * 0.62, crownBase)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  /** M17 仙人掌：绿色矮柱（身）+ 左右双臂（模拟沙漠仙人掌剪影；高度较树矮）。
+   *  scale 缩放整体尺寸（沙漠远处小仙人掌 scale 0.5）；缺省 1。 */
+  private drawCactus(x: number, y: number, hpx: number, cactusColor?: string, scale = 1): void {
+    const { ctx } = this
+    const color = cactusColor ?? '#5a6a2a'
+    const bodyW = Math.max(hpx * 0.22 * scale, 3)
+    const bodyH = hpx * 0.8 * scale
+    const armW = Math.max(hpx * 0.12 * scale, 2)
+    const armLen = hpx * 0.35 * scale
+    ctx.fillStyle = color
+    // 主干
+    ctx.fillRect(x - bodyW / 2, y - bodyH, bodyW, bodyH)
+    // 左臂（向上弯：竖段 + 横段）
+    ctx.fillRect(x - bodyW / 2 - armLen, y - bodyH * 0.72, armLen, armW)
+    ctx.fillRect(x - bodyW / 2 - armW, y - bodyH * 0.72 - armLen, armW, armLen)
+    // 右臂
+    ctx.fillRect(x + bodyW / 2, y - bodyH * 0.6, armLen, armW)
+    ctx.fillRect(x + bodyW / 2, y - bodyH * 0.6 - armLen, armW, armLen)
+  }
+
+  /** M17 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；树干自底部向 rotation 方向弯曲，
+   *  冠顶扇形 3 条叶。rotation ±1 控制弯曲方向（-1 左弯 / +1 右弯 / 缺省右弯）。 */
+  private drawPalm(x: number, y: number, hpx: number, trunkColor?: string, leafColor?: string, rotation = 1): void {
+    const { ctx } = this
+    const trunkW = Math.max(hpx * 0.1, 2)
+    const trunkH = hpx * 0.6
+    const bend = hpx * 0.08 * rotation
+    // 弯曲树干：底部在 x，顶部偏移 bend（方向随 rotation）
+    ctx.fillStyle = trunkColor ?? '#7a5a35'
+    ctx.fillRect(x - trunkW / 2 + bend, y - trunkH, trunkW, trunkH)
+    const crownY = y - trunkH
+    const crownW = hpx * 0.75
+    // 扇形冠：3 条叶（中心 + 左右），用三角近似（整体随树干偏移）
+    ctx.fillStyle = leafColor ?? '#2a6a3a'
+    ctx.beginPath()
+    ctx.moveTo(x + bend, crownY - hpx * 0.4)
+    ctx.lineTo(x + bend - crownW * 0.55, crownY)
+    ctx.lineTo(x + bend + crownW * 0.55, crownY)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = (leafColor ?? '#2a6a3a').replace('#', '#3') // 简化：上层叶略亮用同一色系近似
+    ctx.beginPath()
+    ctx.moveTo(x + bend, crownY - hpx * 0.22)
+    ctx.lineTo(x + bend - crownW * 0.8, crownY)
+    ctx.lineTo(x + bend + crownW * 0.8, crownY)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  /** M17 雪堆：圆顶雪包 + 顶部覆雪小树（山岳冷色；雪白圆顶模拟积雪路面旁雪堆） */
+  private drawSnowpile(x: number, y: number, hpx: number, snowColor?: string, treeColorLight?: string): void {
+    const { ctx } = this
+    const r = Math.max(hpx * 0.28, 3)
+    const treeColor = treeColorLight ?? '#c8d8e8'
+    // 雪堆本体（椭圆：压缩圆）
+    ctx.fillStyle = snowColor ?? '#e8f0f8'
+    ctx.beginPath()
+    ctx.ellipse(x, y - r * 0.4, r, r * 0.55, 0, 0, Math.PI * 2)
+    ctx.fill()
+    // 雪堆上的覆雪小树（冷色三角，区别于普通绿树）
+    const treeH = hpx * 0.5
+    ctx.fillStyle = '#5a6a7a'
+    ctx.beginPath()
+    ctx.moveTo(x, y - r * 0.9 - treeH)
+    ctx.lineTo(x - r * 0.5, y - r * 0.9)
+    ctx.lineTo(x + r * 0.5, y - r * 0.9)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = treeColor
+    ctx.beginPath()
+    ctx.moveTo(x, y - r * 0.7 - treeH)
+    ctx.lineTo(x - r * 0.35, y - r * 0.7)
+    ctx.lineTo(x + r * 0.35, y - r * 0.7)
     ctx.closePath()
     ctx.fill()
   }

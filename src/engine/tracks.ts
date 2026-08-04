@@ -1,4 +1,5 @@
 import { createSmoothTrack, DEFAULT_CONTROL_POINTS, type CurveControlPoint, type Segment } from './track'
+import type { Environment } from './environment'
 
 export interface TrackDef {
   /** 唯一标识（URL/存档用） */
@@ -15,6 +16,8 @@ export interface TrackDef {
   trafficCount?: number
   /** 时段（'night' 夜晚赛道，缺省视为 'day'），渲染层据此切换夜晚色板与车灯 */
   timeOfDay?: 'day' | 'night'
+  /** M17 环境场景：驱动天空/草地/远山/景物类型与配色（与赛道名称关联） */
+  environment: Environment
 }
 
 /** 高速公路：长直道 + 大半径缓弯 */
@@ -154,10 +157,41 @@ const ALPINE_CONTROL_POINTS: CurveControlPoint[] = [
 
 export const TRACK_DEFS: TrackDef[] = [
   // classic 不写 trafficCount，走默认密度（TRAFFIC_DEFAULT_COUNT = 14）
-  { id: 'classic', name: '经典赛道', difficulty: 1, controlPoints: DEFAULT_CONTROL_POINTS, laps: 3 },
-  { id: 'highway', name: '高速公路', difficulty: 2, controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3, trafficCount: 16 },
-  { id: 's-curve', name: 'S 弯挑战', difficulty: 2, controlPoints: SCURVE_CONTROL_POINTS, laps: 2, trafficCount: 8 },
-  { id: 'island', name: '环岛巡回', difficulty: 2, controlPoints: ISLAND_CONTROL_POINTS, laps: 3, trafficCount: 14 },
+  {
+    id: 'classic',
+    name: '经典赛道',
+    difficulty: 1,
+    controlPoints: DEFAULT_CONTROL_POINTS,
+    laps: 3,
+    environment: 'plains',
+  },
+  {
+    id: 'highway',
+    name: '高速公路',
+    difficulty: 2,
+    controlPoints: HIGHWAY_CONTROL_POINTS,
+    laps: 3,
+    trafficCount: 16,
+    environment: 'highway',
+  },
+  {
+    id: 's-curve',
+    name: 'S 弯挑战',
+    difficulty: 2,
+    controlPoints: SCURVE_CONTROL_POINTS,
+    laps: 2,
+    trafficCount: 8,
+    environment: 's-curve',
+  },
+  {
+    id: 'island',
+    name: '环岛巡回',
+    difficulty: 2,
+    controlPoints: ISLAND_CONTROL_POINTS,
+    laps: 3,
+    trafficCount: 14,
+    environment: 'island',
+  },
   {
     id: 'canyon',
     name: '峡谷疾驰',
@@ -166,10 +200,35 @@ export const TRACK_DEFS: TrackDef[] = [
     laps: 2,
     trafficCount: 12,
     timeOfDay: 'night',
+    environment: 'canyon',
   },
-  { id: 'desert', name: '沙漠疾驰', difficulty: 1, controlPoints: DESERT_CONTROL_POINTS, laps: 3, trafficCount: 14 },
-  { id: 'forest', name: '森林穿梭', difficulty: 2, controlPoints: FOREST_CONTROL_POINTS, laps: 2, trafficCount: 12 },
-  { id: 'coast', name: '海岸公路', difficulty: 2, controlPoints: COAST_CONTROL_POINTS, laps: 3, trafficCount: 16 },
+  {
+    id: 'desert',
+    name: '沙漠疾驰',
+    difficulty: 1,
+    controlPoints: DESERT_CONTROL_POINTS,
+    laps: 3,
+    trafficCount: 14,
+    environment: 'desert',
+  },
+  {
+    id: 'forest',
+    name: '森林穿梭',
+    difficulty: 2,
+    controlPoints: FOREST_CONTROL_POINTS,
+    laps: 2,
+    trafficCount: 12,
+    environment: 'forest',
+  },
+  {
+    id: 'coast',
+    name: '海岸公路',
+    difficulty: 2,
+    controlPoints: COAST_CONTROL_POINTS,
+    laps: 3,
+    trafficCount: 16,
+    environment: 'coast',
+  },
   {
     id: 'alpine',
     name: '山岳险道',
@@ -178,6 +237,7 @@ export const TRACK_DEFS: TrackDef[] = [
     laps: 2,
     trafficCount: 8,
     timeOfDay: 'night',
+    environment: 'alpine',
   },
 ]
 

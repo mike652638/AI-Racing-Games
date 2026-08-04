@@ -1,7 +1,7 @@
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { mulberry32 } from './scenery'
 
-export type SpriteKind = 'tree' | 'lamp'
+export type SpriteKind = 'tree' | 'lamp' | 'cactus' | 'palm' | 'snowpile'
 
 export interface Sprite {
   kind: SpriteKind
@@ -11,6 +11,14 @@ export interface Sprite {
   offset: number
   /** 世界高度（单位） */
   height: number
+  /** M17 环境树冠主色（渲染层用，环境配置驱动；缺省 fallback 内置色） */
+  treeColor?: string
+  /** M17 环境树冠亮色（两层树冠的上层） */
+  treeColorLight?: string
+  /** M17 棕榈弯曲方向：-1 左弯 / +1 右弯（确定性随机，多变化） */
+  rotation?: number
+  /** M17 整体缩放系数（沙漠远处小仙人掌用，<1 缩小）；缺省 1 */
+  scale?: number
 }
 
 const ROAD_SIDE_OFFSET = 1.4
@@ -18,6 +26,13 @@ const ROAD_SIDE_OFFSET = 1.4
 const TREE_HEIGHT = 1.2
 /** 路灯世界高度（约 2.8m） */
 const LAMP_HEIGHT = 0.8
+/** M17 环境默认：路边景物间距（世界单位） */
+const DEFAULT_SPACING = 800
+/** M17 环境默认：树出现概率 */
+const DEFAULT_TREE_RATIO = 0.7
+/** M17 环境默认：树冠主色（与旧版 drawTree 内置 #2d5a27 一致，保证 plains 零回归） */
+const DEFAULT_TREE_COLOR = '#2d5a27'
+const DEFAULT_TREE_COLOR_LIGHT = '#3a7a35'
 
 /** 极近距离树的最大绘制高度（像素，P2）：防 1/cameraDepth 投影在贴脸时产生过大精灵遮挡画面 */
 export const MAX_TREE_HEIGHT_PX = 240
@@ -25,22 +40,71 @@ export const MAX_TREE_HEIGHT_PX = 240
 export const MAX_LAMP_HEIGHT_PX = 200
 
 /** 景物像素高度 clamp（P2）：hpx 超出对应上限时截断，防止近距精灵无限放大。
- *  仅约束绘制高度，不影响投影数学（project 保持原语义，路面/车流等投影不受影响）。 */
+ *  仅约束绘制高度，不影响投影数学（project 保持原语义，路面/车流等投影不受影响）。
+ *  M17：树/仙人掌/棕榈/雪堆共用树的上限（同属"高大景物"），路灯用路灯上限。 */
 export function clampSpriteHeight(kind: SpriteKind, hpx: number): number {
-  const max = kind === 'tree' ? MAX_TREE_HEIGHT_PX : MAX_LAMP_HEIGHT_PX
+  const max = kind === 'lamp' ? MAX_LAMP_HEIGHT_PX : MAX_TREE_HEIGHT_PX
   return Math.min(hpx, max)
 }
 
-/** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing） */
-export function createRoadsideSprites(track: Segment[], seed = 1234, spacing = 800): Sprite[] {
+/** M17 环境景物配置（treeRatio/spacing/treeColor/spriteKind 由 environment.ts 提供，此处收敛为可选参保持向后兼容） */
+export interface RoadsideEnv {
+  /** 景物类型（'tree' 基准树形；desert 仙人掌、coast 棕榈、alpine 雪堆） */
+  spriteKind?: SpriteKind
+  treeRatio?: number
+  spacing?: number
+  treeColor?: string
+  treeColorLight?: string
+}
+
+/** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing；M17 支持环境驱动密度/树色/形状/旋转）。
+ *  M17 增强：palm 生成随机弯曲方向（rotation ±1）；cactus 环境（沙漠）在树位之间额外插入
+ *  间隔一半、高度减半的小仙人掌（scale 0.5），营造远处仙人掌群。 */
+export function createRoadsideSprites(
+  track: Segment[],
+  seed = 1234,
+  spacing = DEFAULT_SPACING,
+  env: RoadsideEnv = {},
+): Sprite[] {
   const rand = mulberry32(seed)
   const totalLength = track.length * SEGMENT_LENGTH
+  const treeRatio = env.treeRatio ?? DEFAULT_TREE_RATIO
+  const treeColor = env.treeColor ?? DEFAULT_TREE_COLOR
+  const treeColorLight = env.treeColorLight ?? DEFAULT_TREE_COLOR_LIGHT
+  // M17：环境决定"树位"的实际形状（desert 仙人掌 / coast 棕榈 / alpine 雪堆 / 其余树）
+  const kindAtTreeSlot: SpriteKind = env.spriteKind ?? 'tree'
+  // M17 增强：沙漠环境在相邻树位中点额外插入小仙人掌（scale 0.5，高度减半）
+  const insertSmallCactus = kindAtTreeSlot === 'cactus'
   const sprites: Sprite[] = []
   for (let z = spacing / 2; z < totalLength; z += spacing) {
-    const kind: SpriteKind = rand() < 0.7 ? 'tree' : 'lamp'
-    const height = kind === 'tree' ? TREE_HEIGHT : LAMP_HEIGHT
-    sprites.push({ kind, z, offset: -ROAD_SIDE_OFFSET, height })
-    sprites.push({ kind, z, offset: ROAD_SIDE_OFFSET, height })
+    const kind: SpriteKind = rand() < treeRatio ? kindAtTreeSlot : 'lamp'
+    const height = kind === 'lamp' ? LAMP_HEIGHT : TREE_HEIGHT
+    // 棕榈弯曲方向确定性随机（±1），其余景物无 rotation
+    const rotation = kind === 'palm' ? (rand() < 0.5 ? -1 : 1) : undefined
+    sprites.push({ kind, z, offset: -ROAD_SIDE_OFFSET, height, treeColor, treeColorLight, rotation })
+    sprites.push({ kind, z, offset: ROAD_SIDE_OFFSET, height, treeColor, treeColorLight, rotation })
+    // 沙漠小仙人掌：树位之间中点（z + spacing/2），高度减半、scale 0.5，左右各一
+    if (insertSmallCactus && z + spacing / 2 < totalLength) {
+      const smallZ = z + spacing / 2
+      sprites.push({
+        kind: 'cactus',
+        z: smallZ,
+        offset: -ROAD_SIDE_OFFSET,
+        height: TREE_HEIGHT * 0.5,
+        treeColor,
+        treeColorLight,
+        scale: 0.5,
+      })
+      sprites.push({
+        kind: 'cactus',
+        z: smallZ,
+        offset: ROAD_SIDE_OFFSET,
+        height: TREE_HEIGHT * 0.5,
+        treeColor,
+        treeColorLight,
+        scale: 0.5,
+      })
+    }
   }
   return sprites
 }
