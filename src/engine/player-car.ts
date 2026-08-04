@@ -13,7 +13,7 @@ export interface PlayerCarOptions {
 }
 
 /** 玩家车高度占屏幕高度比例（任务 P0：15-20%） */
-export const PLAYER_CAR_HEIGHT_RATIO = 0.17
+export const PLAYER_CAR_HEIGHT_RATIO = 0.19
 /** 车身宽高比（宽 / 高） */
 const PLAYER_CAR_ASPECT = 0.82
 /** 车底距屏幕底部的空隙（占屏幕高度比例，位置"底部中央偏下"） */
@@ -21,7 +21,7 @@ const PLAYER_CAR_BOTTOM_GAP_RATIO = 0.05
 /** 最大倾斜角（度，任务：±5° 左右） */
 const PLAYER_CAR_MAX_TILT_DEG = 5
 /** 横向偏移映射系数（世界单位 → 像素：laneOffset × height × 系数） */
-const LANE_OFFSET_PX_FACTOR = 0.22
+const LANE_OFFSET_PX_FACTOR = 0.2
 /** 车身主色（红色，参考 road-geometry 路缘配色 #d03030） */
 const BODY_COLOR = '#d8382f'
 /** 车身下缘暗部（底盘阴影） */
