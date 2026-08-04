@@ -203,3 +203,157 @@ export class BoostSound {
     osc.stop(t + 0.26)
   }
 }
+
+// ============ M15（M15）：漂移摩擦胎声与轻量胎噪（WebAudio 程序化合成） ============
+
+/** 归一化辅助：钳制到 [0, 1]（speedRatio 可被 BOOST 推到 1.15，转向输入也可能越界） */
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v))
+}
+
+/** 漂移胎声：带通滤波器中心频率下限（Hz）——低速漂移的摩擦嘶声基调 */
+export const DRIFT_FREQ_MIN = 700
+/** 漂移胎声：带通滤波器中心频率上限（Hz）——满速漂移更尖锐 */
+export const DRIFT_FREQ_MAX = 2000
+/** 漂移胎声增益上限（注入 sfxGain 前的最大幅度） */
+export const DRIFT_GAIN_MAX = 0.3
+/** 湿滑路面：胎声中心频率 ×0.75（水膜摩擦声变闷） */
+export const DRIFT_WET_FREQ_MULT = 0.75
+/** 湿滑路面：胎声增益 ×0.8（被雨声/水声压低） */
+export const DRIFT_WET_GAIN_MULT = 0.8
+/** 胎噪：低通滤波器截止频率（Hz）——只保留低频滚动噪声 */
+export const TIRE_FILTER_FREQ = 1500
+/** 胎噪增益上限（极小值，正常行驶时绝不喧宾夺主） */
+export const TIRE_GAIN_MAX = 0.02
+
+export interface DriftSoundParams {
+  /** 带通滤波器中心频率（Hz） */
+  frequency: number
+  /** 增益（注入 sfxGain 前的实际幅度） */
+  gain: number
+}
+
+/** 漂移摩擦胎声参数（纯函数，可单测）：速度主（0.6）转向辅（0.4）合成强度，湿滑降低频率/增益 */
+export function computeDriftSoundParams(speedRatio: number, steerAbs: number, wet = false): DriftSoundParams {
+  const ratio = clamp01(speedRatio)
+  const steer = clamp01(steerAbs)
+  const intensity = Math.min(1, 0.6 * ratio + 0.4 * steer)
+  return {
+    frequency: (DRIFT_FREQ_MIN + (DRIFT_FREQ_MAX - DRIFT_FREQ_MIN) * ratio) * (wet ? DRIFT_WET_FREQ_MULT : 1),
+    gain: DRIFT_GAIN_MAX * intensity * (wet ? DRIFT_WET_GAIN_MULT : 1),
+  }
+}
+
+/** 胎噪电平（纯函数，可单测）：返回最终增益（0..TIRE_GAIN_MAX）；速度主（0.6）转向次（0.3）湿滑加成（+0.1） */
+export function computeTireSoundParams(speedRatio: number, steerAbs: number, wet = false): number {
+  const ratio = clamp01(speedRatio)
+  const steer = clamp01(steerAbs)
+  const level = Math.min(1, 0.6 * ratio + 0.3 * steer + (wet ? 0.1 : 0))
+  return TIRE_GAIN_MAX * level
+}
+
+/** 漂移摩擦胎声：2s 白噪声循环 → bandpass（速度越高中心频率越高）→ gain ≤0.3 → output。
+ *  仿 RainSound 的 start/stop（幂等、防刷屏重建）+ EngineSound 的 setSpeedRatio 调制模式。 */
+export class DriftSound {
+  private ctx: AudioContext
+  private filter: BiquadFilterNode
+  private gain: GainNode
+  private buffer: AudioBuffer
+  private source: AudioBufferSourceNode | null = null
+  private started = false
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.filter = ctx.createBiquadFilter()
+    this.filter.type = 'bandpass'
+    this.filter.frequency.value = DRIFT_FREQ_MIN
+    this.filter.Q.value = 2
+    this.gain = ctx.createGain()
+    this.gain.gain.value = 0
+    this.filter.connect(this.gain)
+    this.gain.connect(output)
+    // 2 秒白噪声 buffer（循环播放，模拟轮胎摩擦嘶声）
+    const length = Math.floor(ctx.sampleRate * 2)
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+    this.buffer = buffer
+  }
+
+  /** 是否正在播放（debug hook / 冒烟断言用） */
+  isPlaying(): boolean {
+    return this.started
+  }
+
+  /** 启动漂移胎声（幂等）：resume ctx + bufferSource 惰性创建；音量由 setIntensity 调制 */
+  start(): void {
+    if (this.started) return
+    this.started = true
+    this.ctx.resume()
+    const source = this.ctx.createBufferSource()
+    source.buffer = this.buffer
+    source.loop = true
+    source.connect(this.filter)
+    source.start()
+    this.source = source
+  }
+
+  /** 停止漂移胎声（幂等）：增益渐出，稍后停止源避免硬切爆音 */
+  stop(): void {
+    if (!this.started) return
+    this.started = false
+    this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05)
+    this.source?.stop(this.ctx.currentTime + 0.2)
+    this.source = null
+  }
+
+  /** 随车速比/转向/湿滑调制胎声：setTargetAtTime 平滑到 computeDriftSoundParams 目标 */
+  setIntensity(speedRatio: number, steerAbs: number, wet = false): void {
+    const { frequency, gain } = computeDriftSoundParams(speedRatio, steerAbs, wet)
+    const now = this.ctx.currentTime
+    this.filter.frequency.setTargetAtTime(frequency, now, 0.05)
+    this.gain.gain.setTargetAtTime(gain, now, 0.05)
+  }
+}
+
+/** 轻量胎噪：2s 白噪声循环 → lowpass 1500Hz → gain ≤0.02 → output。
+ *  构造即启动循环源（EngineSound 模式），gain 0 静音，setLevel 随速度/转向/湿滑调制。 */
+export class TireSound {
+  private ctx: AudioContext
+  private filter: BiquadFilterNode
+  private gain: GainNode
+  private buffer: AudioBuffer
+  private source: AudioBufferSourceNode
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.filter = ctx.createBiquadFilter()
+    this.filter.type = 'lowpass'
+    this.filter.frequency.value = TIRE_FILTER_FREQ
+    this.gain = ctx.createGain()
+    this.gain.gain.value = 0
+    this.filter.connect(this.gain)
+    this.gain.connect(output)
+    // 2 秒白噪声 buffer（循环播放，模拟轮胎滚动噪声）
+    const length = Math.floor(ctx.sampleRate * 2)
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+    this.buffer = buffer
+    // 构造即启动（EngineSound 模式）：gain 0 静音，setLevel 调制音量
+    this.source = ctx.createBufferSource()
+    this.source.buffer = this.buffer
+    this.source.loop = true
+    this.source.connect(this.filter)
+    this.source.start()
+  }
+
+  /** 随车速比/转向/湿滑调制胎噪电平：setTargetAtTime 平滑到 computeTireSoundParams 目标（封顶 TIRE_GAIN_MAX） */
+  setLevel(speedRatio: number, steerAbs: number, wet = false): void {
+    this.gain.gain.setTargetAtTime(computeTireSoundParams(speedRatio, steerAbs, wet), this.ctx.currentTime, 0.05)
+  }
+}

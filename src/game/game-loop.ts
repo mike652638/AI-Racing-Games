@@ -2,7 +2,7 @@ import { Renderer, type BoostParticle } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
 import { TRACK_DEFS } from '../engine/tracks'
 import { createCarConfig, type CarConfig } from '../physics/car'
-import { BoostSound, CollisionSound, EngineSound, RainSound } from '../audio/engine'
+import { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
 import { type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
@@ -115,6 +115,10 @@ export class GameLoop {
   private collisionSound: CollisionSound | null = null
   /** BOOST 氮气音效（音频惰性创建时实例化，boost 激活边沿触发 play） */
   private boostSound: BoostSound | null = null
+  /** 漂移摩擦胎声（M15：音频惰性创建时实例化，漂移激活 start / 非激活 stop，随车速/转向/湿滑调制） */
+  private driftSound: DriftSound | null = null
+  /** 轻量胎噪（M15：音频惰性创建时实例化，常驻极低音量，随车速/转向/湿滑调制） */
+  private tireSound: TireSound | null = null
   /** 上一帧 boost 是否激活（边沿检测：本帧激活且上帧未激活 → boostSound.play()） */
   private boostActive = false
   /** BOOST 尾焰粒子（H2：P1 激活期间每帧至多 1 粒，存活 0.6s；经 viewFor 传入 renderer 投影） */
@@ -587,6 +591,9 @@ export class GameLoop {
       this.collisionSound = new CollisionSound(ctx, sfxGain)
       // H2（H2）：BOOST 氮气音效（走音效分轨）
       this.boostSound = new BoostSound(ctx, sfxGain)
+      // M15（M15）：漂移摩擦胎声与轻量胎噪（走音效分轨，随 sfxVolume 与主音量调节；默认启用）
+      this.driftSound = new DriftSound(ctx, sfxGain)
+      this.tireSound = new TireSound(ctx, sfxGain)
     }
     this.applyPhase(
       nextPhase(
@@ -678,6 +685,9 @@ export class GameLoop {
       rainSound: this.rainSound,
       boostSound: this.boostSound,
       collisionSound: this.collisionSound,
+      // M15（M15）：漂移摩擦胎声与胎噪注入帧块驱动（未惰性创建为 null 时 updateFrame 安全 no-op）
+      driftSound: this.driftSound,
+      tireSound: this.tireSound,
       input: this.input,
       joystick: this.joystick,
       onFinish: () => this.applyPhase(PHASE_FINISHED),

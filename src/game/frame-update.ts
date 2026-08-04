@@ -2,7 +2,7 @@ import { updateTraffic } from '../engine/traffic'
 import { WEATHER_CYCLE_SECONDS } from '../engine/lighting'
 import type { BoostParticle } from '../engine/renderer'
 import type { CarConfig, CarInput } from '../physics/car'
-import type { RainSound, BoostSound, CollisionSound } from '../audio/engine'
+import type { RainSound, BoostSound, CollisionSound, DriftSound, TireSound } from '../audio/engine'
 import { updateCollisions } from './collision'
 import { CHALLENGE_SECONDS } from './constants'
 import { updateBoostCharge } from './frame-pure'
@@ -48,6 +48,10 @@ export interface FrameUpdateContext {
   boostSound: BoostSound | null
   /** 碰撞冲击音（collisionCount 增长时 play，强度 = 双玩家速度比取较快者） */
   collisionSound: CollisionSound | null
+  /** 漂移摩擦胎声（M15 可选注入：漂移激活 start / 非激活 stop，setIntensity 随车速/转向/湿滑调制；音频未创建时 null no-op） */
+  driftSound?: DriftSound | null
+  /** 轻量胎噪（M15 可选注入：常驻极低音量，setLevel 随车速/转向/湿滑调制；音频未创建时 null no-op） */
+  tireSound?: TireSound | null
   /** 键盘输入源（GameLoop 注入；getP1Input 为 WASD、getP2Input 为方向键） */
   input: { getP1Input(): CarInput; getP2Input(): CarInput }
   /** 触屏摇杆输入源（active 时优先于键盘） */
@@ -85,6 +89,9 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
 
   if (ctx.phase !== PHASE_RACING) {
     // 非比赛阶段不执行更新段（与旧 frame 的 if (this.phase === PHASE_RACING) 一致）
+    // M15（M15）：暂停/结算/菜单时静音漂移胎声与胎噪（音频未创建为 null/undefined 时安全 no-op）
+    ctx.driftSound?.stop()
+    ctx.tireSound?.setLevel(0, 0, false)
     return {
       shouldRender: true,
       lastActivePlayer: ctx.lastActivePlayer,
@@ -227,6 +234,26 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.collisionSound?.play(impact)
     lastCollisionCount = race.collisionCount
   }
+
+  // M15（M15）：漂移摩擦胎声与轻量胎噪——漂移激活期间播放胎声（随车速/转向/湿滑调制），
+  // 胎噪常驻极低音量（速度越大越明显、转向加强、湿滑轻微加成）；均走 sfxGain 分轨。
+  // 置于玩家物理更新之后（driftState 为本帧最新）；音频未创建（null/undefined）时安全 no-op
+  const driftActive = race.player1.driftState.active || race.player2.driftState.active
+  if (driftActive) {
+    ctx.driftSound?.start()
+    // 强度取双玩家车速比与转向绝对值最大值（分屏双人漂移取较剧烈一方；单屏 player2 静止自然取 P1）
+    const speedRatio = Math.max(race.player1.carState.speed, race.player2.carState.speed) / carConfig.maxSpeed
+    const steerAbs = Math.max(Math.abs(effInput1.steer), Math.abs(effInput2.steer))
+    ctx.driftSound?.setIntensity(speedRatio, steerAbs, wet)
+  } else {
+    ctx.driftSound?.stop()
+  }
+  // 胎噪以 P1 车速/转向驱动（单屏语义即 P1；音量极小不喧宾夺主）
+  ctx.tireSound?.setLevel(
+    race.player1.carState.speed / carConfig.maxSpeed,
+    Math.abs(effInput1.steer),
+    wet,
+  )
 
   // 完赛判定（mode 统一：挑战限时优先 + 正常圈数判定；语义与旧两个 if 完全一致——
   // 任一命中即触发 finish 并跳过本帧后续渲染）
