@@ -26,6 +26,8 @@
 11. `2026-08-03-night-match-touch-audio.md`：夜晚/对局/触屏/音效扩展（M11）：Task F1 夜晚赛道 + 车头灯、F2 分屏对局榜 TOP10、F3 触屏暂停入口、F4 雨声/碰撞音效、F5 drawRain 离屏缓存、F6 漂移得分 MAX 标记、F7 全量验证与冒烟、F8 codemap 刷新。
 12. `2026-08-03-challenge-boost-wet-audio.md`：挑战/氮气/雨天/工程优化（M12）：Task G1 漂移挑战模式、G2 车灯转向、G3 雨天物理、G4 BOOST 氮气、G5 lapRef 复用、G6 MusicPlayer 纯函数化、G7 音量分级、G8 全量验证与冒烟、G9 codemap 刷新。
 13. `2026-08-03-challenge-bonus-particles-matrix.md`：挑战加成/BOOST 粒子/尾灯/排行榜权重/回归矩阵（M13）：Task H1 挑战模式天气/难度加成计分、H2 BOOST 音效与视觉粒子、H3 车流夜间尾灯、H4 漂移连击排行榜权重、H5 updatePlayerFrame 返回 lastLap 消除桥接、H6 CollisionSound 强度分级、H7 结算面板可滚动、H8 run-bot 多赛道矩阵回归、H9 全量验证与冒烟、H10 codemap 刷新。
+14. `2026-08-03-performance-optimization-plan.md`：性能优化（M14）：Task 1-10 覆盖三层策略——道路离屏缓存（road-strip.ts 曲率段合并 + 离屏预渲染 + TrackContext.roadStrips）、每帧分配削减（spritesInRangeIndexed 复用数组 / viewFor 缓存对象 / fillStyle 缓存）、分屏与性能模式降级（PerformanceConfig 三档 + `?perf=1`）；附 `2026-08-03-performance-optimization-task8-report.md`（Task 8 实施报告）。
+15. `2026-08-04-improvements.md`：已识别改进实施（M15）：Task A-F 六条 lane——渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分与 pauseTitle、死代码清理与文档同步、工程化配置（ESLint/Prettier/husky/CI/.gitignore）。
 
 ## Integration
 
@@ -50,3 +52,6 @@
 | `2026-08-03-night-match-touch-audio.md` | M11 扩展：夜晚赛道与车头灯、分屏对局 TOP10、触屏暂停入口、雨声/碰撞音效、drawRain 离屏缓存、漂移得分 MAX 标记 |
 | `2026-08-03-challenge-boost-wet-audio.md` | M12 扩展：漂移挑战模式、车灯转向、雨天物理、BOOST 氮气、lapRef 复用、MusicPlayer 纯函数化、音量分级 |
 | `2026-08-03-challenge-bonus-particles-matrix.md` | M13 扩展：挑战模式天气/难度加成计分、BOOST 音效与视觉粒子、车流夜间尾灯、漂移连击排行榜权重、updatePlayerFrame 返回 lastLap、CollisionSound 强度分级、结算面板可滚动、run-bot 9 赛道矩阵回归 |
+| `2026-08-03-performance-optimization-plan.md` | M14 性能优化：道路离屏缓存（road-strip.ts）、每帧分配削减、分屏/性能模式降级（Task 1-10） |
+| `2026-08-03-performance-optimization-task8-report.md` | M14 Task 8 实施报告：PerformanceConfig 三档与 `?perf` 查询参数落地 |
+| `2026-08-04-improvements.md` | M15 已识别改进实施：渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分与 pauseTitle、死代码清理与文档同步、工程化配置（Task A-F） |
