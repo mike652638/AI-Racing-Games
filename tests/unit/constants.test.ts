@@ -5,6 +5,7 @@ import {
   BOOST_DRAIN_RATE,
   BOOST_MAX_SPEED_MULT,
   CHALLENGE_SECONDS,
+  CHALLENGE_TARGET_SCORE,
   COLLISION_COOLDOWN,
   COLLISION_SPEED_FACTOR,
   DRIFT_CHARGE_THRESHOLD,
@@ -28,8 +29,9 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
     expect(DRIFT_SCORE_MAX).toBe(99999)
   })
 
-  it('挑战模式常量值与约定一致（G1：限时 60 秒刷分）', () => {
+  it('挑战模式常量值与约定一致（G1：限时 60 秒刷分；M15：目标 5000 分）', () => {
     expect(CHALLENGE_SECONDS).toBe(60)
+    expect(CHALLENGE_TARGET_SCORE).toBe(5000)
   })
 
   it('BOOST 氮气常量值与约定一致（G4）', () => {

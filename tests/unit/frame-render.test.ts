@@ -80,6 +80,7 @@ function makeCtx(over: Partial<FrameRenderContext> = {}): FrameRenderContext {
     bestTime2: null,
     hotseatMode: false,
     hotseatPlayer: 1,
+    boostActive: false,
     ...over,
   }
 }
@@ -99,12 +100,7 @@ describe('菜单预览渲染分支', () => {
     expect(renderer.drawDivider).not.toHaveBeenCalled()
     expect(ctx.previewCameraZ[0]).toBe(500)
     expect(ctx.previewCameraZ[1]).toBe(500)
-    const [cameraZ, smoke, timeSec, view] = renderer.render.mock.calls[0] as [
-      number,
-      unknown[],
-      number,
-      RenderView,
-    ]
+    const [cameraZ, smoke, timeSec, view] = renderer.render.mock.calls[0] as [number, unknown[], number, RenderView]
     expect(cameraZ).toBe(500)
     expect(smoke).toEqual([])
     expect(timeSec).toBe(0)
@@ -149,12 +145,7 @@ describe('比赛渲染分支', () => {
     expect(renderer.render).toHaveBeenCalledTimes(1)
     expect(renderer.renderRegion).not.toHaveBeenCalled()
     expect(renderer.setCameraX).toHaveBeenCalledWith(0.5)
-    const [cameraZ, smoke, timeSec, view] = renderer.render.mock.calls[0] as [
-      number,
-      unknown[],
-      number,
-      RenderView,
-    ]
+    const [cameraZ, smoke, timeSec, view] = renderer.render.mock.calls[0] as [number, unknown[], number, RenderView]
     expect(cameraZ).toBe(123)
     expect(smoke).toBe(ctx.race.player1.driftState.smoke)
     expect(timeSec).toBe(4.5)

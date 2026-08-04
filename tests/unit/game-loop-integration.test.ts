@@ -22,6 +22,8 @@ interface StubElement {
     remove: ReturnType<typeof vi.fn>
   }
   appendChild: ReturnType<typeof vi.fn>
+  /** m4：兼容 buildTrackOptions 中 querySelector('.track-label') */
+  querySelector: (selector: string) => StubElement | null
   addEventListener: (type: string, cb: (e: unknown) => void) => void
   setPointerCapture: ReturnType<typeof vi.fn>
   clientWidth: number
@@ -42,6 +44,8 @@ function createElementStub(): StubElement {
     style: {},
     classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn() },
     appendChild: vi.fn(),
+    // m4：兼容 buildTrackOptions 中 querySelector('.track-label') 的兜底
+    querySelector: () => null,
     addEventListener: (type: string, cb: (e: unknown) => void): void => {
       const arr = listeners.get(type) ?? []
       arr.push(cb)

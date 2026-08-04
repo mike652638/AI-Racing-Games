@@ -20,9 +20,15 @@ interface StubElement {
   hidden: boolean
   textContent: string
   style: Record<string, string>
+  classList: DOMTokenList
 }
 function makeElement(): StubElement {
-  return { hidden: false, textContent: '', style: {} }
+  return {
+    hidden: false,
+    textContent: '',
+    style: {},
+    classList: { toggle: vi.fn() } as unknown as DOMTokenList,
+  }
 }
 
 /** document.getElementById 返回指定元素（缺失 id 返回 null）；updateFrame 惰性获取依赖 */
@@ -92,7 +98,10 @@ describe('非比赛阶段跳过更新段', () => {
     stubDocument()
     const mode = makeStubMode()
     const onFinish = vi.fn()
-    const r = updateFrame(DT, makeCtx({ phase: PHASE_MENU, mode, onFinish, lastActivePlayer: 2, boostActive: true, lastCollisionCount: 5 }))
+    const r = updateFrame(
+      DT,
+      makeCtx({ phase: PHASE_MENU, mode, onFinish, lastActivePlayer: 2, boostActive: true, lastCollisionCount: 5 }),
+    )
     expect(r.shouldRender).toBe(true)
     expect(r.lastActivePlayer).toBe(2)
     expect(r.boostActive).toBe(true)
@@ -245,7 +254,14 @@ describe('惰性 DOM 缓存与 HUD 副作用', () => {
     stubDocument()
     const timer = makeElement()
     const score = makeElement()
-    const r = updateFrame(DT, makeCtx({ mode: CHALLENGE, challengeTimer: timer as unknown as HTMLDivElement, challengeScore: score as unknown as HTMLDivElement }))
+    const r = updateFrame(
+      DT,
+      makeCtx({
+        mode: CHALLENGE,
+        challengeTimer: timer as unknown as HTMLDivElement,
+        challengeScore: score as unknown as HTMLDivElement,
+      }),
+    )
     expect(r.challengeTimer).toBe(timer)
     expect(r.challengeScore).toBe(score)
   })

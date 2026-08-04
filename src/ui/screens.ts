@@ -13,6 +13,7 @@ import {
   saveBestTimeFor,
   type WinStats,
 } from './save'
+import { CHALLENGE_TARGET_SCORE } from '../game/constants'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
 
 /** 屏幕 DOM 引用：启动/结算/暂停面板及结算文本（P2 行仅分屏时存在） */
@@ -42,6 +43,10 @@ export interface ScreenElements {
   pauseRestart?: HTMLButtonElement
   /** 暂停菜单继续按钮（#pause-resume，click 恢复比赛；GameLoop 构造器绑定） */
   pauseResume?: HTMLButtonElement
+  /** 暂停菜单退出按钮（#pause-quit-btn，click 回菜单退出当前对局；M5） */
+  pauseQuit?: HTMLButtonElement
+  /** 结算屏返回主菜单按钮（#finish-restart-btn，click 回菜单；M19） */
+  finishRestartBtn?: HTMLButtonElement
   /** 暂停菜单音乐分轨音量 slider（#pause-music-volume，input range 0-100；G7） */
   pauseMusicVolume?: HTMLInputElement
   /** 暂停菜单音效分轨音量 slider（#pause-sfx-volume，input range 0-100；G7） */
@@ -116,7 +121,10 @@ function fillFinishPanel(
     const top = loadDriftTop()
     const idx = top.findIndex((e) => e.score === score)
     elements.finishBest.textContent = idx >= 0 ? `漂移榜第 ${idx + 1} 名` : ''
-    elements.finishScore.textContent = `挑战漂移得分 ${score}`
+    // M15：挑战模式结算展示达标/未达标（目标 5000 分）
+    const target = CHALLENGE_TARGET_SCORE
+    const reached = score >= target
+    elements.finishScore.textContent = `挑战漂移得分 ${score} · ${reached ? '达标' : '未达标'}（目标 ${target}）`
     if (race.player1.driftState.score > 0) {
       const isDriftRecord = saveBestDriftScore(score, trackId0)
       const bestDriftScore = loadBestDriftScore(trackId0)

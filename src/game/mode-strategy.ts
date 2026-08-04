@@ -76,11 +76,7 @@ export interface SelectTrackArgs {
  * merge 为 false（分屏）时 input1 = P1、input2 = P2（保持独立）。摇杆 active 时优先取摇杆输入。
  */
 function routeInputs(ctx: InputRoutingContext, merge: boolean): { input1: CarInput; input2: CarInput } {
-  const input1 = ctx.joystickActive
-    ? ctx.joystickInput
-    : merge
-      ? mergeCarInputs(ctx.p1Input, ctx.p2Input)
-      : ctx.p1Input
+  const input1 = ctx.joystickActive ? ctx.joystickInput : merge ? mergeCarInputs(ctx.p1Input, ctx.p2Input) : ctx.p1Input
   const input2 = merge ? { throttle: 0, brake: false, steer: 0 } : ctx.p2Input
   return { input1, input2 }
 }
@@ -143,11 +139,9 @@ function updateCurrentHotseatPlayer(args: PlayerUpdateArgs, hotseatPlayer: 1 | 2
  * （单屏/挑战非双人，P2 恒未完赛）。
  */
 function finishByLaps(race: RaceState, trackManager: TrackManager, includeP2: boolean): boolean {
-  const finishedP1 =
-    lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
+  const finishedP1 = lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
   const finishedP2 =
-    includeP2 &&
-    lapFromZ(race.player2.cameraZ, trackManager.getLapLength(1)) > trackManager.getTotalLaps(1)
+    includeP2 && lapFromZ(race.player2.cameraZ, trackManager.getLapLength(1)) > trackManager.getTotalLaps(1)
   return finishedP1 || finishedP2
 }
 
@@ -232,7 +226,7 @@ const HOTSEAT: ModeStrategy = {
   splitMode: false,
   hotseatMode: true,
   challengeMode: false,
-  menuHint: 'P1 先跑 · 完成按回车交棒 P2 · 1-9 选赛道 · 按任意键开始',
+  menuHint: 'P1 先跑 · 完成按回车交棒 P2 · 双人同赛道 · 1-9 选赛道 · 按任意键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
   },
@@ -261,7 +255,7 @@ const CHALLENGE: ModeStrategy = {
   splitMode: false,
   hotseatMode: false,
   challengeMode: true,
-  menuHint: '60 秒限时刷分 · WASD / 方向键驾驶 · 按任意键开始',
+  menuHint: '60 秒限时刷分 · 目标 5000 · WASD / 方向键驾驶 · 按任意键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
   },

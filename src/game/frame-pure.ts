@@ -126,7 +126,12 @@ const _viewCache: RenderView = {
  * 预计算在 TrackContext 创建时完成）。Task B6：复用模块级 _viewCache 赋值各字段后
  * 返回同一引用（两次调用之间渲染已完成，覆盖安全；导出供单测验证引用复用）。
  */
-export function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): RenderView {
+export function viewFor(
+  ctx: TrackContext,
+  boostParticles?: BoostParticle[],
+  speedRatio = 0,
+  boosting = false,
+): RenderView {
   _viewCache.track = ctx.segments
   _viewCache.curvePrefixSum = ctx.curvePrefixSum
   _viewCache.spriteIndex = ctx.spriteIndex
@@ -134,6 +139,9 @@ export function viewFor(ctx: TrackContext, boostParticles?: BoostParticle[]): Re
   _viewCache.night = ctx.def.timeOfDay === 'night'
   // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
   _viewCache.boostParticles = boostParticles
+  // M8：速度线与 BOOST 金色 vignette 参数
+  _viewCache.speedRatio = speedRatio
+  _viewCache.boosting = boosting
   return _viewCache
 }
 

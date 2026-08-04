@@ -15,6 +15,8 @@ export const DRIFT_SCORE_MAX = 99999
 
 /** 漂移挑战模式限时时长（秒，?challenge=1 时按此倒计时收束对局） */
 export const CHALLENGE_SECONDS = 60
+/** 漂移挑战模式目标分数（?challenge=1 时结算展示达标/未达标；M15） */
+export const CHALLENGE_TARGET_SCORE = 5000
 
 /** BOOST 氮气加速的加速度倍率（相对 config.acceleration，G4） */
 export const BOOST_ACCEL_MULT = 0.6

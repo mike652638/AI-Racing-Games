@@ -34,6 +34,8 @@ export interface FrameRenderContext {
   hotseatMode: boolean
   /** 热座当前回合玩家（updateHud 玩家标签与漂移指示数据源；非热座忽略） */
   hotseatPlayer: 1 | 2
+  /** M8：BOOST 激活状态（任一玩家），用于渲染金色 vignette */
+  boostActive: boolean
 }
 
 /** 每帧渲染段的结果：写回 GameLoop 的小地图引用（可能已重建） */
@@ -51,6 +53,12 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
   const { renderer, race, trackManager } = ctx
   const w = window.innerWidth
   let minimap = ctx.minimap
+
+  // M8：速度与 BOOST 状态用于速度线 / 金色 vignette
+  const maxSpeed = ctx.carConfig.maxSpeed
+  const p1SpeedRatio = race.player1.carState.speed / maxSpeed
+  const p2SpeedRatio = race.player2.carState.speed / maxSpeed
+  const boosting = ctx.boostActive
 
   if (ctx.phase === PHASE_MENU) {
     // 双预览相机按各自世界圈长推进（分屏时 P1/P2 预览独立滚动）
@@ -74,7 +82,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player1.driftState.smoke,
       race.player1.raceTime,
-      viewFor(race.tracks[0], ctx.boostParticles),
+      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting),
     )
     renderer.setCameraX(race.player2.carState.position)
     renderer.renderRegion(
@@ -83,7 +91,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player2.driftState.smoke,
       race.player2.raceTime,
-      viewFor(race.tracks[1], ctx.boostParticles),
+      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting),
     )
     // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
     // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
@@ -94,7 +102,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       race.player1.cameraZ,
       race.player1.driftState.smoke,
       race.player1.raceTime,
-      viewFor(race.tracks[0], ctx.boostParticles),
+      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting),
     )
   }
 

@@ -324,6 +324,52 @@ describe('Renderer 状态切换', () => {
     expect(boostIncr).toBeGreaterThan(baseIncr)
   })
 
+  it('M8 速度线：speedRatio=1 时 stroke 增量高于低速（0.7 阈值以下不绘制）', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[0])
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+      speedRatio: 0.5,
+    }
+    const fastView: RenderView = { ...baseView, speedRatio: 1 }
+    renderer.render(0, [], 0, baseView)
+    const before = callCount(canvas.__ctx.__calls, 'stroke')
+    renderer.render(0, [], 0, fastView)
+    const afterFast = callCount(canvas.__ctx.__calls, 'stroke')
+    renderer.render(0, [], 0, baseView)
+    const afterBase = callCount(canvas.__ctx.__calls, 'stroke')
+    const fastIncr = afterFast - before
+    const baseIncr = afterBase - afterFast
+    expect(fastIncr).toBeGreaterThan(baseIncr)
+  })
+
+  it('M8 BOOST 金色 vignette：boosting=true 时 createRadialGradient 与 fillRect 增量高于未激活', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[0])
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+      boosting: false,
+    }
+    const boostView: RenderView = { ...baseView, boosting: true }
+    renderer.render(0, [], 0, baseView)
+    const beforeGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const beforeRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, boostView)
+    const afterBoostGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const afterBoostRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    renderer.render(0, [], 0, baseView)
+    const afterBaseGrad = callCount(canvas.__ctx.__calls, 'createRadialGradient')
+    const afterBaseRect = callCount(canvas.__ctx.__calls, 'fillRect')
+    expect(afterBoostGrad - beforeGrad).toBeGreaterThan(afterBaseGrad - afterBoostGrad)
+    expect(afterBoostRect - beforeRect).toBeGreaterThan(afterBaseRect - afterBoostRect)
+  })
+
   it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4])

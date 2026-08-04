@@ -177,6 +177,10 @@ export class GameLoop {
     const p2TrackName = $('p2-track-name') as HTMLSpanElement
     p2TrackName.hidden = !this.mode.splitMode
     this.hudElements = this.collectHudElements($, hud2Container)
+    // M11：分屏模式下暂停按钮移至底部中央，避免遮挡右下虚拟摇杆
+    if (this.mode.splitMode && this.hudElements.pauseBtn) {
+      this.hudElements.pauseBtn.classList.add('split-center')
+    }
     this.screenElements = this.collectScreenElements($)
     // P6（P6）：暂停菜单控件事件——音量 slider input → clamp+gain 同步+持久化；按钮 click → 阶段切换
     // （Task D：闭包内联 volume.ts 纯函数，masterGain 未惰性创建时仅 clamp；元素缺失守卫式绑定）
@@ -268,9 +272,11 @@ export class GameLoop {
       pauseVolume: $('pause-volume') as HTMLInputElement,
       pauseRestart: $('pause-restart') as HTMLButtonElement,
       pauseResume: $('pause-resume') as HTMLButtonElement,
+      pauseQuit: $('pause-quit-btn') as HTMLButtonElement,
       pauseMusicVolume: $('pause-music-volume') as HTMLInputElement,
       pauseSfxVolume: $('pause-sfx-volume') as HTMLInputElement,
       pauseTitle: $('pause-title') as HTMLHeadingElement,
+      finishRestartBtn: $('finish-restart-btn') as HTMLButtonElement,
     }
   }
 
@@ -299,6 +305,9 @@ export class GameLoop {
       (v) => (this.sfxVolume = v),
     )
     this.bindPhaseButton(this.screenElements.pauseRestart, () => this.applyPhase(PHASE_MENU))
+    this.bindPhaseButton(this.screenElements.pauseQuit, () => this.applyPhase(PHASE_MENU))
+    // M19：结算屏返回主菜单按钮（触屏/鼠标可用）
+    this.bindPhaseButton(this.screenElements.finishRestartBtn, () => this.applyPhase(PHASE_MENU))
     // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
     this.bindPhaseButton(this.hudElements.pauseBtn, () => this.applyPhase(togglePause(this.phase)))
     this.bindPhaseButton(this.screenElements.pauseResume, () => this.applyPhase(togglePause(this.phase)))
@@ -309,8 +318,11 @@ export class GameLoop {
     const trackOptions = Array.from({ length: TRACK_DEFS.length }, (_, i) => $(`track-option-${i}`) as HTMLDivElement)
     trackOptions.forEach((option, i) => {
       const def = TRACK_DEFS[i]
-      // 按钮文本：序号 + 名称 + 难度星级（★×difficulty + ☆×(3-difficulty)，覆盖 index.html 初始纯文本）
-      option.textContent = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
+      // m4：按钮文本写入 .track-label，避免清空内嵌 SVG 图标
+      const label = option.querySelector('.track-label')
+      const text = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
+      if (label) label.textContent = text
+      else option.textContent = text
       // 菜单点击选赛道（触屏/鼠标均可）：等价于键盘 1-9；热座双人同步 P2 世界
       option.addEventListener('click', () => {
         if (this.phase !== PHASE_MENU) return
@@ -434,7 +446,11 @@ export class GameLoop {
       // 配色类与 HUD P1/P2 标签风格一致（p1/p2 class，见 hud.ts hudPlayerTag）
       const pauseTitle = this.screenElements.pauseTitle
       if (pauseTitle) {
-        const pausedWho = this.mode.splitMode ? this.lastActivePlayer : this.mode.hotseatMode ? this.hotseatPlayer : null
+        const pausedWho = this.mode.splitMode
+          ? this.lastActivePlayer
+          : this.mode.hotseatMode
+            ? this.hotseatPlayer
+            : null
         if (pausedWho !== null) {
           pauseTitle.textContent = pausedWho === 2 ? 'P2 已暂停' : 'P1 已暂停'
           pauseTitle.classList.toggle('p1', pausedWho === 1)
@@ -719,6 +735,7 @@ export class GameLoop {
       bestTime2: this.bestTime2,
       hotseatMode: this.mode.hotseatMode,
       hotseatPlayer: this.hotseatPlayer,
+      boostActive: this.boostActive,
     })
     this.minimap = rr.minimap
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)

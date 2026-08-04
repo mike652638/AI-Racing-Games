@@ -120,7 +120,10 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.challengeTimer ??= document.getElementById('challenge-timer') as HTMLDivElement | null
     if (ctx.challengeTimer) {
       ctx.challengeTimer.hidden = false
-      ctx.challengeTimer.textContent = `剩余 ${Math.max(0, CHALLENGE_SECONDS - race.player1.raceTime).toFixed(1)}s`
+      const left = Math.max(0, CHALLENGE_SECONDS - race.player1.raceTime)
+      ctx.challengeTimer.textContent = `剩余 ${left.toFixed(1)}s`
+      // m17：剩余 10 秒内触发紧急闪烁动画
+      ctx.challengeTimer.classList.toggle('urgent', left <= 10)
     }
     // 挑战模式实时得分——与倒计时同生命周期，显示当前漂移得分（整数）
     ctx.challengeScore ??= document.getElementById('challenge-score') as HTMLDivElement | null
@@ -158,20 +161,10 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
 
   // G4（G4）：BOOST 蓄力/消耗——漂移激活蓄力、按键（Space/Enter）且 charge>0 时消耗并激活；
   // 并入 boost 字段后传给 updatePlayerFrame（触屏 input.boost 恒 false 不受影响）
-  const boost1 = updateBoostCharge(
-    race.player1.boostCharge,
-    dt,
-    input1.boost === true,
-    race.player1.driftState.active,
-  )
+  const boost1 = updateBoostCharge(race.player1.boostCharge, dt, input1.boost === true, race.player1.driftState.active)
   race.player1.boostCharge = boost1.charge
   const effInput1: CarInput = { ...input1, boost: boost1.boost }
-  const boost2 = updateBoostCharge(
-    race.player2.boostCharge,
-    dt,
-    input2.boost === true,
-    race.player2.driftState.active,
-  )
+  const boost2 = updateBoostCharge(race.player2.boostCharge, dt, input2.boost === true, race.player2.driftState.active)
   race.player2.boostCharge = boost2.charge
   const effInput2: CarInput = { ...input2, boost: boost2.boost }
 
@@ -249,11 +242,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.driftSound?.stop()
   }
   // 胎噪以 P1 车速/转向驱动（单屏语义即 P1；音量极小不喧宾夺主）
-  ctx.tireSound?.setLevel(
-    race.player1.carState.speed / carConfig.maxSpeed,
-    Math.abs(effInput1.steer),
-    wet,
-  )
+  ctx.tireSound?.setLevel(race.player1.carState.speed / carConfig.maxSpeed, Math.abs(effInput1.steer), wet)
 
   // 完赛判定（mode 统一：挑战限时优先 + 正常圈数判定；语义与旧两个 if 完全一致——
   // 任一命中即触发 finish 并跳过本帧后续渲染）

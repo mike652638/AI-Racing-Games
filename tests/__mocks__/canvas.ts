@@ -2,8 +2,8 @@
  * CanvasRenderingContext2D / HTMLCanvasElement 测试替身。
  *
  * 覆盖 renderer.ts 实际调用的全部 ctx 方法（fillRect/beginPath/moveTo/lineTo/closePath/
- * fill/save/restore/translate/rect/clip/drawImage/arc/rotate/createLinearGradient/addColorStop/
- * setTransform/getImageData），
+ * fill/save/restore/translate/rect/clip/drawImage/arc/rotate/createLinearGradient/createRadialGradient/
+ * addColorStop/setTransform/getImageData），
  * 以及 GameLoop 集成测试用到的元素方法（addEventListener/appendChild/setPointerCapture）；
  * 通过 __calls 记录各方法调用次数、__args 记录各方法调用实参（二者一一对应），
  * 供"渲染输出稳定/确实发生绘制/坐标整数对齐"断言使用。
@@ -83,6 +83,12 @@ export function createMockCanvas(width = 800, height = 600): MockCanvas {
     rotate: (...args: unknown[]): void => record('rotate', args),
     createLinearGradient: (...args: unknown[]): { addColorStop: (offset: number, color: string) => void } => {
       record('createLinearGradient', args)
+      return {
+        addColorStop: (offset: number, color: string): void => record('addColorStop', [offset, color]),
+      }
+    },
+    createRadialGradient: (...args: unknown[]): { addColorStop: (offset: number, color: string) => void } => {
+      record('createRadialGradient', args)
       return {
         addColorStop: (offset: number, color: string): void => record('addColorStop', [offset, color]),
       }

@@ -11,7 +11,7 @@
   --title-fs: clamp(28px, 9vw, 64px);
   --subtitle-fs: clamp(16px, 4vw, 24px);
   --hud-fs: clamp(14px, 3vw, 20px);
-  --hint-fs: clamp(12px, 2.5vw, 14px);
+  --hint-fs: clamp(14px, 3vw, 16px);
   --menu-purple: #2d1b4e;
   --menu-pink: #ff3864;
   --menu-cyan: #00d9ff;
@@ -230,6 +230,17 @@ canvas {
     0 0 3px rgba(0, 0, 0, 0.8);
 }
 
+/* m17：挑战模式倒计时剩余 10 秒内紧急闪烁 */
+#challenge-timer.urgent {
+  color: #ff3864;
+  animation: timer-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* 小地图 / 赛道进度指示器（#hud-minimap：Batch 6 单屏比赛阶段显示；canvas 像素内容由 src/ui/minimap.ts 每帧绘制。
    必须显式覆盖全局 canvas 规则的 width/height——否则 100vw/100vh 会把小地图撑满整个视口） */
 #hud-minimap {
@@ -422,7 +433,7 @@ canvas {
   100% { background-position: 0 40px; }
 }
 
-.menu-sun {
+  .menu-sun {
   position: absolute;
   left: 50%;
   bottom: 32%;
@@ -431,7 +442,6 @@ canvas {
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 50%, rgba(255, 56, 100, 0) 70%);
-  filter: blur(2px);
   box-shadow: 0 0 80px 20px rgba(255, 56, 100, 0.4);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
@@ -572,7 +582,7 @@ canvas {
 
 #track-select {
   display: flex;
-  gap: 14px;
+  gap: 20px;
   justify-content: center;
   margin: 12px auto 10px;
   flex-wrap: wrap;
@@ -608,6 +618,41 @@ canvas {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   letter-spacing: 0.5px;
   overflow: hidden;
+}
+
+.track-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.track-icon {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+  margin-right: 8px;
+  opacity: 0.85;
+  color: rgba(255, 255, 255, 0.85);
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.track-label {
+  white-space: nowrap;
+}
+
+.track-option:hover .track-icon,
+.track-option.selected .track-icon,
+.track-option.selected-p2 .track-icon {
+  opacity: 1;
+}
+
+.track-option.selected .track-icon {
+  color: var(--accent);
+}
+
+.track-option.selected-p2 .track-icon {
+  color: #4ade80;
 }
 
 .track-option::before {
@@ -858,7 +903,6 @@ canvas {
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 45%, rgba(255, 56, 100, 0) 70%);
-  filter: blur(3px);
   box-shadow: 0 0 100px 30px rgba(255, 56, 100, 0.35);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
@@ -1060,6 +1104,40 @@ canvas {
   color: rgba(255, 255, 255, 0.85);
 }
 
+#finish-restart-btn {
+  margin-top: 18px;
+  padding: 10px 28px;
+  border: 2px solid #ffd75e;
+  border-radius: 10px;
+  background: rgba(255, 215, 94, 0.12);
+  color: #ffd75e;
+  font-family: var(--font-mono);
+  font-size: clamp(14px, 3.5vw, 18px);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  z-index: 10;
+}
+
+#finish-restart-btn:hover,
+#finish-restart-btn:active {
+  background: rgba(255, 215, 94, 0.35);
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 24px rgba(255, 215, 94, 0.4);
+  transform: translateY(-2px);
+}
+
+#finish-restart-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
 #finish-screen .hint {
   margin-top: 18px;
   font-size: var(--subtitle-fs);
@@ -1134,7 +1212,8 @@ canvas {
 }
 
 #pause-restart,
-#pause-resume {
+#pause-resume,
+#pause-quit-btn {
   padding: 8px 20px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 8px;
@@ -1145,22 +1224,40 @@ canvas {
   cursor: pointer;
   transition:
     opacity 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+#pause-quit-btn {
+  border-color: rgba(255, 215, 94, 0.55);
+  color: #ffd75e;
+  background: rgba(255, 215, 94, 0.1);
 }
 
 #pause-restart:hover,
 #pause-restart:active,
 #pause-resume:hover,
-#pause-resume:active {
+#pause-resume:active,
+#pause-quit-btn:hover,
+#pause-quit-btn:active {
   opacity: 0.85;
   border-color: rgba(255, 255, 255, 0.65);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
-/* F3（F3）：触屏暂停悬浮按钮（#pause-btn：HUD 内右下角圆形按钮，RACING 阶段由 applyPhase 显示；
-   半透明背景 + z-index 高于 canvas，触屏设备暂停入口） */
+#pause-quit-btn:hover,
+#pause-quit-btn:active {
+  border-color: rgba(255, 215, 94, 0.85);
+  background: rgba(255, 215, 94, 0.2);
+}
+
+/* F3（F3）：触屏暂停悬浮按钮（#pause-btn：HUD 内左下角圆形按钮，RACING 阶段由 applyPhase 显示；
+   半透明背景 + z-index 高于 canvas，与右下角虚拟摇杆互不遮挡） */
 #pause-btn {
   position: fixed;
-  right: 16px;
+  left: 16px;
   bottom: 16px;
   width: 52px;
   height: 52px;
@@ -1174,6 +1271,12 @@ canvas {
   z-index: 30;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* M11：分屏模式下暂停按钮居中，两视窗对称可见，避免与任意一侧摇杆重叠 */
+#pause-btn.split-center {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 #pause-btn:hover,
@@ -1284,7 +1387,7 @@ canvas {
   }
 
   #track-select {
-    gap: 8px;
+    gap: 12px;
   }
 
   .track-option {
@@ -1312,6 +1415,14 @@ canvas {
 
   .finish-card {
     padding: 12px 14px;
+  }
+}
+
+/* 超小屏（如 iPhone SE / 迷你机型）：标题与副标题不再比中屏更小，至少持平或略大 */
+@media (max-width: 390px) {
+  :root {
+    --title-fs: 26px;
+    --subtitle-fs: 15px;
   }
 }
 
