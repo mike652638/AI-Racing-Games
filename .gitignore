@@ -29,6 +29,7 @@ Thumbs.db
 /screenshots/
 # 视觉验证产物（agent-browser 截图 + 临时分析脚本）
 tests/visual/
+.opencode/images/
 
 # oh-my-opencode 插件缓存
 .slim/
