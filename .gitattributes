@@ -1,0 +1,13 @@
+# 统一行尾为 LF（Windows 开发环境防 CRLF 警告：core.autocrlf=false + eol=lf）
+# 验证：git ls-files --eol | findstr "w/crlf" 应零匹配
+* text=auto eol=lf
+
+# 二进制文件不参与换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary

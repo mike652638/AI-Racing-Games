@@ -20,14 +20,14 @@ npm test           # vitest run（单元测试）
 npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 ```
 
-`npm run bot` 输出示例：
+`npm run bot` 输出示例（classic 赛道，3 圈，实测值）：
 
 ```json
 {
   "laps": 3,
-  "lapTimesSec": [24.55, 48.0, 71.43],
-  "totalTimeSec": 71.43,
-  "avgSpeed": 3865,
+  "lapTimesSec": [26.083, 51.05, 76.017],
+  "totalTimeSec": 76.017,
+  "avgSpeed": 3631.7,
   "violations": 0,
   "offRoadTimeSec": 0,
   "passed": true
@@ -87,14 +87,15 @@ npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 
 ```
 src/
-  engine/       # 伪3D投影、路面分段渲染、视差山景、路边景物、漂移烟雾、车流渲染、赛道定义（tracks.ts）、玩家车渲染
+  engine/       # 伪3D投影、路面分段渲染、视差山景、路边景物（含环境差异化形状）、漂移烟雾、车流渲染、赛道定义（tracks.ts）、环境配置、玩家车渲染
   physics/      # 车辆运动学、漂移、双人按键映射
-  game/         # GameLoop 主循环（19 文件）、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、碰撞、赛道上下文、常量、音量
+  game/         # GameLoop 主循环（20 文件）、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、碰撞、赛道上下文、常量（re-export shared）
   ai/           # bot 决策器、圈速模拟器
+  shared/       # 独立共享层：游戏常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源（解环 game↔ui）
   ui/           # HUD、格式化、游戏状态机、启动/结算画面、存档、触屏摇杆、小地图
   audio/        # WebAudio 合成：引擎音效（漂移摩擦/胎噪）、背景音乐
 tests/
-  unit/         # Vitest 单测（41 文件 593 用例）
+  unit/         # Vitest 单测（44 文件 639 用例）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
   helpers/      # 测试辅助

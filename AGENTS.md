@@ -23,9 +23,10 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 
 ```
 src/
-  engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、环境配置（environment.ts）、玩家车渲染
+  engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、环境配置（environment.ts）、玩家车渲染；景物形状（sprite-draw）、屏幕特效（screen-effects）、车流绘制（traffic-draw）、地形装饰（terrain-draw）、道路渲染（road-surface）为 2026-08-05 从 renderer.ts 拆分的关注点模块
   physics/      # 车辆运动学（car）、漂移（drift）、双人按键映射（input）
-  game/         # 游戏核心（20 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、常量、音量、TOP 刷新
+  game/         # 游戏核心（20 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
+  shared/       # 独立共享层（2026-08-05 解环 game↔ui）：常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源，engine/physics/ui 直接导入
   ai/           # bot 决策器（bot）、圈速模拟器（simulate）
   ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）、游戏状态（gamestate）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
@@ -41,9 +42,9 @@ docs/           # 计划档案、视觉分析、superpowers plans
 ## 架构要点
 
 - **纯函数领域层**：frame-update / frame-render / finish-accounting / frame-pure 为无副作用纯函数（状态进、状态/渲染指令出），game-loop.ts 仅做编排（938→719 行）；mode-strategy 以策略对象封装单屏/分屏/挑战等模式的差异，避免大 if 分支。
-- **常量唯一真源**：game/constants 为全局共享常量层（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE），engine/physics/ui 均反向导入，无循环初始化问题。
+- **常量唯一真源**：src/shared/constants 为全局共享常量层（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE；2026-08-05 由 game/constants 提升至独立共享层），engine/physics/ui 均直接导入，game 层保留 re-export 兼容层，无循环初始化问题。
 - **确定性生成**：赛道、车流等由确定性随机种子生成，9 赛道 bot 矩阵回归（0 违规）可复现。
-- **依赖环（有意折衷）**：game↔ui 存在受限双向依赖环——game/ 对 ui/ 为运行级调用（hud/screens/joystick/save/minimap）；ui/ 对 game/ 的**业务类型依赖全部为 import type（RaceState/TrackContext）**，运行时依赖仅限 game/constants 常量值（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE）与 gamestate/format 的 re-export 兼容层；engine/physics 亦反向导入 game/constants——game/constants 实质是全局共享常量层（唯一真源），无循环初始化问题。彻底解环路径（如将常量层提升为独立共享模块）留作未来可选重构，当前不执行。
+- **依赖方向（2026-08-05 已解环）**：原 game↔ui 受限双向环已消除——game/ 对 ui/ 为运行级调用（hud/screens/joystick/save/minimap）；ui/ 对 game/ 仅剩 **import type（RaceState/TrackContext，编译期擦除）**，其运行时依赖（常量 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE 与 phase/phase-logic/lap）已全部提升至 src/shared 并由 ui 直接导入；engine/physics 亦改直接依赖 src/shared/constants。依赖方向单向：engine/physics → shared；ui → shared + physics(type) + game(type only)；game → engine/physics/ui/shared。若未来进一步消除 ui 对 game 的类型级依赖（RaceState/TrackContext 类型提升），可 100% 解耦。
 
 ## 里程碑（分阶段推进，每阶段可运行可验证）
 
