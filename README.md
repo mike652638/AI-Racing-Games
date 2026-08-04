@@ -71,9 +71,9 @@ npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 
 ```
 src/
-  engine/       # 伪3D投影、路面分段渲染、视差山景、路边景物、漂移烟雾
+  engine/       # 伪3D投影、路面分段渲染、视差山景、路边景物、漂移烟雾、赛道定义（tracks.ts）
   physics/      # 车辆运动学、漂移、双人按键映射
-  track/        # 赛道数据（分段路点、曲线配置）[位于 engine/]
+  game/         # GameLoop 主循环、阶段 FSM、碰撞、赛道上下文、玩家车渲染、常量
   ai/           # bot 决策器、圈速模拟器
   ui/           # HUD、格式化、游戏状态机、启动/结算画面、存档
   audio/        # WebAudio 引擎音效合成

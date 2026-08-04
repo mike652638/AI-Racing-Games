@@ -27,3 +27,6 @@ Thumbs.db
 /test-manual.py
 /night-bot-check.ts
 /screenshots/
+
+# oh-my-opencode 插件缓存
+.slim/
