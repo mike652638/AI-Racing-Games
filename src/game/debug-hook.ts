@@ -53,8 +53,14 @@ export interface DebugHookSources {
   boostCharge: () => number
 }
 
-/** 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取） */
+/**
+ * 安装调试钩子：把运行时状态暴露到 window.__gameDebug（自动化验证脚本读取）。
+ * 生产构建剥离（2026-08-05）：非 DEV 环境直接 no-op——vite build 下
+ * import.meta.env.DEV 静态替换为 false，整段赋值被死码消除；
+ * vitest（mode=test，DEV=true）与 dev 服务器保持安装，测试断言不受影响。
+ */
 export function installDebugHook(sources: DebugHookSources): void {
+  if (!import.meta.env.DEV) return
   window.__gameDebug = {
     get audioState() {
       return sources.audioState()

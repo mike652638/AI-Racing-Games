@@ -2,14 +2,17 @@ import { Renderer, type BoostParticle } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
 import { TRACK_DEFS } from '../engine/tracks'
 import { createCarConfig, type CarConfig } from '../physics/car'
-import { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
-import { MusicPlayer } from '../audio/music'
-import { COUNTDOWN_HINTS } from '../ui/copy'
 import { type HudElements } from '../ui/hud'
 import { JoystickUI } from '../ui/joystick'
 import { Minimap } from '../ui/minimap'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime, loadBestTimeFor } from '../ui/save'
+import { createAudioRig } from './audio-rig'
+import type { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
+import type { MusicPlayer } from '../audio/music'
+import { runCountdown } from './countdown'
+import { collectHudElements, collectScreenElements } from './dom-setup'
+import { buildTrackPreviewSvg } from './track-preview'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic } from './track-context'
@@ -77,34 +80,6 @@ const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
 
 /** 赛道难度星级 title 提示文案（下标即难度） */
 const DIFFICULTY_HINT: Record<number, string> = { 1: '入门', 2: '进阶', 3: '挑战' }
-
-/**
- * 由赛道控制点积分生成轨迹点列（伪 3D 曲率 → 平面 x/z 曲线）：
- * angle += curve*dz；x += sin(angle)*dz。总采样约 160 点，段内按曲率线性插值。
- */
-function integrateControlPoints(controlPoints: { z: number; curve: number }[]): { x: number; z: number }[] {
-  const totalZ = controlPoints.reduce((sum, p) => sum + p.z, 0)
-  const points: { x: number; z: number }[] = []
-  let x = 0
-  let z = 0
-  let angle = 0
-  for (let i = 0; i < controlPoints.length; i++) {
-    const seg = controlPoints[i]
-    const steps = Math.max(1, Math.round((160 * seg.z) / totalZ))
-    const dz = seg.z / steps
-    for (let s = 0; s < steps; s++) {
-      // 段内曲率线性插值（与下一段衔接平滑）
-      const next = controlPoints[i + 1]
-      const t = next ? s / steps : 1
-      const curve = seg.curve + (next ? (next.curve - seg.curve) * t : 0)
-      angle += curve * dz
-      x += Math.sin(angle) * dz
-      z += dz
-      points.push({ x, z })
-    }
-  }
-  return points
-}
 
 /**
  * 游戏主循环：迁移自 main.ts 的全部运行时职责——DOM 引用、初始化、
@@ -215,12 +190,12 @@ export class GameLoop {
     // 分屏菜单 P2 赛道名：仅分屏时可见（index.html 初始 hidden，缺陷②修复）
     const p2TrackName = $('p2-track-name') as HTMLSpanElement
     p2TrackName.hidden = !this.mode.splitMode
-    this.hudElements = this.collectHudElements($, hud2Container)
+    this.hudElements = collectHudElements($, hud2Container)
     // M11：分屏模式下暂停按钮移至底部中央，避免遮挡右下虚拟摇杆
     if (this.mode.splitMode && this.hudElements.pauseBtn) {
       this.hudElements.pauseBtn.classList.add('split-center')
     }
-    this.screenElements = this.collectScreenElements($)
+    this.screenElements = collectScreenElements($)
     // P6（P6）：暂停菜单控件事件——音量 slider input → clamp+gain 同步+持久化；按钮 click → 阶段切换
     // （Task D：闭包内联 volume.ts 纯函数，masterGain 未惰性创建时仅 clamp；元素缺失守卫式绑定）
     this.bindPauseControls()
@@ -269,60 +244,6 @@ export class GameLoop {
     refreshBestSummary()
     refreshMatchTop()
     requestAnimationFrame(this.frame)
-  }
-
-  /** 组装 HUD DOM 引用（P1/P2 速度、圈数、计时、最佳时间与漂移指示；hud2Container 分屏布局类） */
-  private collectHudElements($: (id: string) => HTMLElement, hud2Container: HTMLDivElement): HudElements {
-    return {
-      hudContainer: $('hud') as HTMLDivElement,
-      hud2Container,
-      hudBest: $('hud-best') as HTMLDivElement,
-      hudSpeed: $('hud-speed') as HTMLDivElement,
-      hudSpeedUnit: $('hud-speed-unit') as HTMLDivElement,
-      hudLap: $('hud-lap') as HTMLDivElement,
-      hudTime: $('hud-time') as HTMLDivElement,
-      hudSpeed2: $('hud-speed-2') as HTMLDivElement,
-      hudSpeedUnit2: $('hud-speed-unit-2') as HTMLDivElement,
-      hudLap2: $('hud-lap-2') as HTMLDivElement,
-      hudTime2: $('hud-time-2') as HTMLDivElement,
-      hudBestP2: $('hud-best-p2') as HTMLDivElement,
-      hudPlayerTag: $('hud-player-tag') as HTMLDivElement,
-      driftIndicator: $('drift-indicator') as HTMLDivElement,
-      driftScoreValue: $('drift-score-value') as HTMLSpanElement,
-      driftCombo: $('drift-combo') as HTMLDivElement,
-      hudCollision: $('hud-collision') as HTMLDivElement,
-      pauseBtn: $('pause-btn') as HTMLButtonElement,
-    }
-  }
-
-  /** 组装屏幕 DOM 引用（启动/结算/暂停面板及结算文本，P2 行仅分屏时存在） */
-  private collectScreenElements($: (id: string) => HTMLElement): ScreenElements {
-    return {
-      startScreen: $('start-screen') as HTMLDivElement,
-      finishScreen: $('finish-screen') as HTMLDivElement,
-      pauseScreen: $('pause-screen') as HTMLDivElement,
-      finishTime: $('finish-time') as HTMLParagraphElement,
-      finishSpeed: $('finish-speed') as HTMLParagraphElement,
-      finishBest: $('finish-best') as HTMLParagraphElement,
-      finishScore: $('finish-score') as HTMLParagraphElement,
-      finishLaps: $('finish-laps') as HTMLDivElement,
-      finishTime2: $('finish-time-2') as HTMLParagraphElement,
-      finishSpeed2: $('finish-speed-2') as HTMLParagraphElement,
-      finishBest2: $('finish-best-2') as HTMLParagraphElement,
-      finishScore2: $('finish-score-2') as HTMLParagraphElement,
-      finishLaps2: $('finish-laps-2') as HTMLDivElement,
-      finishHint: $('finish-hint') as HTMLDivElement,
-      finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
-      finishWins: $('finish-wins') as HTMLDivElement,
-      pauseVolume: $('pause-volume') as HTMLInputElement,
-      pauseRestart: $('pause-restart') as HTMLButtonElement,
-      pauseResume: $('pause-resume') as HTMLButtonElement,
-      pauseQuit: $('pause-quit-btn') as HTMLButtonElement,
-      pauseMusicVolume: $('pause-music-volume') as HTMLInputElement,
-      pauseSfxVolume: $('pause-sfx-volume') as HTMLInputElement,
-      pauseTitle: $('pause-title') as HTMLHeadingElement,
-      finishRestartBtn: $('finish-restart-btn') as HTMLButtonElement,
-    }
   }
 
   /** 绑定暂停菜单控件事件：三个音量 slider + 重开/继续/触屏暂停按钮（守卫式，缺失元素跳过） */
@@ -471,31 +392,16 @@ export class GameLoop {
     })
   }
 
-  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过） */
+  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过；积分/SVG 下沉 track-preview.ts） */
   private refreshTrackPreview(trackIndex: number): void {
     const preview = document.getElementById('track-preview')
     if (!preview) return
     const def = TRACK_DEFS[trackIndex]
     if (!def) return
-    const W = 200
-    const H = 64
-    const pad = 8
-    const pts = integrateControlPoints(def.controlPoints)
-    if (pts.length === 0) return
-    // 归一化到 viewBox：x 按全段跨度、z 按总长纵向铺满
-    let minX = Infinity
-    let maxX = -Infinity
-    let maxZ = -Infinity
-    for (const p of pts) {
-      if (p.x < minX) minX = p.x
-      if (p.x > maxX) maxX = p.x
-      if (p.z > maxZ) maxZ = p.z
+    const svg = buildTrackPreviewSvg(def)
+    if (svg !== null) {
+      preview.innerHTML = svg
     }
-    const spanX = maxX - minX || 1
-    const sx = (x: number): number => pad + ((x - minX) / spanX) * (W - 2 * pad)
-    const sy = (z: number): number => pad + (z / maxZ) * (H - 2 * pad)
-    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)} ${sy(p.z).toFixed(1)}`).join(' ')
-    preview.innerHTML = `<path d="${d}" fill="none" stroke="#ffd75e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${sx(pts[0].x).toFixed(1)}" cy="${pad}" r="4" fill="#ffd75e"/>`
   }
 
   /**
@@ -737,33 +643,18 @@ export class GameLoop {
    */
   private startGame(): void {
     if (!this.engineSound) {
-      const ctx = new AudioContext()
-      // P6（P6）：主音量节点——总控；G7 起分轨：musicGain/sfxGain 各连 masterGain，独立调节
-      const masterGain = ctx.createGain()
-      masterGain.gain.value = this.volume
-      masterGain.connect(ctx.destination)
-      this.masterGain = masterGain
-      // G7（G7）：音乐/音效分轨——MusicPlayer 走 musicGain、引擎/雨声/碰撞音走 sfxGain
-      const musicGain = ctx.createGain()
-      musicGain.gain.value = this.musicVolume
-      musicGain.connect(masterGain)
-      this.musicGain = musicGain
-      const sfxGain = ctx.createGain()
-      sfxGain.gain.value = this.sfxVolume
-      sfxGain.connect(masterGain)
-      this.sfxGain = sfxGain
-      this.engineSound = new EngineSound(ctx, sfxGain)
-      this.engineSound.start()
-      this.music = new MusicPlayer(ctx, musicGain)
-      this.music.start()
-      // F4（F4）：雨声环境音与碰撞冲击音同样走音效分轨（随 sfxVolume 与主音量调节）
-      this.rainSound = new RainSound(ctx, sfxGain)
-      this.collisionSound = new CollisionSound(ctx, sfxGain)
-      // H2（H2）：BOOST 氮气音效（走音效分轨）
-      this.boostSound = new BoostSound(ctx, sfxGain)
-      // M15（M15）：漂移摩擦胎声与轻量胎噪（走音效分轨，随 sfxVolume 与主音量调节；默认启用）
-      this.driftSound = new DriftSound(ctx, sfxGain)
-      this.tireSound = new TireSound(ctx, sfxGain)
+      // 音频装备下沉 audio-rig.ts（2026-08-05）：masterGain 总控 + musicGain/sfxGain 分轨 + 全部音效一次性装配
+      const rig = createAudioRig(new AudioContext(), this.volume, this.musicVolume, this.sfxVolume)
+      this.masterGain = rig.masterGain
+      this.musicGain = rig.musicGain
+      this.sfxGain = rig.sfxGain
+      this.engineSound = rig.engineSound
+      this.music = rig.music
+      this.rainSound = rig.rainSound
+      this.collisionSound = rig.collisionSound
+      this.boostSound = rig.boostSound
+      this.driftSound = rig.driftSound
+      this.tireSound = rig.tireSound
     }
     // 菜单阶段隐藏摇杆，比赛阶段显示
     this.updateJoystickVisibility(true)
@@ -957,39 +848,10 @@ export class GameLoop {
     }
   }
 
-  /** 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（3→2→1→GO） */
+  /** 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（3→2→1→GO；实现下沉 countdown.ts） */
   private startCountdown(): void {
     const overlay = document.getElementById('countdown-overlay')
-    const numberEl = overlay?.querySelector('.countdown-number') as HTMLElement | null
-    if (!overlay || !numberEl) return
-    // M16：操作提示文案与 README 同源（copy.ts 常量填充，index.html 为空容器）
-    const hintsEl = overlay.querySelector('.countdown-hints') as HTMLElement | null
-    if (hintsEl) {
-      hintsEl.innerHTML = COUNTDOWN_HINTS.map((hint) => `<p>${hint}</p>`).join('')
-    }
-    overlay.hidden = false
-    let count = 3
-    const showNumber = (n: number): void => {
-      numberEl.textContent = n > 0 ? String(n) : 'GO!'
-      // 重置动画
-      numberEl.style.animation = 'none'
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      numberEl.offsetHeight // 触发 reflow
-      numberEl.style.animation = ''
-    }
-    showNumber(count)
-    const timer = window.setInterval(() => {
-      count--
-      if (count > 0) {
-        showNumber(count)
-      } else {
-        showNumber(0)
-        window.clearInterval(timer)
-        window.setTimeout(() => {
-          overlay.hidden = true
-        }, 500)
-      }
-    }, 800)
+    if (overlay) runCountdown(overlay)
   }
 }
 
