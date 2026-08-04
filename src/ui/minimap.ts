@@ -1,4 +1,4 @@
-import type { TrackContext } from '../game/track-context'
+import type { TrackContext } from '../shared/types'
 import { SEGMENT_LENGTH } from '../engine/track'
 
 /**

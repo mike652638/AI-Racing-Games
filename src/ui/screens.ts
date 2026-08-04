@@ -1,5 +1,5 @@
 import type { CarConfig } from '../physics/car'
-import type { RaceState } from '../game/state'
+import type { RaceState } from '../shared/types'
 import { formatLapTimes, formatSpeed, formatTime } from './format'
 import {
   loadBestDriftScore,

@@ -1,37 +1,15 @@
-import { buildRoadStrips, type RoadStrip } from '../engine/road-strip'
-import { SEGMENT_LENGTH, type Segment } from '../engine/track'
-import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites, type Sprite } from '../engine/sprites'
+import { buildRoadStrips } from '../engine/road-strip'
+import { SEGMENT_LENGTH } from '../engine/track'
+import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites } from '../engine/sprites'
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
 import { getEnvironmentProfile } from '../engine/environment'
-import { createTraffic, type TrafficCar } from '../engine/traffic'
+import { createTraffic } from '../engine/traffic'
 import { TRAFFIC_DEFAULT_COUNT } from './constants'
+import type { TrackContext } from '../shared/types'
 
-/**
- * 单个玩家的完整赛道世界上下文：赛道定义、分段数据、圈长/圈数、
- * 渲染用预计算（曲率前缀和/景物段索引/景物列表）与运行时车流。
- * 分屏模式下 P1/P2 各持一份（互不共享，车流独立推进与碰撞）；
- * 单人模式仅 [0] 生效。预计算在创建时完成，运行时零重建。
- */
-export interface TrackContext {
-  /** 赛道定义（来源 src/engine/tracks） */
-  def: TrackDef
-  /** 赛道分段数据（createTrackFromDef(def)） */
-  segments: Segment[]
-  /** 单圈长度（世界单位）= segments.length * SEGMENT_LENGTH */
-  lapLength: number
-  /** 总圈数 = def.laps */
-  totalLaps: number
-  /** 曲率前缀和（渲染 O(1) 查询累计曲率） */
-  curvePrefixSum: Float64Array
-  /** 景物段索引（键 = floor(z / SEGMENT_LENGTH)） */
-  spriteIndex: Map<number, Sprite[]>
-  /** 路边景物列表（道路两侧树木/路灯） */
-  sprites: Sprite[]
-  /** 道路段缓存（按曲率分段的条带，渲染层离屏绘制后逐段复用） */
-  roadStrips: RoadStrip[]
-  /** 本世界车流（in-place 推进） */
-  traffic: TrafficCar[]
-}
+// 类型提升（2026-08-05）：TrackContext 接口唯一真源移至 src/shared/types.ts（解耦 ui→game 类型依赖），
+// 本文件保留同名 re-export 兼容层，既有导入路径不变
+export type { TrackContext }
 
 /** 按赛道定义创建完整赛道上下文（含渲染预计算与车流） */
 export function createTrackContext(def: TrackDef): TrackContext {

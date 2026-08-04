@@ -1,6 +1,5 @@
 import type { CarConfig } from '../physics/car'
-import type { RaceState } from '../game/state'
-import type { TrackContext } from '../game/track-context'
+import type { RaceState, TrackContext } from '../shared/types'
 import { formatLap, formatSpeed, formatTime, lapFromZ } from './format'
 import { PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
 import { DRIFT_SCORE_MAX } from '../shared/constants'

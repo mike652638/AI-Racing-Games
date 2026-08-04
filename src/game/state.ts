@@ -1,35 +1,12 @@
-import { createPlayerState, resetPlayerState, type PlayerState } from './player-state'
+import { createPlayerState, resetPlayerState } from './player-state'
 import { TRACK_DEFS } from '../engine/tracks'
-import { PHASE_MENU, type Phase } from './phase'
-import { createTrackContext, type TrackContext } from './track-context'
+import { PHASE_MENU } from './phase'
+import { createTrackContext } from './track-context'
+import type { RaceState } from '../shared/types'
 
-/**
- * 对局可变状态容器：集中管理双玩家的独立状态（PlayerState）、碰撞计数、
- * 圈速记录、双赛道上下文（TrackContext）等所有运行时可变数据，
- * 便于统一重置与单测。
- */
-export interface RaceState {
-  /** P1 玩家独立状态（车辆/漂移/相机/计时/冷却） */
-  player1: PlayerState
-  /** P2 玩家独立状态（分屏时有效） */
-  player2: PlayerState
-  /** 双玩家赛道上下文（分屏各用其一；单人模式仅 [0] 生效） */
-  tracks: [TrackContext, TrackContext]
-  /** 碰撞总次数（P1/P2 各自世界内的车流碰撞累计） */
-  collisionCount: number
-  /** 每圈累计用时（lapTimes[i] 为第 i+1 圈完成时刻） */
-  lapTimes: number[]
-  /** 当前已完成圈数（1 基，lapFromZ 推进） */
-  lastLap: number
-  /** P2 每圈累计用时（分屏时独立记录，P2 圈速用） */
-  lapTimes2: number[]
-  /** P2 当前已完成圈数（1 基） */
-  lastLap2: number
-  /** 游戏阶段（菜单/比赛/暂停/结算） */
-  phase: Phase
-  /** 结算面板是否已填充（避免重复写入记录） */
-  finishShown: boolean
-}
+// 类型提升（2026-08-05）：RaceState 接口唯一真源移至 src/shared/types.ts（解耦 ui→game 类型依赖），
+// 本文件保留同名 re-export 兼容层，既有导入路径不变
+export type { RaceState }
 
 /** 创建初始对局状态（默认以 TRACK_DEFS[0] 创建双 TrackContext，车流由各自上下文持有） */
 export function createRaceState(): RaceState {
