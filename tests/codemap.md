@@ -4,7 +4,7 @@
 
 质量验证层。通过三层自动化测试基建保障 OutRun 伪 3D 赛车游戏各模块的正确性，并作为里程碑验收的门禁（typecheck + test + bot 全绿）：
 
-- `tests/unit/`：白盒单元测试（Vitest，共 34 个 `.test.ts`、452 个用例）。对 `src/` 下各模块的纯函数与状态机做行为验证，覆盖伪 3D 投影、路面分段几何、赛道生成与管理（M9 起 9 条赛道含难度星级，M11 起含夜晚赛道 `timeOfDay` 标记）、车辆运动学（M12 含雨天 wet 抓地力/制动衰减与氮气 boost 加速）、漂移（含 M10 连击/倍率与得分 clamp、M13 H1 scoreMultiplier 挑战加成透传）、碰撞、bot 决策、跑圈模拟、UI 格式化与 HUD（含单屏 P2 BEST、热座玩家标签、M10 漂移连击 COMBO 显示、M11 得分 MAX 标记、M12 挑战模式倒计时 challengeTimer 兼容）、存档（含胜场统计、漂移 TOP10 排行榜、M10 各赛道 BEST 汇总、M11 分屏对局 TOP10、M13 H4 排行榜条目 combo 连击字段保留与混存兼容）、输入映射（M12 含 boost 键）、音频合成（含 M10 EngineSound 输出注入、M11 RainSound/CollisionSound 噪声音效、M12 MusicPlayer 调度纯函数 stepEvents/nextStep、M13 H2 BoostSound 扫频与 H6 CollisionSound 强度分级）、光照（含阴天 overcast、M9 白天天空恒蓝、M10 雨天 raining、M11 夜晚 night 色板）、场景生成、游戏阶段与玩家状态、常量注册表（含车流常量与 M12 CHALLENGE_SECONDS/BOOST 系列）、车流密度配置与避让 AI（M12 含 shiftDir 变道方向）、虚拟摇杆 reset，以及 Renderer / GameLoop 两个状态型模块的集成验证（含热座模式、9 赛道选择、暂停菜单音量/重开/触屏按钮、M12 挑战模式计时、G7 音乐/音效分轨音量、M11 夜晚车灯 arc 与变道转向、M13 H3 夜间车尾灯 fillRect 增量、M13 H2 boost 粒子 arc 增量、雨滴离屏 drawImage 平铺、M13 H4 漂移榜「连击 x」后缀）。
+- `tests/unit/`：白盒单元测试（Vitest，共 41 个 `.test.ts`、591 个用例）。对 `src/` 下各模块的纯函数与状态机做行为验证，覆盖伪 3D 投影、路面分段几何、赛道生成与管理（M9 起 9 条赛道含难度星级，M11 起含夜晚赛道 `timeOfDay` 标记）、车辆运动学（M12 含雨天 wet 抓地力/制动衰减与氮气 boost 加速）、漂移（含 M10 连击/倍率与得分 clamp、M13 H1 scoreMultiplier 挑战加成透传）、碰撞、bot 决策、跑圈模拟、UI 格式化与 HUD（含单屏 P2 BEST、热座玩家标签、M10 漂移连击 COMBO 显示、M11 得分 MAX 标记、M12 挑战模式倒计时 challengeTimer 兼容）、存档（含胜场统计、漂移 TOP10 排行榜、M10 各赛道 BEST 汇总、M11 分屏对局 TOP10、M13 H4 排行榜条目 combo 连击字段保留与混存兼容）、输入映射（M12 含 boost 键）、音频合成（含 M10 EngineSound 输出注入、M11 RainSound/CollisionSound 噪声音效、M12 MusicPlayer 调度纯函数 stepEvents/nextStep、M13 H2 BoostSound 扫频与 H6 CollisionSound 强度分级、**M15 DriftSound/TireSound 漂移胎噪与帧驱动接线**）、光照（含阴天 overcast、M9 白天天空恒蓝、M10 雨天 raining、M11 夜晚 night 色板）、场景生成、游戏阶段与玩家状态、常量注册表（含车流常量与 M12 CHALLENGE_SECONDS/BOOST 系列）、车流密度配置与避让 AI（M12 含 shiftDir 变道方向）、虚拟摇杆 reset，以及 Renderer / GameLoop 两个状态型模块的集成验证（含热座模式、9 赛道选择、暂停菜单音量/重开/触屏按钮、M12 挑战模式计时、G7 音乐/音效分轨音量、M11 夜晚车灯 arc 与变道转向、M13 H3 夜间车尾灯 fillRect 增量、M13 H2 boost 粒子 arc 增量、雨滴离屏 drawImage 平铺、M13 H4 漂移榜「连击 x」后缀）；**M15 新增 game 层 4 模块独立单测（mode-strategy 四模式路由/finish-accounting 结算记账/frame-update 帧更新挂钩/frame-render 渲染分支）与音频接线测试（drift-tire-audio 纯函数+类调制/frame-update-audio 帧驱动静音与调制）**。
 - `tests/bot/`：黑盒集成验收脚本。用 `simulateLaps` 驱动 bot 在真实赛道上自动跑圈，输出圈速/违规 JSON 报告，并以进程退出码（0/1）判定通过/失败。
 - `tests/__mocks__/`：Canvas 测试替身基建。`canvas.ts` 提供可记录调用次数与实参的 mock canvas / ctx，支撑 Renderer 与 GameLoop 的"渲染输出确实发生、稳定且坐标对齐"类断言。
 
@@ -30,7 +30,7 @@
 
 1. `npm run typecheck`（tsc --noEmit）：静态类型检查，先于一切验证。
 2. `npm run lint`（eslint .）：代码规范检查。
-3. `npm test`（vitest run）：执行 `tests/unit/*.test.ts` 全部 34 个单测文件（452 个用例）。
+3. `npm test`（vitest run）：执行 `tests/unit/*.test.ts` 全部 41 个单测文件（591 个用例）。
 4. `npm run bot`（tsx tests/bot/run-bot.ts）：M13 H8 起为全赛道矩阵回归——遍历 `TRACK_DEFS` 全部 9 条赛道（含 canyon/alpine 夜间赛道），每条按自身 `def.laps` 圈数调用 `simulateLaps(createTrackFromDef(def), createCarConfig(), createBotConfig(), { laps: def.laps })`，输出每条赛道的 JSON 报告（trackId、name、laps、finished、lapTimesSec、totalTimeSec、avgSpeed、violations、offRoadTimeSec）；判定逻辑：全部赛道 `finished === true && violations <= 3` 时打印「✅ bot 跑圈通过（9 条赛道全部完成，0 违规超标）」并以退出码 0 结束，否则打印「❌ bot 跑圈失败」退出码 1。
 5. `npm run build`（tsc --noEmit && vite build）：发布构建验证，每里程碑最后执行。
 
@@ -41,8 +41,8 @@
   - `src/physics`：car、drift、input
   - `src/ai`：bot、simulate
   - `src/ui`：format、gamestate、save、joystick、hud
-  - `src/audio`：engine（engine-audio）、music
-  - `src/game`：collision/state、constants、phase（phase-logic）、player-state、track-context（含车流密度）、track-manager、game-loop（单测 + 集成冒烟，含热座与 9 赛道）
+  - `src/audio`：engine（engine-audio、M15 drift-tire-audio）、music（music 调度、M15 frame-update-audio 帧驱动接线）
+  - `src/game`：collision/state、constants、phase（phase-logic）、player-state、track-context（含车流密度）、track-manager、game-loop（单测 + 集成冒烟，含热座与 9 赛道）、M15 mode-strategy / finish-accounting / frame-update / frame-render 四模块独立单测
 - `tests/__mocks__/canvas.ts` 被 `renderer-state.test.ts` 与 `game-loop-integration.test.ts` 复用，支撑渲染器与主循环的绘制断言。
 - Depends on: `vitest`（单测运行器）、`tsx`（bot 脚本执行器）、`tests/helpers/`（track/sprites 测试辅助：迁移自 src 的 `createDefaultTrack` 与线性版 `spritesInRange`）、`src/ai/simulate`（simulateLaps 跑圈引擎）、`src/engine/track`（createStraightTrack（@deprecated 仅测试使用）/ createTrack / createSmoothTrack）、`src/engine/tracks`（TRACK_DEFS / createTrackFromDef）、`src/physics/car`（createCarConfig / updateCar）、`src/ai/bot`（createBotConfig / decideBotInput）、`src/game/game-loop`（GameLoop / updatePlayerFrame）、`src/game/track-context` / `src/game/track-manager`（赛道上下文与管理）。
 

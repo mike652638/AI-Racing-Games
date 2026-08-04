@@ -41,7 +41,7 @@
   - `src/game/track-context.ts`：`TrackContext` 类型（`def.id`/`lapLength`/`totalLaps`，HUD 圈数计算与存档 key 的来源）
   - `src/game/phase.ts` 与 `src/game/phase-logic.ts`：经 `gamestate.ts` re-export（`Phase`/`PHASE_*`/`nextPhase`/`togglePause`）
   - `src/game/lap.ts`：`lapFromZ` 经 `format.ts` re-export（圈数计算下沉后的兼容层）
-  - index.html 对应 DOM 结构（`hud-*`/`hud-best-p2`/`hud-player-tag`、`drift-indicator`/`drift-score-value`/`drift-combo`（M10 P2 连击倍率）、`challenge-timer`（M12 G1 挑战倒计时）、`boost-bar`（M12 G4 BOOST 条）、`pause-btn`（M11 F3 触屏暂停悬浮按钮）、`start-screen`（含 `#best-summary` 各赛道 BEST 汇总、`#drift-top` 菜单榜单与 `#match-top` 对局榜）、`finish-*`/`finish-hint`/`finish-drift-winner`/`finish-wins`、`pause-screen`（含 `#pause-controls` 总音量/音乐/音效三 slider、继续按钮与重开按钮）、9 个 `track-option-*` 赛道按钮等 id 与 `joystick-base`/`joystick-knob` 样式类）
+  - index.html 对应 DOM 结构（`hud-*`/`hud-best-p2`/`hud-player-tag`、`drift-indicator`/`drift-score-value`/`drift-combo`（M10 P2 连击倍率）、`challenge-timer`（M12 G1 挑战倒计时）、`boost-bar`（M12 G4 BOOST 条）、`pause-btn`（M11 F3 触屏暂停悬浮按钮）、`start-screen`（含 `#best-summary` 各赛道 BEST 汇总、`#drift-top` 菜单榜单与 `#match-top` 对局榜）、`finish-*`/`finish-hint`/`finish-drift-winner`/`finish-wins`、`pause-screen`（含 `#pause-controls` 总音量/音乐/音效三 slider、继续按钮与重开按钮）、9 个 `track-option-*` 赛道按钮等 id 与 `joystick-base`/`joystick-knob` 样式类；**M15 发布级打磨**——`index.html` 增启动画面与结算动画结构（`.menu-bg` 多层背景、标题三层叠放 `.title-main/.title-stroke/.title-glow`、榜单玻璃卡片 `.leaderboard-cards/.lb-card`、结算行 `.finish-line`），全部由 `style.css` CSS 动画驱动（`#finish-screen:not([hidden])` 触发错开淡入/上滑/去模糊、`.finish-record` 金/`.finish-score` 橙高亮、`.finish-banner-glow` 发光呼吸），UI 层 JS 零改动）
   - 浏览器 Web API：`localStorage`（`save.ts`，不可用时降级 `null`）、`PointerEvent`/`setPointerCapture`（`joystick.ts`，仅 touch 生效）
 
 ## Files

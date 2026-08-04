@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 34 个 `.test.ts` 文件，覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
+Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 41 个 `.test.ts` 文件（591 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
 
 ## Design
 
@@ -39,17 +39,24 @@ Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态�
 | `collision.test.ts`              | 验证 `updateCollisions`/`applyTrafficCollision`（P1/P2 分屏、独立冷却）与 `createRaceState`/`resetRaceState` 状态工厂                                                                                                       |
 | `constants.test.ts`              | 常量注册表：断言 `game/constants` 漂移/碰撞/渲染/路面几何/车流常量值（防魔法数字回潮），含 M12 `CHALLENGE_SECONDS` 与 BOOST 系列，校验 `DRAW_DISTANCE` 兼容导出                                                             |
 | `drift.test.ts`                  | 验证 `updateDrift` 漂移状态机：charge 积累/衰减、激活阈值、烟雾粒子生命周期、转向率 ×1.5 与速度损耗、得分与速度成正比、纯函数性，含 M10 连击/倍率与得分 clamp                                                               |
+| `drift-tire-audio.test.ts`       | **M15**：验证 `computeDriftSoundParams`/`computeTireSoundParams` 纯函数（速度/转向/湿滑系数、钳制）、DriftSound/TireSound 构造输出注入、start/stop 幂等、setIntensity/setLevel 调制目标断言                                 |
 | `engine-audio.test.ts`           | 验证 `computeEngineParams` 引擎音效频率/增益映射，M10 `EngineSound` 输出注入，M11 `RainSound`/`CollisionSound` 噪声音效（防刷屏）                                                                                           |
+| `finish-accounting.test.ts`      | **M15**：验证 `accountFinish` 结算记账——完赛标记（单屏 P2 恒 false/分屏热座 P2 参与）、driftWinner（分屏双完赛平局归 P1）、record 守卫、胜场/漂移分/对局记账各模式分支（vi.mock 隔离 localStorage）                              |
 | `format.test.ts`                 | 验证 HUD 格式化：速度 km/h 换算、MM:SS.mmm 计时、圈数推导与圈速列表                                                                                                                                                         |
+| `frame-render.test.ts`           | **M15**：验证 `renderFrame`——菜单/比赛单屏/分屏三分支（renderRegion×2+drawDivider、viewFor 单例复用）、updateHud 点亮与布局类、小地图（单屏更新/分屏隐藏、trackContext 不一致重建）                                            |
+| `frame-update.test.ts`           | **M15**：验证 `updateFrame`——非 RACING 透传、mode 挂钩调用与参数透传（hotseatPlayer/challengeMult 雨天 1.5）、完赛 onFinish+shouldRender=false、帧间状态写回、惰性 DOM 缓存、BOOST 粒子、双世界车流推进                      |
+| `frame-update-audio.test.ts`     | **M15**：验证帧驱动音频接线——漂移激活/未激活/分屏 P2/雨天 wet 触发、胎噪逐帧调制、非比赛阶段静音、null/undefined 安全 no-op                                                                                                     |
 | `game-loop.test.ts`              | 验证 `updatePlayerFrame` 完整链路（加速/漂移/圈速记录/P1-P2 互不影响）与菜单预览相机推进/回绕，M12 wet 雨天透传与 `updateBoostCharge` 蓄能/消耗                                                                             |
-| `game-loop-integration.test.ts`  | GameLoop 集成冒烟：stub 全局 DOM/rAF/AudioContext 驱动真实主循环，验证阶段流转、分屏/热座模式、9 赛道选择、暂停菜单（音量/重开/触屏）、M12 挑战模式计时、分轨音量与视觉缺陷回归（「分屏双人完赛」用例 testTimeout 15000ms） |
+| `game-loop-integration.test.ts`  | GameLoop 集成冒烟：stub 全局 DOM/rAF/AudioContext 驱动真实主循环，验证阶段流转、分屏/热座模式、9 赛道选择、暂停菜单（音量/重开/触屏）、M12 挑战模式计时、分轨音量与视觉缺陷回归（「分屏双人完赛」用例 testTimeout 15000ms；M15 起 8 处长模拟用例统一放宽超时——6 处 15000ms、2 处 30000ms） |
 | `gamestate.test.ts`              | 验证 `nextPhase`/`togglePause`（旧 ui/gamestate 接口）：菜单/比赛/结算流转与暂停切换                                                                                                                                        |
 | `hud.test.ts`                    | 验证 `updateHud`：菜单/比赛可见性、分屏布局、双玩家独立圈数、P2 BEST 显隐、热座玩家标签、M10 漂移连击 COMBO 显示、M11 得分 MAX 标记、M12 挑战模式倒计时兼容（元素缺省不抛错）                                               |
 | `input.test.ts`                  | 验证双人键盘输入映射（WASD/方向键、互不干扰、左右抵消），M12 boost 键映射                                                                                                                                                   |
 | `joystick.test.ts`               | 验证 `offsetToInput` 虚拟摇杆：死区、方向映射、幅值钳制、对角合成，M11 `reset()` 清空内部状态                                                                                                                               |
 | `lighting.test.ts`               | 验证 `updateLighting` 昼夜光照：hsl 输出、日出/日落变化、周期回绕、负时间容错、overcast 阴天、M9 白天天空恒蓝、M10 raining 雨天、M11 night 夜晚色板                                                                         |
+| `mode-strategy.test.ts`          | **M15**：验证 `createModeStrategy` 工厂（split 优先互斥）与四实例——getInputs 路由（合并双键盘/分屏独立/摇杆优先）、updateActivePlayer、shouldUpdateP2Traffic/collisionIncludesP2（热座按回合）、updatePlayers（热座回合路由）、shouldFinish（挑战限时优先）、afterSelectP1Track（热座双人同步）、menuHint 互异                    |
 | `music.test.ts`                  | 验证 `noteToFreq` 音符频率与节拍换算、低音/旋律音域，M12 调度纯函数 `stepEvents`/`nextStep` 循环回绕                                                                                                                        |
 | `phase.test.ts`                  | 验证 `game/phase` 四阶段常量与 `phase-logic` 的 `nextPhase`/`togglePause`：流转、暂停态不响应、菜单/结算态 togglePause 无效                                                                                                 |
+| `player-car.test.ts`             | **M15 前身（P0 玩家车可见化）**：验证 `drawPlayerCar`——底部固定精灵、laneOffset 平移、steer 倾斜、夜间车灯+光柱、BOOST 尾焰、高度比例                                                                                       |
 | `player-state.test.ts`           | 验证 `createPlayerState`/`resetPlayerState`：双玩家状态与 DriftState（含 smoke）对象相互独立、reset 清空                                                                                                                    |
 | `projection.test.ts`             | 验证 `project` 伪 3D 透视投影：scale、横向映射、地平线收敛、相机后方剔除                                                                                                                                                    |
 | `renderer-state.test.ts`         | 验证 `Renderer` 状态切换：重复渲染稳定、setTrack/setViewport/setTraffic、renderRegion 裁剪、RenderView 路径等价、像素对齐，M11 夜晚车灯 arc 增量、M12 车灯变道转向、M11 雨滴离屏缓存（drawImage 双幅平铺）                  |
