@@ -2,8 +2,11 @@ import { describe, expect, test } from 'vitest'
 import {
   buildCurvePrefixSum,
   buildSpriteIndex,
+  clampSpriteHeight,
   createRoadsideSprites,
   curveOffsetAtZ,
+  MAX_LAMP_HEIGHT_PX,
+  MAX_TREE_HEIGHT_PX,
   spritesInRangeIndexed,
   type Sprite,
 } from '../../src/engine/sprites'
@@ -240,5 +243,26 @@ describe('路边景物投影尺寸（P0-3 回归）', () => {
       }),
     )
     expect(maxHpx).toBeLessThan(opts.height * 0.5)
+  })
+})
+
+describe('精灵近距离 clamp（P2）', () => {
+  test('clampSpriteHeight 将超限像素高度截断到树/灯各自上限，未超限原样返回', () => {
+    expect(clampSpriteHeight('tree', 500)).toBe(MAX_TREE_HEIGHT_PX)
+    expect(clampSpriteHeight('tree', 100)).toBe(100)
+    expect(clampSpriteHeight('tree', MAX_TREE_HEIGHT_PX)).toBe(MAX_TREE_HEIGHT_PX)
+    expect(clampSpriteHeight('lamp', 500)).toBe(MAX_LAMP_HEIGHT_PX)
+    expect(clampSpriteHeight('lamp', 80)).toBe(80)
+    expect(clampSpriteHeight('lamp', MAX_LAMP_HEIGHT_PX)).toBe(MAX_LAMP_HEIGHT_PX)
+  })
+
+  test('投影数学不受 clamp 影响（project 原语义保留，供路面/车流等共享投影）', () => {
+    // 与 Renderer.buildOpts 同参：horizon = height*0.35, depth = width*0.84
+    const nearOpts: ProjectionOptions = { width: 800, height: 600, horizon: 210, depth: 672 }
+    const nearCamera: Camera3D = { x: 0, y: 1, z: 0 }
+    // 极近距离（cameraDepth → 0）时原始 scale 仍然很大——clamp 只约束绘制高度，不改投影
+    const near = project(nearOpts, nearCamera, { x: 0, y: 0, z: 10 })
+    expect(near).not.toBeNull()
+    expect(near!.scale).toBeGreaterThan(10)
   })
 })

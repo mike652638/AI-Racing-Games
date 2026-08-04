@@ -332,14 +332,14 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.getElement('finish-time-2').hidden).toBe(true)
   })
 
-  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 3px 全高分隔线）', () => {
+  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 4px 全高分隔线）', () => {
     // 重新构造分屏环境（window.location.search = '?split=1'），覆盖 beforeEach 的单屏 stub
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     const canvas = splitEnv.getCanvas()
-    // 过滤出"3px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线
+    // 过滤出"4px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线（P3：3px 加宽至 4px）
     const countDivider = (): number =>
-      (canvas.__ctx.__args.fillRect ?? []).filter((a) => a[1] === 0 && a[2] === 3 && a[3] === 600).length
+      (canvas.__ctx.__args.fillRect ?? []).filter((a) => a[1] === 0 && a[2] === 4 && a[3] === 600).length
 
     // 菜单分屏：左/右两次 renderRegion + 一次 drawDivider
     splitEnv.driveFrames(3)

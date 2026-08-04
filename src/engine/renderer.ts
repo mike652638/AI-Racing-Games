@@ -2,7 +2,15 @@ import { RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../game/constants'
 import { project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
-import { buildCurvePrefixSum, buildSpriteIndex, curveOffsetAtZ, spritesInRangeIndexed, type Sprite } from './sprites'
+import {
+  buildCurvePrefixSum,
+  buildSpriteIndex,
+  clampSpriteHeight,
+  curveOffsetAtZ,
+  spritesInRangeIndexed,
+  type Sprite,
+} from './sprites'
+import { drawPlayerCar } from './player-car'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
 import { updateLighting, WEATHER_CYCLE_SECONDS } from './lighting'
@@ -33,6 +41,8 @@ export interface RenderOptions {
   skipBoostParticles?: boolean
   /** 跳过雨丝渲染 */
   skipRain?: boolean
+  /** 跳过玩家车辆精灵绘制（P0：渲染降级/非玩家车场景，缺省绘制） */
+  skipPlayerCar?: boolean
 }
 
 /** 一次渲染所需的完整赛道数据（分屏双世界各持一份，避免每帧重建）。
@@ -356,14 +366,17 @@ export class Renderer {
     ctx.restore()
   }
 
-  /** 分屏交界分隔线：全高半透明白竖线，覆盖两区域近处路缘石交错瑕疵。
-   *  必须在 renderRegion 的 ctx.restore() 之后调用（transform 已复位，用全屏坐标）。
-   *  （Batch 3：3px 宽 + 半透明白，比原 2px 纯黑更醒目）
-   */
-  drawDivider(x: number, width = 3): void {
+  /** 分屏交界分隔线：4px 深色渐变（左右边缘柔化，视觉不生硬），覆盖两区域近处路缘石交错瑕疵。
+   *  必须在 renderRegion 的 ctx.restore() 之后调用（transform 已复位，用全屏坐标）。 */
+  drawDivider(x: number, width = 4): void {
     const { ctx } = this
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
-    ctx.fillRect(Math.round(x - width / 2), 0, width, this.opts.height)
+    const cx = Math.round(x)
+    const gradient = ctx.createLinearGradient(cx - width / 2, 0, cx + width / 2, 0)
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.65)')
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+    ctx.fillStyle = gradient
+    ctx.fillRect(cx - width / 2, 0, width, this.opts.height)
   }
 
   private renderWithOpts(
@@ -395,7 +408,12 @@ export class Renderer {
     const night = view?.night ?? false
     const colors = updateLighting(timeSec, overcast, raining, night)
 
-    ctx.fillStyle = colors.skyTop
+    // 天空纵向渐变（P1）：skyTop → skyBottom 两段渐变填充至地平线，替代单色天空（消除山脊硬切感）；
+    // 夜晚赛道锁定深暗色板，渐变仍保持暗色氛围（top 略亮、bottom 更暗）
+    const skyGradient = ctx.createLinearGradient(0, 0, 0, opts.horizon)
+    skyGradient.addColorStop(0, colors.skyTop)
+    skyGradient.addColorStop(1, colors.skyBottom)
+    ctx.fillStyle = skyGradient
     ctx.fillRect(0, 0, opts.width, opts.horizon)
     for (const layer of night ? this.mountainsNight : this.mountains) {
       drawMountainLayerCached(ctx, layer, cameraZ, opts)
@@ -415,6 +433,16 @@ export class Renderer {
     }
     if (!renderOpts?.skipBoostParticles && v.boostParticles?.length) {
       this.drawBoostParticles(v.boostParticles, cameraZ, opts)
+    }
+    // 玩家车辆精灵（P0）：屏幕底部固定位置、不参与世界投影，画在路面/车流/烟雾/尾焰之上、雨层之前；
+    // 横向偏移与转向倾斜由 camera.x 推导（game 层未显式传 steer，保持纯函数风格）；
+    // BOOST 提示复用 boostParticles 非空判定，并与 skipBoostParticles 联动（跳过 BOOST 特效时车尾尾焰一并跳过）
+    if (!renderOpts?.skipPlayerCar) {
+      drawPlayerCar(ctx, opts, {
+        laneOffset: this.camera.x,
+        night,
+        boosting: !renderOpts?.skipBoostParticles && (v.boostParticles?.length ?? 0) > 0,
+      })
     }
     if (raining && !renderOpts?.skipRain) {
       this.drawRain(timeSec, opts)
@@ -727,7 +755,7 @@ export class Renderer {
       if (!bottom) {
         continue
       }
-      const hpx = sprite.height * bottom.scale * opts.height * 0.5
+      const hpx = clampSpriteHeight(sprite.kind, sprite.height * bottom.scale * opts.height * 0.5)
       if (sprite.kind === 'tree') {
         this.drawTree(bottom.x, bottom.y, hpx)
       } else {

@@ -162,22 +162,27 @@ describe('Renderer 状态切换', () => {
     // rect(0, 0, ow, height)：x=0 恒为整数，w 必须取整
     expect(Number.isInteger(lastRect[0])).toBe(true)
     expect(Number.isInteger(lastRect[2])).toBe(true)
-    const lastTranslate = args.translate[args.translate.length - 1]
-    // translate(ox, 0)：x 必须取整，否则裁剪区域偏移到半像素
-    expect(Number.isInteger(lastTranslate[0])).toBe(true)
+    const regionTranslate = args.translate[0]
+    // translate(ox, 0)：x 必须取整，否则裁剪区域偏移到半像素。
+    // 取序列首项：renderRegion 的区域平移恒为第一次 translate（renderWithOpts 内
+    // 玩家车精灵的 save/translate/rotate 在其后，P0 起序列不再只有一项）
+    expect(Number.isInteger(regionTranslate[0])).toBe(true)
   })
 
-  it('drawDivider 绘制全高半透明可见竖线', () => {
+  it('drawDivider 绘制全高 4px 深色渐变分隔线（P3：左右边缘柔化）', () => {
     const { canvas, renderer } = createHarness(800, 600)
     renderer.drawDivider(400)
     const fillRectArgs = canvas.__ctx.__args.fillRect
     const last = fillRectArgs[fillRectArgs.length - 1]
-    // fillRect(Math.round(x - width/2), 0, width, height)：居中 3px 全高竖线（Batch 3：加宽加亮）
-    expect(last[0]).toBe(399)
+    // fillRect(Math.round(x - width/2), 0, width, height)：居中 4px 全高竖线（P3：加宽 + 渐变）
+    expect(last[0]).toBe(398)
     expect(last[1]).toBe(0)
-    expect(last[2]).toBe(3)
+    expect(last[2]).toBe(4)
     expect(last[3]).toBe(600)
-    expect(canvas.__ctx.fillStyle).toBe('rgba(255, 255, 255, 0.4)')
+    // fillStyle 为 createLinearGradient 渐变对象，且 addColorStop 调用了 3 次（透明→深色→透明）
+    expect(canvas.__ctx.__calls.createLinearGradient ?? 0).toBeGreaterThan(0)
+    expect(canvas.__ctx.__calls.addColorStop ?? 0).toBeGreaterThanOrEqual(3)
+    expect(canvas.__ctx.fillStyle).not.toBe('rgba(255, 255, 255, 0.4)')
   })
 
   it('renderRegion 用自定义 RenderView 渲染不同赛道（s-curve）不抛错且产生绘制', () => {

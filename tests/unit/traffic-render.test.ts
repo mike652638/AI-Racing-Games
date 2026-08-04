@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectTraffic } from '../../src/engine/traffic-render'
+import { MAX_TRAFFIC_HEIGHT_PX, projectTraffic } from '../../src/engine/traffic-render'
 import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
 import { SEGMENT_LENGTH } from '../../src/engine/track'
 import type { ProjectionOptions } from '../../src/engine/projection'
@@ -69,6 +69,26 @@ describe('projectTraffic 车流投影', () => {
 
   it('空数组返回空结果', () => {
     expect(projectTraffic([], 200, cameraX, opts, camera)).toEqual([])
+  })
+
+  it('极近距离车流高度 clamp 到 MAX_TRAFFIC_HEIGHT_PX 且保持宽高比（P2 防贴脸超大遮挡）', () => {
+    // 相机 z=200 与 cameraZ=200 对齐（project 用 camera.z 计算 dz）：car z=201 → dz=1，
+    // 投影 scale = depth/dz = 300，原始高度 = 0.4 × 300 × (600/2) = 36000 >> 200
+    const nearCamera = { x: 0, y: 1, z: 200 }
+    const p = projectTraffic([car(201)], 200, cameraX, opts, nearCamera)[0]
+    expect(p.height).toBeLessThanOrEqual(MAX_TRAFFIC_HEIGHT_PX)
+    expect(p.height).toBeCloseTo(MAX_TRAFFIC_HEIGHT_PX, 6)
+    // 宽高比保持不变：原始宽高比 = (CAR_WORLD_WIDTH × (width/2)) / (CAR_WORLD_HEIGHT × (height/2)) = 200/120 = 5/3
+    expect(p.width / p.height).toBeCloseTo((0.5 * (opts.width / 2)) / (0.4 * (opts.height / 2)), 9)
+  })
+
+  it('远车投影高度未超限时原样输出（< MAX_TRAFFIC_HEIGHT_PX 不 clamp）', () => {
+    // 相机 z=200：car z=1200 → dz=1000，scale = 0.3，原始高度 = 0.4 × 0.3 × 300 = 36、原始宽度 = 0.5 × 0.3 × 400 = 60
+    const nearCamera = { x: 0, y: 1, z: 200 }
+    const p = projectTraffic([car(1200)], 200, cameraX, opts, nearCamera)[0]
+    expect(p.height).toBeCloseTo(36, 6)
+    expect(p.width).toBeCloseTo(60, 6)
+    expect(p.height).toBeLessThan(MAX_TRAFFIC_HEIGHT_PX)
   })
 })
 

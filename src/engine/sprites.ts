@@ -19,6 +19,18 @@ const TREE_HEIGHT = 1.2
 /** 路灯世界高度（约 2.8m） */
 const LAMP_HEIGHT = 0.8
 
+/** 极近距离树的最大绘制高度（像素，P2）：防 1/cameraDepth 投影在贴脸时产生过大精灵遮挡画面 */
+export const MAX_TREE_HEIGHT_PX = 240
+/** 极近距离路灯的最大绘制高度（像素，P2） */
+export const MAX_LAMP_HEIGHT_PX = 200
+
+/** 景物像素高度 clamp（P2）：hpx 超出对应上限时截断，防止近距精灵无限放大。
+ *  仅约束绘制高度，不影响投影数学（project 保持原语义，路面/车流等投影不受影响）。 */
+export function clampSpriteHeight(kind: SpriteKind, hpx: number): number {
+  const max = kind === 'tree' ? MAX_TREE_HEIGHT_PX : MAX_LAMP_HEIGHT_PX
+  return Math.min(hpx, max)
+}
+
 /** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing） */
 export function createRoadsideSprites(track: Segment[], seed = 1234, spacing = 800): Sprite[] {
   const rand = mulberry32(seed)
