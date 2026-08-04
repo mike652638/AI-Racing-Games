@@ -720,6 +720,22 @@ export class GameLoop {
       return
     }
 
+    // 玩家实时转向输入（-1..1）：复用 updateFrame 同款输入路由（mode.getInputs 合并
+    // WASD+方向键/摇杆），保证渲染倾斜与物理转向输入源一致——直接取 getP1Input 会漏掉
+    // 方向键（P2 映射）在单屏合并输入中的转向分量，导致物理左移但车辆不倾斜
+    let steer1 = 0
+    let steer2 = 0
+    if (this.phase === PHASE_RACING) {
+      const { input1, input2 } = this.mode.getInputs({
+        joystickActive: this.joystick.isActive(),
+        joystickInput: this.joystick.getInput(),
+        p1Input: this.input.getP1Input(),
+        p2Input: this.input.getP2Input(),
+      })
+      steer1 = input1.steer
+      steer2 = this.mode.splitMode ? input2.steer : 0
+    }
+
     const rr = renderFrame(dt, {
       phase: this.phase,
       splitMode: this.mode.splitMode,
@@ -736,6 +752,8 @@ export class GameLoop {
       hotseatMode: this.mode.hotseatMode,
       hotseatPlayer: this.hotseatPlayer,
       boostActive: this.boostActive,
+      steer1,
+      steer2,
     })
     this.minimap = rr.minimap
     this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)

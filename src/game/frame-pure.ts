@@ -131,6 +131,7 @@ export function viewFor(
   boostParticles?: BoostParticle[],
   speedRatio = 0,
   boosting = false,
+  steer = 0,
 ): RenderView {
   _viewCache.track = ctx.segments
   _viewCache.curvePrefixSum = ctx.curvePrefixSum
@@ -142,6 +143,8 @@ export function viewFor(
   // M8：速度线与 BOOST 金色 vignette 参数
   _viewCache.speedRatio = speedRatio
   _viewCache.boosting = boosting
+  // 玩家实时转向输入（-1..1，比赛渲染传 ctx.steer1/steer2；菜单预览缺省 0）：驱动车辆转向倾斜
+  _viewCache.steer = steer
   return _viewCache
 }
 

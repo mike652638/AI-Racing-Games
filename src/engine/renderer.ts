@@ -60,6 +60,9 @@ export interface RenderView {
   speedRatio?: number
   /** M8：BOOST 激活状态，用于金色 vignette 屏幕特效 */
   boosting?: boolean
+  /** 玩家实时转向输入（-1..1，game 层 CarInput.steer 透传）：驱动车辆转向倾斜；
+   *  缺省 undefined 时 drawPlayerCar 回退 laneOffset 推导（无延迟的即时响应） */
+  steer?: number
 }
 
 interface MountainLayer {
@@ -442,13 +445,15 @@ export class Renderer {
       this.drawBoostParticles(v.boostParticles, cameraZ, opts)
     }
     // 玩家车辆精灵（P0）：屏幕底部固定位置、不参与世界投影，画在路面/车流/烟雾/尾焰之上、雨层之前；
-    // 横向偏移与转向倾斜由 camera.x 推导（game 层未显式传 steer，保持纯函数风格）；
+    // 横向偏移由 camera.x 提供；转向倾斜由 game 层实时 steer 输入驱动（缺省回退 laneOffset 推导，
+    // 即按下转向键即刻倾斜、无需等待 laneOffset 累积）；
     // BOOST 提示复用 boostParticles 非空判定，并与 skipBoostParticles 联动（跳过 BOOST 特效时车尾尾焰一并跳过）
     if (!renderOpts?.skipPlayerCar) {
       drawPlayerCar(ctx, opts, {
         laneOffset: this.camera.x,
         night,
         boosting: !renderOpts?.skipBoostParticles && (v.boostParticles?.length ?? 0) > 0,
+        steer: v.steer,
       })
     }
     if (raining && !renderOpts?.skipRain) {

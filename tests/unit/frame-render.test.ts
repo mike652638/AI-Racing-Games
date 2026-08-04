@@ -81,6 +81,8 @@ function makeCtx(over: Partial<FrameRenderContext> = {}): FrameRenderContext {
     hotseatMode: false,
     hotseatPlayer: 1,
     boostActive: false,
+    steer1: 0,
+    steer2: 0,
     ...over,
   }
 }
