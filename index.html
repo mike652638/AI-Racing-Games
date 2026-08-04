@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <title>OutRun 伪 3D 复刻</title>
+    <!-- PWA：SVG 图标（favicon 与 manifest 通用） -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <!-- PWA：manifest link 由 vite-plugin-pwa 构建时自动注入（避免重复），此处不手写 -->
+    <meta name="theme-color" content="#ffd75e" />
+    <!-- PWA：移动端添加到主屏幕 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OutRun" />
+    <link rel="apple-touch-icon" href="/pwa-192.png" />
   </head>
   <body>
     <canvas id="game"></canvas>
@@ -32,48 +42,83 @@
     </div>
     <div id="rotate-hint">
       <div class="rotate-icon">⟳</div>
-      <p>请旋转设备至横屏以获得最佳体验</p>
+      <h2>请旋转设备</h2>
+      <p>横屏才能获得最佳驾驶体验</p>
     </div>
     <div id="start-screen">
-      <h1>OUTRUN 伪 3D</h1>
-      <div id="track-select">
-        <div class="track-option selected" id="track-option-0">1 经典赛道 ★☆☆</div>
-        <div class="track-option" id="track-option-1">2 高速公路 ★☆☆</div>
-        <div class="track-option" id="track-option-2">3 S 弯挑战 ★★☆</div>
-        <div class="track-option" id="track-option-3">4 环岛巡回 ★★☆</div>
-        <div class="track-option" id="track-option-4">5 峡谷疾驰 ★★☆</div>
-        <div class="track-option" id="track-option-5">6 沙漠疾驰 ★★☆</div>
-        <div class="track-option" id="track-option-6">7 森林穿梭 ★★★</div>
-        <div class="track-option" id="track-option-7">8 海岸公路 ★★★</div>
-        <div class="track-option" id="track-option-8">9 山岳险道 ★★★</div>
+      <div class="menu-bg" aria-hidden="true">
+        <div class="menu-gradient"></div>
+        <div class="menu-grid"></div>
+        <div class="menu-sun"></div>
+        <div class="menu-stars"></div>
+        <div class="menu-light"></div>
       </div>
-      <p id="track-name">经典赛道</p>
-      <p id="p2-track-name" hidden>经典赛道</p>
-      <p id="keyboard-hint">WASD / 方向键 驾驶</p>
-      <p id="touch-hint">触屏：左上刹车 · 右上油门 · 左下左转 · 右下右转</p>
-      <div id="best-summary">暂无最佳成绩</div>
-      <div id="drift-top">暂无漂移记录</div>
-      <div id="match-top">暂无对局记录</div>
-      <button id="start-btn" type="button" style="margin-top:20px;padding:10px 32px;border:2px solid #ffd75e;border-radius:10px;background:rgba(255,215,94,0.15);color:#ffd75e;font-family:var(--font-mono);font-size:clamp(16px,4vw,22px);cursor:pointer;transition:background 0.15s ease;">开始游戏</button>
-      <p class="hint" id="menu-hint">按任意键开始 · 1-9 切换赛道</p>
-      <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 1-9 切换赛道</p>
+      <div class="menu-content">
+        <div class="title-wrap">
+          <h1 class="title-main">OUTRUN 伪 3D</h1>
+          <div class="title-stroke" aria-hidden="true">OUTRUN 伪 3D</div>
+          <div class="title-glow" aria-hidden="true">OUTRUN 伪 3D</div>
+        </div>
+        <div id="track-select">
+          <div class="track-option selected" id="track-option-0">1 经典赛道 ★☆☆</div>
+          <div class="track-option" id="track-option-1">2 高速公路 ★☆☆</div>
+          <div class="track-option" id="track-option-2">3 S 弯挑战 ★★☆</div>
+          <div class="track-option" id="track-option-3">4 环岛巡回 ★★☆</div>
+          <div class="track-option" id="track-option-4">5 峡谷疾驰 ★★☆</div>
+          <div class="track-option" id="track-option-5">6 沙漠疾驰 ★★☆</div>
+          <div class="track-option" id="track-option-6">7 森林穿梭 ★★★</div>
+          <div class="track-option" id="track-option-7">8 海岸公路 ★★★</div>
+          <div class="track-option" id="track-option-8">9 山岳险道 ★★★</div>
+        </div>
+        <p id="track-name">经典赛道</p>
+        <p id="p2-track-name" hidden>经典赛道</p>
+        <p id="keyboard-hint">WASD / 方向键 驾驶</p>
+        <p id="touch-hint">触屏：左上刹车 · 右上油门 · 左下左转 · 右下右转</p>
+        <div class="leaderboard-cards">
+          <div class="lb-card">
+            <div class="lb-card-head">赛道最佳</div>
+            <div id="best-summary">暂无最佳成绩</div>
+          </div>
+          <div class="lb-card">
+            <div class="lb-card-head">漂移榜单</div>
+            <div id="drift-top">暂无漂移记录</div>
+          </div>
+          <div class="lb-card">
+            <div class="lb-card-head">对局战绩</div>
+            <div id="match-top">暂无对局记录</div>
+          </div>
+        </div>
+        <button id="start-btn" type="button">开始游戏</button>
+        <p class="hint" id="menu-hint">按任意键开始 · 1-9 切换赛道</p>
+        <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 1-9 切换赛道</p>
+      </div>
     </div>
     <div id="finish-screen" hidden>
-      <h1>完赛!</h1>
-      <p id="finish-time"></p>
-      <p id="finish-speed"></p>
-      <p id="finish-best"></p>
-      <p id="finish-score"></p>
-      <div id="finish-laps"></div>
-      <p id="finish-time-2" hidden></p>
-      <p id="finish-speed-2" hidden></p>
-      <p id="finish-best-2" hidden></p>
-      <p id="finish-score-2" hidden></p>
-      <div id="finish-laps-2" hidden></div>
-      <div id="finish-drift-winner" hidden></div>
-      <div id="finish-wins" hidden></div>
-      <div id="finish-hint" hidden></div>
-      <p class="hint">按 R 重新开始</p>
+      <div class="finish-bg" aria-hidden="true">
+        <div class="finish-sun"></div>
+        <div class="finish-grid"></div>
+      </div>
+      <div class="finish-panel">
+        <h1 class="finish-title">完赛!</h1>
+        <div class="finish-card p1-card">
+          <p class="finish-line" id="finish-time"></p>
+          <p class="finish-line" id="finish-speed"></p>
+          <p class="finish-line finish-record" id="finish-best"></p>
+          <p class="finish-line finish-score" id="finish-score"></p>
+        </div>
+        <div class="finish-line finish-laps" id="finish-laps"></div>
+        <div class="finish-card p2-card finish-line">
+          <p class="finish-line" id="finish-time-2" hidden></p>
+          <p class="finish-line" id="finish-speed-2" hidden></p>
+          <p class="finish-line finish-record" id="finish-best-2" hidden></p>
+          <p class="finish-line finish-score" id="finish-score-2" hidden></p>
+        </div>
+        <div class="finish-line finish-laps" id="finish-laps-2" hidden></div>
+        <div class="finish-line finish-banner" id="finish-drift-winner" hidden></div>
+        <div class="finish-line finish-stats" id="finish-wins" hidden></div>
+        <div class="finish-line finish-hint" id="finish-hint" hidden></div>
+        <p class="hint finish-line finish-restart">按 R 重新开始</p>
+      </div>
     </div>
     <div id="pause-screen" hidden>
       <h1 id="pause-title">PAUSED</h1>
