@@ -30,6 +30,10 @@
       <div id="hud-time-2">0:00.000</div>
       <div id="hud-best-2" hidden>BEST 0:00.000</div>
     </div>
+    <div id="rotate-hint">
+      <div class="rotate-icon">⟳</div>
+      <p>请旋转设备至横屏以获得最佳体验</p>
+    </div>
     <div id="start-screen">
       <h1>OUTRUN 伪 3D</h1>
       <div id="track-select">
@@ -52,6 +56,7 @@
       <div id="match-top">暂无对局记录</div>
       <button id="start-btn" type="button" style="margin-top:20px;padding:10px 32px;border:2px solid #ffd75e;border-radius:10px;background:rgba(255,215,94,0.15);color:#ffd75e;font-family:var(--font-mono);font-size:clamp(16px,4vw,22px);cursor:pointer;transition:background 0.15s ease;">开始游戏</button>
       <p class="hint" id="menu-hint">按任意键开始 · 1-9 切换赛道</p>
+      <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 1-9 切换赛道</p>
     </div>
     <div id="finish-screen" hidden>
       <h1>完赛!</h1>
@@ -75,9 +80,9 @@
       <p class="hint">按 ESC 继续</p>
       <div id="pause-controls">
         <button id="pause-resume" type="button">继续</button>
-        <label>音量 <input id="pause-volume" type="range" min="0" max="100" value="60"></label>
-        <label>音乐 <input id="pause-music-volume" type="range" min="0" max="100" value="80"></label>
-        <label>音效 <input id="pause-sfx-volume" type="range" min="0" max="100" value="100"></label>
+        <label>音量 <input id="pause-volume" type="range" min="0" max="100" value="60"><span id="pause-volume-value">60%</span></label>
+        <label>音乐 <input id="pause-music-volume" type="range" min="0" max="100" value="80"><span id="pause-music-volume-value">80%</span></label>
+        <label>音效 <input id="pause-sfx-volume" type="range" min="0" max="100" value="100"><span id="pause-sfx-volume-value">100%</span></label>
         <button id="pause-restart" type="button">重新开始（R）</button>
       </div>
     </div>
