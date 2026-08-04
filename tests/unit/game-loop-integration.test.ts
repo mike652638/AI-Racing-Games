@@ -776,6 +776,30 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(saved).toBe('0.8')
   })
 
+  it('P2（P2）：三个音量 slider input 同步数值标签（#pause-*-value，百分比整数格式）', () => {
+    const env2 = stubEnvironment('', {})
+    new GameLoop()
+    // 构造器初始同步：slider 当前值写进数值标签（stub value 初始空 → '0%'，元素缺失时静默跳过不抛错）
+    expect(env2.getElement('pause-volume-value').textContent).toBe('0%')
+    expect(env2.getElement('pause-music-volume-value').textContent).toBe('0%')
+    expect(env2.getElement('pause-sfx-volume-value').textContent).toBe('0%')
+    // 主音量 slider → 80/100 → 数值标签 '80%'
+    const vol = env2.getElement('pause-volume')
+    vol.value = '80'
+    env2.fireElementEvent('pause-volume', 'input')
+    expect(env2.getElement('pause-volume-value').textContent).toBe('80%')
+    // 音乐 slider → 40/100 → 数值标签 '40%'
+    const music = env2.getElement('pause-music-volume')
+    music.value = '40'
+    env2.fireElementEvent('pause-music-volume', 'input')
+    expect(env2.getElement('pause-music-volume-value').textContent).toBe('40%')
+    // 音效 slider → 100/100 → 数值标签 '100%'
+    const sfx = env2.getElement('pause-sfx-volume')
+    sfx.value = '100'
+    env2.fireElementEvent('pause-sfx-volume', 'input')
+    expect(env2.getElement('pause-sfx-volume-value').textContent).toBe('100%')
+  })
+
   it('G1（G1）：挑战模式限时刷分——驱动到限时后 finished 且结算面板显示挑战文案', () => {
     const chEnv = stubEnvironment('?challenge=1')
     new GameLoop()
@@ -786,9 +810,13 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 首帧挑战剩余时间 60s（raceTime 0）
     const first = chEnv.debugValue('challengeTimeLeft')
     expect(first).toBe(60)
+    // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见
+    chEnv.driveFrames(2)
+    expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
+    expect(chEnv.getElement('challenge-score').hidden).toBe(false)
     // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
     // 结算面板走挑战分支 → finish-time '挑战结束'
-    chEnv.driveFrames(1250)
+    chEnv.driveFrames(1248)
     expect(chEnv.debugValue('phase')).toBe('finished')
     expect(chEnv.getElement('finish-time').textContent).toBe('挑战结束')
     // 挑战剩余时间递减（finished 后帧循环停止推进 raceTime，定格在完赛时刻）

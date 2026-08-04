@@ -38,6 +38,20 @@ export function inputFromKeys(pressed: Set<string>, mapping: PlayerMapping): Car
   }
 }
 
+/** 合并两路键盘输入（单屏双键盘兼容：P1 WASD + P2 方向键同时可用）。
+ *  油门取大、刹车任一激活、转向相加后 clamp 到 [-1,1]（反向抵消）；
+ *  boost 任一激活即产出，均未按不产出字段（保持条件产出形状）。 */
+export function mergeCarInputs(a: CarInput, b: CarInput): CarInput {
+  const steer = Math.max(-1, Math.min(1, a.steer + b.steer))
+  const boost = a.boost === true || b.boost === true
+  return {
+    throttle: Math.max(a.throttle, b.throttle),
+    brake: a.brake || b.brake,
+    steer,
+    ...(boost ? { boost: true } : {}),
+  }
+}
+
 export interface TouchPoint {
   x: number
   y: number

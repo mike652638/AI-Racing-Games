@@ -12,6 +12,7 @@ import { Minimap } from '../ui/minimap'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { addDriftScore, addMatchResult, loadBestTime, loadBestTimeFor, recordWin, type WinStats } from '../ui/save'
 import { createInputManager } from './input'
+import { mergeCarInputs } from '../physics/input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic } from './track-context'
 import { updateCollisions } from './collision'
@@ -214,7 +215,11 @@ export class GameLoop {
       pauseVolume.addEventListener('input', () => {
         this.volume = clampAndSyncGain(Number(pauseVolume.value) / 100, this.masterGain)
         persistVolume(VOLUME_KEY, this.volume)
+        // P2（P2）：同步滑块数值标签（UI 层新增 #pause-volume-value span，元素缺失时静默跳过）
+        this.syncVolumeLabel(pauseVolume, 'pause-volume-value')
       })
+      // P2（P2）：初始同步一次（UI 层 span 初始文本可能为空，保证与 slider 当前值一致）
+      this.syncVolumeLabel(pauseVolume, 'pause-volume-value')
     }
     if (pauseRestart) {
       pauseRestart.addEventListener('click', () => {
@@ -228,13 +233,21 @@ export class GameLoop {
       pauseMusicVolume.addEventListener('input', () => {
         this.musicVolume = clampAndSyncGain(Number(pauseMusicVolume.value) / 100, this.musicGain)
         persistVolume(MUSIC_VOLUME_KEY, this.musicVolume)
+        // P2（P2）：同步滑块数值标签（UI 层新增 #pause-music-volume-value span，元素缺失时静默跳过）
+        this.syncVolumeLabel(pauseMusicVolume, 'pause-music-volume-value')
       })
+      // P2（P2）：初始同步一次（UI 层 span 初始文本可能为空，保证与 slider 当前值一致）
+      this.syncVolumeLabel(pauseMusicVolume, 'pause-music-volume-value')
     }
     if (pauseSfxVolume) {
       pauseSfxVolume.addEventListener('input', () => {
         this.sfxVolume = clampAndSyncGain(Number(pauseSfxVolume.value) / 100, this.sfxGain)
         persistVolume(SFX_VOLUME_KEY, this.sfxVolume)
+        // P2（P2）：同步滑块数值标签（UI 层新增 #pause-sfx-volume-value span，元素缺失时静默跳过）
+        this.syncVolumeLabel(pauseSfxVolume, 'pause-sfx-volume-value')
       })
+      // P2（P2）：初始同步一次（UI 层 span 初始文本可能为空，保证与 slider 当前值一致）
+      this.syncVolumeLabel(pauseSfxVolume, 'pause-sfx-volume-value')
     }
     // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
     const pauseBtn = this.hudElements.pauseBtn
@@ -256,6 +269,11 @@ export class GameLoop {
     trackOptions.forEach((option, i) => {
       const def = TRACK_DEFS[i]
       option.textContent = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
+      // 菜单点击选赛道（触屏/鼠标均可）：等价于键盘 1-9；热座双人同步 P2 世界
+      option.addEventListener('click', () => {
+        if (this.phase !== PHASE_MENU) return
+        this.selectP1Track(i)
+      })
     })
 
     // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用；P2 赛道名元素 B4 控制显隐）
@@ -334,6 +352,17 @@ export class GameLoop {
    */
   getPerformanceConfig(): PerformanceConfig {
     return resolvePerformanceConfig(this.splitMode, this._perfMode)
+  }
+
+  /**
+   * 同步暂停菜单滑块数值标签（P2：UI 层新增 #pause-*-value span，显示百分比整数）。
+   * 元素尚未由 UI 层添加时静默跳过（判空守卫），不抛错。
+   */
+  private syncVolumeLabel(slider: HTMLInputElement, labelId: string): void {
+    const label = document.getElementById(labelId)
+    if (label) {
+      label.textContent = `${Math.round(Number(slider.value))}%`
+    }
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
@@ -584,6 +613,20 @@ export class GameLoop {
   }
 
   /**
+   * 菜单选择 P1 赛道（键盘 1-9 与赛道按钮点击共用）：
+   * 热座双人同一赛道：P1 选赛道后同步 P2 世界（TrackContext 与预览起点）。
+   */
+  private selectP1Track(trackIndex: number): void {
+    this.selectTrackFor(0, trackIndex)
+    if (this.hotseatMode) {
+      // 热座双人同一赛道：P1 选赛道后同步 P2 世界（TrackContext 与预览起点）
+      this.trackManager.selectTrack(1, trackIndex)
+      this.race.tracks[1] = this.trackManager.getContext(1)
+      this.previewCameraZ[1] = initialPreviewCameraZ(trackIndex, this.race.tracks[1].lapLength)
+    }
+  }
+
+  /**
    * 为指定玩家切换赛道：TrackManager 重建该玩家 TrackContext 后，
    * 同步 race.tracks 引用（渲染视图/HUD 均取 race.tracks，需与 trackManager 一致），
    * 并把该玩家菜单预览相机重置到新赛道的等分起点。另一玩家不受影响。
@@ -665,7 +708,13 @@ export class GameLoop {
           x: this.race.player2.carState.position,
         })
       }
-      const input1 = this.joystick.isActive() ? this.joystick.getInput() : this.input.getP1Input()
+      // 单屏：合并 P1(WASD)+P2(方向键) 键盘输入（方向键单屏可用，与菜单"WASD / 方向键驾驶"文案一致）；
+      // 分屏：P1 仅 WASD、P2 仅方向键（保持独立）
+      const input1 = this.joystick.isActive()
+        ? this.joystick.getInput()
+        : this.splitMode
+          ? this.input.getP1Input()
+          : mergeCarInputs(this.input.getP1Input(), this.input.getP2Input())
       const input2 = this.splitMode ? this.input.getP2Input() : { throttle: 0, brake: false, steer: 0 }
       // P9：分屏暂停标题标注数据源——最近活跃玩家（P1 优先：双人同时活跃归 P1，
       // 仅 P2 有输入才标 P2；触屏摇杆输入走 input1 分支自然归 P1）
