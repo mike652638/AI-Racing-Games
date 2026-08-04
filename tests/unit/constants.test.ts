@@ -58,7 +58,7 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
   })
 
   it('车流常量值与约定一致', () => {
-    expect(TRAFFIC_DEFAULT_COUNT).toBe(8)
+    expect(TRAFFIC_DEFAULT_COUNT).toBe(14)
   })
 
   it('road-geometry 兼容导出 DRAW_DISTANCE 与真源 RENDER_DRAW_DISTANCE 一致', () => {

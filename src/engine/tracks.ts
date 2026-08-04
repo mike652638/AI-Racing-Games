@@ -153,30 +153,30 @@ const ALPINE_CONTROL_POINTS: CurveControlPoint[] = [
 ]
 
 export const TRACK_DEFS: TrackDef[] = [
-  // classic 不写 trafficCount，走默认密度（TRAFFIC_DEFAULT_COUNT = 8）
+  // classic 不写 trafficCount，走默认密度（TRAFFIC_DEFAULT_COUNT = 14）
   { id: 'classic', name: '经典赛道', difficulty: 1, controlPoints: DEFAULT_CONTROL_POINTS, laps: 3 },
-  { id: 'highway', name: '高速公路', difficulty: 2, controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3, trafficCount: 12 },
-  { id: 's-curve', name: 'S 弯挑战', difficulty: 2, controlPoints: SCURVE_CONTROL_POINTS, laps: 2, trafficCount: 6 },
-  { id: 'island', name: '环岛巡回', difficulty: 2, controlPoints: ISLAND_CONTROL_POINTS, laps: 3, trafficCount: 10 },
+  { id: 'highway', name: '高速公路', difficulty: 2, controlPoints: HIGHWAY_CONTROL_POINTS, laps: 3, trafficCount: 16 },
+  { id: 's-curve', name: 'S 弯挑战', difficulty: 2, controlPoints: SCURVE_CONTROL_POINTS, laps: 2, trafficCount: 8 },
+  { id: 'island', name: '环岛巡回', difficulty: 2, controlPoints: ISLAND_CONTROL_POINTS, laps: 3, trafficCount: 14 },
   {
     id: 'canyon',
     name: '峡谷疾驰',
     difficulty: 3,
     controlPoints: CANYON_CONTROL_POINTS,
     laps: 2,
-    trafficCount: 8,
+    trafficCount: 12,
     timeOfDay: 'night',
   },
-  { id: 'desert', name: '沙漠疾驰', difficulty: 1, controlPoints: DESERT_CONTROL_POINTS, laps: 3, trafficCount: 10 },
-  { id: 'forest', name: '森林穿梭', difficulty: 2, controlPoints: FOREST_CONTROL_POINTS, laps: 2, trafficCount: 8 },
-  { id: 'coast', name: '海岸公路', difficulty: 2, controlPoints: COAST_CONTROL_POINTS, laps: 3, trafficCount: 12 },
+  { id: 'desert', name: '沙漠疾驰', difficulty: 1, controlPoints: DESERT_CONTROL_POINTS, laps: 3, trafficCount: 14 },
+  { id: 'forest', name: '森林穿梭', difficulty: 2, controlPoints: FOREST_CONTROL_POINTS, laps: 2, trafficCount: 12 },
+  { id: 'coast', name: '海岸公路', difficulty: 2, controlPoints: COAST_CONTROL_POINTS, laps: 3, trafficCount: 16 },
   {
     id: 'alpine',
     name: '山岳险道',
     difficulty: 3,
     controlPoints: ALPINE_CONTROL_POINTS,
     laps: 2,
-    trafficCount: 6,
+    trafficCount: 8,
     timeOfDay: 'night',
   },
 ]

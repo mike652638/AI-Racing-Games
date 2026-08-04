@@ -45,4 +45,4 @@ export const ROAD_HALF_WIDTH = 1
 export const EDGE_WIDTH = 0.15
 
 /** 车流默认密度（条/圈）；赛道可通过 TrackDef.trafficCount 覆盖 */
-export const TRAFFIC_DEFAULT_COUNT = 8
+export const TRAFFIC_DEFAULT_COUNT = 14
