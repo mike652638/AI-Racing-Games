@@ -14,6 +14,7 @@ import {
   DRIFT_STEER_THRESHOLD,
   EDGE_WIDTH,
   OFF_ROAD_PUSHBACK,
+  RACE_COUNTDOWN_SECONDS,
   RACE_START_GRACE,
   RENDER_DEPTH_RATIO,
   RENDER_DRAW_DISTANCE,
@@ -46,8 +47,10 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
   it('碰撞常量值与约定一致', () => {
     expect(COLLISION_SPEED_FACTOR).toBe(0.5)
     expect(COLLISION_COOLDOWN).toBe(1)
-    // 起步保护期（2026-08-05）：覆盖倒计时 ≈2.9s + 开局短窗口（classic 首次环绕穿越 ≈1.9s）
+    // 起步保护期（2026-08-05）：自 GO 起计（F-1 后倒计时不再消耗保护期），覆盖开局车流环绕短窗口
     expect(RACE_START_GRACE).toBe(5)
+    // 起步倒计时冻结时长（F-1，2026-08-05 审计）：与 runCountdown 3→2→1 各 0.8s 对齐
+    expect(RACE_COUNTDOWN_SECONDS).toBe(2.4)
   })
 
   it('渲染常量值与约定一致', () => {
