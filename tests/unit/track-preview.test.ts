@@ -56,4 +56,14 @@ describe('buildTrackPreviewSvg（菜单赛道缩略图 SVG）', () => {
     const def = { controlPoints: [] } as unknown as TrackDef
     expect(buildTrackPreviewSvg(def)).toBeNull()
   })
+
+  it('颜色参数：自定义主题色生效（stroke/fill/color 同色），缺省金黄向后兼容（2026-08-05）', () => {
+    const colored = buildTrackPreviewSvg(TRACK_DEFS[0], 200, 64, 8, '#6ec6ff')!
+    expect(colored).toContain('stroke="#6ec6ff"')
+    expect(colored).toContain('fill="#6ec6ff"')
+    expect(colored).toContain('color="#6ec6ff"')
+    // 缺省不传色仍为金黄（既有断言依赖）
+    const def = buildTrackPreviewSvg(TRACK_DEFS[0])!
+    expect(def).toContain('stroke="#ffd75e"')
+  })
 })

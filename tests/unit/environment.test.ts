@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TRACK_DEFS } from '../../src/engine/tracks'
-import { getEnvironmentProfile } from '../../src/engine/environment'
+import { getEnvironmentProfile, getEnvironmentPreviewColor, PREVIEW_COLOR_DEFAULT } from '../../src/engine/environment'
 import { updateLighting } from '../../src/engine/lighting'
 import { createTrackFromDef } from '../../src/engine/tracks'
 import { createRoadsideSprites } from '../../src/engine/sprites'
@@ -31,6 +31,16 @@ describe('赛道环境映射（M17 名称关联场景）', () => {
     const grassHues = new Set(envs.map((e) => getEnvironmentProfile(e).grassHue))
     expect(skyHues.size).toBeGreaterThanOrEqual(3)
     expect(grassHues.size).toBeGreaterThanOrEqual(3)
+  })
+
+  it('菜单预览主题色随环境区分，未配回退金黄（2026-08-05 菜单优化）', () => {
+    expect(getEnvironmentPreviewColor('plains')).toBe(PREVIEW_COLOR_DEFAULT)
+    expect(getEnvironmentPreviewColor('desert')).toBe('#ffb347')
+    expect(getEnvironmentPreviewColor('coast')).toBe('#6ec6ff')
+    // 9 环境预览色高区分度（≥ 8 种不同色）
+    const envs = ['plains', 'highway', 's-curve', 'island', 'canyon', 'desert', 'forest', 'coast', 'alpine'] as const
+    const colors = new Set(envs.map((e) => getEnvironmentPreviewColor(e)))
+    expect(colors.size).toBeGreaterThanOrEqual(8)
   })
 })
 

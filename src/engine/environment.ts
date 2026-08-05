@@ -36,6 +36,8 @@ export interface EnvironmentProfile {
   treeColor: string
   /** 树冠亮色（两层树冠的上层） */
   treeColorLight: string
+  /** 菜单赛道缩略图主题色（亮色，随环境区分；缺省回退金黄 #ffd75e，2026-08-05 菜单优化） */
+  previewColor?: string
   /** M17 地形装饰：沙漠沙丘（dunes）/ 海岸海面（sea）/ 峡谷岩壁（rock）；无则省略（默认草原无地形装饰） */
   terrain?: 'dunes' | 'sea' | 'rock'
 }
@@ -56,6 +58,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 800,
     treeColor: '#2d5a27',
     treeColorLight: '#3a7a35',
+    previewColor: '#ffd75e',
   },
   highway: {
     id: 'highway',
@@ -72,6 +75,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 900,
     treeColor: '#2e5427',
     treeColorLight: '#3a6a32',
+    previewColor: '#7ec8ff',
   },
   's-curve': {
     id: 's-curve',
@@ -88,6 +92,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 750,
     treeColor: '#2a5525',
     treeColorLight: '#367033',
+    previewColor: '#8eff9e',
   },
   island: {
     id: 'island',
@@ -104,6 +109,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 850,
     treeColor: '#2f6a2f',
     treeColorLight: '#3d8a3d',
+    previewColor: '#6ee7d8',
   },
   canyon: {
     id: 'canyon',
@@ -120,6 +126,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 1000,
     treeColor: '#4a5a2a',
     treeColorLight: '#5a6a30',
+    previewColor: '#ff9a6e',
     terrain: 'rock',
   },
   desert: {
@@ -137,6 +144,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 1100,
     treeColor: '#5a6a2a',
     treeColorLight: '#6a7a35',
+    previewColor: '#ffb347',
     terrain: 'dunes',
   },
   forest: {
@@ -154,6 +162,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 600,
     treeColor: '#1f4a1f',
     treeColorLight: '#2a5c28',
+    previewColor: '#6eff8e',
   },
   coast: {
     id: 'coast',
@@ -170,6 +179,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 900,
     treeColor: '#2a6a3a',
     treeColorLight: '#388048',
+    previewColor: '#6ec6ff',
     terrain: 'sea',
   },
   alpine: {
@@ -187,10 +197,19 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     spacing: 1000,
     treeColor: '#4a5a5a',
     treeColorLight: '#c8d8e8',
+    previewColor: '#c8d8ff',
   },
 }
 
 /** 按环境标识取配置文件（未知环境回退 plains，防未定义崩溃） */
 export function getEnvironmentProfile(env: Environment): EnvironmentProfile {
   return PROFILES[env] ?? PROFILES.plains
+}
+
+/** 菜单赛道缩略图默认主题色（金黄；环境未配 previewColor 时回退，2026-08-05） */
+export const PREVIEW_COLOR_DEFAULT = '#ffd75e'
+
+/** 按环境取菜单缩略图主题色（未配回退金黄，2026-08-05 菜单优化） */
+export function getEnvironmentPreviewColor(env: Environment): string {
+  return getEnvironmentProfile(env).previewColor ?? PREVIEW_COLOR_DEFAULT
 }

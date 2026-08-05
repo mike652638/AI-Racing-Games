@@ -34,10 +34,11 @@ export function integrateControlPoints(controlPoints: { z: number; curve: number
 }
 
 /**
- * 构建赛道缩略图 SVG innerHTML（金色轨迹 path + 起点圆点）。
+ * 构建赛道缩略图 SVG innerHTML（主题色轨迹 path + 起点圆点）。
  * 归一化到 W×H viewBox：x 按全段跨度、z 按总长纵向铺满；空控制点返回 null。
+ * color 为轨迹主题色（随环境区分，2026-08-05 菜单优化），缺省金黄 #ffd75e。
  */
-export function buildTrackPreviewSvg(def: TrackDef, W = 200, H = 64, pad = 8): string | null {
+export function buildTrackPreviewSvg(def: TrackDef, W = 200, H = 64, pad = 8, color = '#ffd75e'): string | null {
   const pts = integrateControlPoints(def.controlPoints)
   if (pts.length === 0) return null
   let minX = Infinity
@@ -52,5 +53,6 @@ export function buildTrackPreviewSvg(def: TrackDef, W = 200, H = 64, pad = 8): s
   const sx = (x: number): number => pad + ((x - minX) / spanX) * (W - 2 * pad)
   const sy = (z: number): number => pad + (z / maxZ) * (H - 2 * pad)
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)} ${sy(p.z).toFixed(1)}`).join(' ')
-  return `<path d="${d}" fill="none" stroke="#ffd75e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${sx(pts[0].x).toFixed(1)}" cy="${pad}" r="4" fill="#ffd75e"/>`
+  // color 表现属性供 CSS drop-shadow(currentColor) 生成同色光晕（2026-08-05 菜单优化）
+  return `<path d="${d}" fill="none" stroke="${color}" color="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${sx(pts[0].x).toFixed(1)}" cy="${pad}" r="4" fill="${color}" color="${color}"/>`
 }
