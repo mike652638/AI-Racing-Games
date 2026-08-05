@@ -20,8 +20,10 @@ export interface TrafficCar {
 
 /** 碰撞纵向容差（世界单位） */
 export const TRAFFIC_Z_TOL = 80
-/** 碰撞横向容差（世界单位） */
-export const TRAFFIC_X_TOL = 0.9
+/** 碰撞横向容差（offset 单位，2026-08-05 审计修复：原 0.9 > 车流最大 offset 0.85，
+ *  玩家居中时与任意车 z 重叠即碰撞、车道躲避几乎失效；车流世界宽 0.5（半宽 0.25）+
+ *  玩家车约同宽 → 合理容差 ≈ 0.5 + 少量余量；收窄后避让 AI（clamp ±0.85）可真正生效 */
+export const TRAFFIC_X_TOL = 0.55
 /** 车流基础巡航速度 */
 export const TRAFFIC_CRUISE_SPEED = 2400
 /**

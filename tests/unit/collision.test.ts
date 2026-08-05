@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyTrafficCollision, updateCollisions } from '../../src/game/collision'
 import { createRaceState, resetRaceState } from '../../src/game/state'
+import { RACE_START_GRACE } from '../../src/game/constants'
 import type { CarState } from '../../src/physics/car'
 import type { TrafficCar } from '../../src/engine/traffic'
 
@@ -116,6 +117,15 @@ describe('applyTrafficCollision', () => {
     expect(s.speed).toBe(100)
   })
 
+  it('边线车不误撞居中玩家（xTol 0.9→0.55 收窄回归，2026-08-05 审计修复）', () => {
+    // 玩家居中 x=0，车流在边线 offset=0.8：横向间距 0.8 > 0.55 → 不碰撞（原 0.9 会误撞）
+    const edge = applyTrafficCollision(car(0, 100), 1000, [trafficCar(1040, 0.8)], 0, 0.016)
+    expect(edge.hit).toBe(false)
+    // 同车道车 offset=0.4：间距 0.4 < 0.55 → 仍碰撞（车道躲避 gameplay 保留）
+    const lane = applyTrafficCollision(car(0, 100), 1000, [trafficCar(1040, 0.4)], 0, 0.016)
+    expect(lane.hit).toBe(true)
+  })
+
   it('纵向错过不碰撞', () => {
     const s = car(0.5, 100)
     const r = applyTrafficCollision(s, 2000, [trafficCar(1040)], 0, 0.016)
@@ -206,6 +216,7 @@ describe('applyTrafficCollision', () => {
 describe('updateCollisions（P1 车流碰撞）', () => {
   it('P1 车流碰撞：减速并计数', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE // 跳过起步保护期，验证碰撞机制本身
     race.tracks[0].traffic = [trafficCar(1040)]
     race.player1.carState = car(0.5, 100)
     race.player1.cameraZ = 1000
@@ -216,6 +227,7 @@ describe('updateCollisions（P1 车流碰撞）', () => {
 
   it('P1 冷却期内不重复计数', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
     race.tracks[0].traffic = [trafficCar(1040)]
     race.player1.carState = car(0.5, 100)
     race.player1.cameraZ = 1000
@@ -224,11 +236,34 @@ describe('updateCollisions（P1 车流碰撞）', () => {
     expect(race.player1.carState.speed).toBe(50)
     expect(race.collisionCount).toBe(1)
   })
+
+  it('起步保护期：raceTime < RACE_START_GRACE 免疫车流碰撞（防倒计时期环绕车流误撞，2026-08-05）', () => {
+    // 与车流完全重叠但个人计时未达保护期 → 不命中不计数（raceTime 0 = 刚开赛）
+    const race = createRaceState()
+    race.tracks[0].traffic = [trafficCar(1040)]
+    race.player1.carState = car(0.5, 100)
+    race.player1.cameraZ = 1000
+    race.player2.carState = car(0.5, 100)
+    race.player2.cameraZ = 1000
+    race.tracks[1].traffic = [trafficCar(1040)]
+    updateCollisions(race, 0.016, true)
+    expect(race.collisionCount).toBe(0)
+    expect(race.player1.carState.speed).toBe(100)
+    expect(race.player2.carState.speed).toBe(100)
+    // 保护期结束后恢复正常碰撞（P1 计时达标，P2 未达标仍免疫）
+    race.player1.raceTime = RACE_START_GRACE
+    updateCollisions(race, 0.016, true)
+    expect(race.collisionCount).toBe(1)
+    expect(race.player1.carState.speed).toBe(50)
+    expect(race.player2.carState.speed).toBe(100)
+  })
 })
 
 describe('updateCollisions（P2 车流碰撞修复）', () => {
   it('分屏模式下 P2 与车流碰撞：减速并计数（修复原缺失功能）', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
+    race.player2.raceTime = RACE_START_GRACE
     race.tracks[1].traffic = [trafficCar(1040)]
     race.player2.carState = car(0.5, 100)
     race.player2.cameraZ = 1000
@@ -239,6 +274,8 @@ describe('updateCollisions（P2 车流碰撞修复）', () => {
 
   it('非分屏模式下 P2 不与车流碰撞', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
+    race.player2.raceTime = RACE_START_GRACE
     race.tracks[1].traffic = [trafficCar(1040)]
     race.player2.carState = car(0.5, 100)
     race.player2.cameraZ = 1000
@@ -250,6 +287,8 @@ describe('updateCollisions（P2 车流碰撞修复）', () => {
   it('P1/P2 各自独立冷却：一方碰撞不影响另一方立即碰撞', () => {
     // 两个独立赛道世界：P1 世界左道车流撞 P1（position -0.5），P2 世界右道车流撞 P2（position 0.5）
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
+    race.player2.raceTime = RACE_START_GRACE
     race.tracks[0].traffic = [trafficCar(1040, -0.5)]
     race.tracks[1].traffic = [trafficCar(1050, 0.5)]
     race.player1.carState = car(-0.5, 100)
@@ -269,6 +308,8 @@ describe('updateCollisions（P2 车流碰撞修复）', () => {
 describe('updateCollisions（分屏双世界车流独立）', () => {
   it('P1 车流有车而 P2 车流为空：仅 P1 被罚速，计数只 +1', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
+    race.player2.raceTime = RACE_START_GRACE
     race.tracks[0].traffic = [trafficCar(1040)]
     race.tracks[1].traffic = []
     race.player1.carState = car(0.5, 100)
@@ -283,6 +324,8 @@ describe('updateCollisions（分屏双世界车流独立）', () => {
 
   it('P1 车流为空而 P2 车流有车：仅 P2 被罚速，计数只 +1', () => {
     const race = createRaceState()
+    race.player1.raceTime = RACE_START_GRACE
+    race.player2.raceTime = RACE_START_GRACE
     race.tracks[0].traffic = []
     race.tracks[1].traffic = [trafficCar(1040)]
     race.player1.carState = car(0.5, 100)
