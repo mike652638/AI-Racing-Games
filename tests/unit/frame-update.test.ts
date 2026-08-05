@@ -359,3 +359,51 @@ describe('双世界车流推进', () => {
     expect(ctx.race.tracks[1].traffic[0].z).toBeGreaterThan(z2Before)
   })
 })
+
+describe('F-1 起步倒计时冻结（2026-08-05 审计）', () => {
+  test('countdownRemaining>0：raceTime/车流/玩家物理全部冻结，不触发 mode 挂钩与完赛判定', () => {
+    stubDocument()
+    const mode = makeStubMode()
+    const race = createRaceState()
+    race.countdownRemaining = 2.4
+    race.phase = PHASE_RACING
+    const ctx = makeCtx({
+      mode,
+      race,
+      input: {
+        getP1Input: () => ({ throttle: 1, brake: false, steer: 0 }),
+        getP2Input: () => ({ throttle: 0, brake: false, steer: 0 }),
+      },
+    })
+    const z1Before = race.tracks[0].traffic[0].z
+    const r = updateFrame(DT, ctx)
+    // 冻结：计时/相机/车流/粒子均不动，mode 挂钩零调用
+    expect(race.player1.raceTime).toBe(0)
+    expect(race.player1.cameraZ).toBe(0)
+    expect(race.tracks[0].traffic[0].z).toBe(z1Before)
+    expect(mode.getInputs).not.toHaveBeenCalled()
+    expect(mode.updatePlayers).not.toHaveBeenCalled()
+    expect(mode.shouldFinish).not.toHaveBeenCalled()
+    // 倒计时按 dt 递减且未归零：countdownJustFinished=false、照常渲染
+    expect(race.countdownRemaining).toBeCloseTo(2.4 - DT)
+    expect(r.countdownJustFinished).toBe(false)
+    expect(r.shouldRender).toBe(true)
+  })
+
+  test('倒计时归零帧：countdownJustFinished=true（U-3 引导浮层触发点），次帧恢复正常更新', () => {
+    stubDocument()
+    const mode = makeStubMode()
+    const race = createRaceState()
+    race.countdownRemaining = DT // 恰好一帧后归零
+    race.phase = PHASE_RACING
+    const ctx = makeCtx({ mode, race })
+    const r = updateFrame(DT, ctx)
+    expect(race.countdownRemaining).toBe(0)
+    expect(r.countdownJustFinished).toBe(true)
+    expect(mode.getInputs).not.toHaveBeenCalled()
+    // 次帧 countdownRemaining=0 → 恢复正常更新段（mode 挂钩被调用）
+    const r2 = updateFrame(DT, ctx)
+    expect(r2.countdownJustFinished).toBe(false)
+    expect(mode.getInputs).toHaveBeenCalled()
+  })
+})
