@@ -99,8 +99,12 @@ function createAudioNode(): {
 interface Environment {
   fireKey: (code: string, shiftKey?: boolean) => void
   driveFrames: (count: number) => void
+  /** 驱动帧直到完赛（phase=finished）提前终止；maxFrames 仅为安全上限（2026-08-05 抗负载脆弱性） */
+  driveUntilFinished: (maxFrames: number) => void
   phase: () => Phase | undefined
   debugValue: (key: string) => unknown
+  /** requestAnimationFrame 累计调度次数（完赛链断修复回归：ensureLoop 重启计数，2026-08-05） */
+  rafCount: () => number
   getCanvas: () => MockCanvas
   getElement: (id: string) => StubElement
   /** P6（P6）：触发指定元素记录的事件监听器（pause-volume input / pause-restart click 等） */
@@ -239,6 +243,19 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   }
   const phase = (): Phase | undefined =>
     (windowStub as unknown as { __gameDebug?: { phase: Phase } }).__gameDebug?.phase
+  /**
+   * 驱动帧直到完赛即提前终止（maxFrames 仅为安全上限，非固定驱动帧数）：
+   * 削减余量帧的真实耗时，降低整文件并行/机器负载下的超时脆弱性（2026-08-05）；
+   * 完赛后帧循环已停摆（不再自续 rAF），提前终止也避免驱动停摆后的陈旧回调。
+   */
+  const driveUntilFinished = (maxFrames: number): void => {
+    const frame = rafCallbacks[0] as FrameRequestCallback
+    for (let i = 0; i < maxFrames; i++) {
+      now += 50
+      frame(now)
+      if (phase() === PHASE_FINISHED) break
+    }
+  }
   /** 读取 window.__gameDebug 任意字段（installDebugHook 注入的运行时状态） */
   const debugValue = (key: string): unknown =>
     (windowStub as unknown as { __gameDebug?: Record<string, unknown> }).__gameDebug?.[key]
@@ -252,8 +269,10 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   return {
     fireKey,
     driveFrames,
+    driveUntilFinished,
     phase,
     debugValue,
+    rafCount: () => rafCallbacks.length,
     getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
     fireElementEvent,
@@ -330,12 +349,29 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     new GameLoop()
     env.fireKey('Space')
     env.fireKey('KeyW')
-    // 经典赛道 3 圈 ≈ 276000 世界单位；实测最小通过 975 帧，1075 帧×50ms ≈ 53.75s
-    // 满油门（最小通过值 ×1.1 安全余量，覆盖碰撞减速与首帧 dt 偏差）
-    env.driveFrames(1075)
+    // 经典赛道 3 圈 ≈ 276000 世界单位；1075 帧为安全上限，完赛即提前终止（抗负载）
+    env.driveUntilFinished(1075)
     expect(env.phase()).toBe(PHASE_FINISHED)
     // 单屏不触碰 P2 结算行：保持初始 hidden（视觉缺陷回归）
     expect(env.getElement('finish-time-2').hidden).toBe(true)
+    // 2026-08-05 空方框修复：单屏无 P2 内容，P2 结算卡片容器整体隐藏（不显示空边框卡片）
+    expect(env.getElement('finish-card-2').hidden).toBe(true)
+    // 单屏圈速行有内容，可见（非空边框）
+    expect(env.getElement('finish-laps').hidden).toBe(false)
+  })
+
+  it('完赛后回菜单重启帧循环（防 RAF 链断导致画面冻结，2026-08-05 音频/冻结修复）', () => {
+    new GameLoop()
+    env.fireKey('Space')
+    env.fireKey('KeyW')
+    env.driveUntilFinished(1075)
+    expect(env.phase()).toBe(PHASE_FINISHED)
+    // 完赛帧 early-return 未自续 rAF（loopRunning=false）；回菜单经 applyPhase(MENU) 的
+    // ensureLoop 恰好重启一次（防重复调度致双倍速，也防链断致冻结）
+    const before = env.rafCount()
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_MENU)
+    expect(env.rafCount()).toBe(before + 1)
   })
 
   it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 4px 全高分隔线）', () => {
@@ -486,7 +522,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
-    splitEnv.driveFrames(700)
+    // forest 2 圈：700 帧为安全上限，完赛即提前终止（抗负载）
+    splitEnv.driveUntilFinished(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     // C3 双人结算：P1 完赛填 P1 行（E1：分屏加 'P1 ' 前缀），P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
     expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
@@ -508,7 +545,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // P1 无输入保持静止（raceTime 仍随帧递增，但 cameraZ=0 不跨圈 → 未完赛）
     splitEnv.fireKey('Enter')
     splitEnv.fireKey('ArrowUp')
-    splitEnv.driveFrames(700)
+    splitEnv.driveUntilFinished(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     const time2 = splitEnv.getElement('finish-time-2')
     expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
@@ -536,7 +573,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
-    splitEnv.driveFrames(700)
+    splitEnv.driveUntilFinished(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     // E1：分屏结算 P1 行加 'P1 ' 前缀（与 P2 行对称，圈速行除外）
     expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
@@ -563,7 +600,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('Space')
     splitEnv.fireKey('KeyW')
     splitEnv.fireKey('ArrowUp')
-    splitEnv.driveFrames(700)
+    splitEnv.driveUntilFinished(700)
     expect(splitEnv.phase()).toBe(PHASE_FINISHED)
     // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 森林穿梭`（零漂移得分平局归 P1）
     const top = splitEnv.getElement('match-top').textContent
@@ -600,10 +637,9 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     hotEnv.driveFrames(1)
     expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P1 驾驶中')
 
-    // KeyW 驱动 P1 跑完 3 圈（highway 车流 12 辆碰撞减速多）：实测最小通过 1265 帧，
-    // 1400 帧（×1.1 安全余量）= 70s 满油门
+    // KeyW 驱动 P1 跑完 3 圈（highway 车流 12 辆碰撞减速多）：1400 帧为安全上限，完赛即提前终止
     hotEnv.fireKey('KeyW')
-    hotEnv.driveFrames(1400)
+    hotEnv.driveUntilFinished(1400)
     expect(hotEnv.phase()).toBe(PHASE_FINISHED)
     // round 1 结算：P1 行正常填充，finish-hint 提示交棒
     expect(hotEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
@@ -621,7 +657,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P2 驾驶中')
 
     // KeyW（热座共用 P1 键盘映射 input1）驱动 P2 跑完 3 圈（highway 档，同 P1 段）
-    hotEnv.driveFrames(1400)
+    hotEnv.driveUntilFinished(1400)
     expect(hotEnv.phase()).toBe(PHASE_FINISHED)
     // round 2 结算：P1 行显示上一回合用时（不写纪录），P2 行正常全填
     expect(hotEnv.getElement('finish-time').textContent.startsWith('P1 用时')).toBe(true)
@@ -647,8 +683,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
 
     // P1 跑完 3 圈（默认 classic 赛道）进入结算后回车交棒（交棒仅 FINISHED 且 hotseatPlayer===1 生效）
     hotEnv.fireKey('KeyW')
-    // classic 3 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）
-    hotEnv.driveFrames(1075)
+    // classic 3 圈：1075 帧为安全上限，完赛即提前终止
+    hotEnv.driveUntilFinished(1075)
     expect(hotEnv.phase()).toBe(PHASE_FINISHED)
     hotEnv.fireKey('Enter')
     expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
@@ -666,13 +702,13 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     hotEnv.fireKey('Digit2')
     hotEnv.fireKey('Enter')
     hotEnv.fireKey('KeyW')
-    // highway 3 圈：实测最小通过 1265 帧，1400 帧（×1.1 安全余量）
-    hotEnv.driveFrames(1400)
+    // highway 3 圈：1400 帧为安全上限，完赛即提前终止
+    hotEnv.driveUntilFinished(1400)
     expect(hotEnv.phase()).toBe(PHASE_FINISHED)
     // 交棒：P2 回合多跑 10 帧预热（raceTime 多 0.5s），P2 必然比 P1 快照更慢 → 胜者 P1
     hotEnv.fireKey('Enter')
     hotEnv.driveFrames(10)
-    hotEnv.driveFrames(1400)
+    hotEnv.driveUntilFinished(1400)
     expect(hotEnv.phase()).toBe(PHASE_FINISHED)
     // round 2 结算：finish-wins 显示胜场统计（P1 1:0，首次连胜 1）；平手（极端对称）时不记、保持隐藏
     const winsEl = hotEnv.getElement('finish-wins')
@@ -694,8 +730,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
     env.fireKey('Space')
     env.fireKey('KeyW')
-    // classic 3 圈：实测最小通过 975 帧，1075 帧（×1.1 安全余量）满油门
-    env.driveFrames(1075)
+    // classic 3 圈：1075 帧为安全上限，完赛即提前终止（满油门无转向）
+    env.driveUntilFinished(1075)
     expect(env.phase()).toBe(PHASE_FINISHED)
     expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
   }, 15000)
@@ -867,6 +903,9 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     const last = chEnv.debugValue('challengeTimeLeft')
     expect(typeof last).toBe('number')
     expect((last as number) < (first as number)).toBe(true)
+    // 2026-08-05 空方框修复：挑战分支清空 finishLaps（无边框空卡片）且无 P2 内容（P2 卡片隐藏）
+    expect(chEnv.getElement('finish-laps').hidden).toBe(true)
+    expect(chEnv.getElement('finish-card-2').hidden).toBe(true)
   }, 15000)
 
   it('H4（H4）：注入含 combo 的漂移榜条目后 #drift-top 渲染含「连击 x」后缀', () => {

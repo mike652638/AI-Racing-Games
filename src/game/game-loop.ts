@@ -13,6 +13,7 @@ import type { MusicPlayer } from '../audio/music'
 import { runCountdown } from './countdown'
 import { collectHudElements, collectScreenElements } from './dom-setup'
 import { buildTrackPreviewSvg } from './track-preview'
+import { getEnvironmentPreviewColor } from '../engine/environment'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic } from './track-context'
@@ -157,6 +158,8 @@ export class GameLoop {
   /** 菜单预览相机位置（仅 PHASE_MENU 推进；分屏 P1/P2 各自独立，切换赛道时按圈长等分重置起点） */
   private previewCameraZ: [number, number] = [0, 0]
   private last = performance.now()
+  /** 帧循环是否已调度 rAF（防重复调度导致双倍速）；完赛 return 时链断置 false，ensureLoop 重启（2026-08-05 音频/冻结修复） */
+  private loopRunning = false
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
@@ -181,6 +184,30 @@ export class GameLoop {
     const menuHint = document.getElementById('menu-hint')
     if (menuHint) {
       menuHint.textContent = this.mode.menuHint
+    }
+    // UX-3 修复（2026-08-05）：菜单模式徽章——分屏/热座/挑战模式显式标识，避免用户误认为单屏；
+    // 单屏模式保持隐藏（默认玩法无需标注）
+    const modeBadge = document.getElementById('menu-mode-badge')
+    if (modeBadge) {
+      if (this.mode.splitMode) {
+        modeBadge.hidden = false
+        modeBadge.textContent = '分屏模式 · 双人同屏'
+        modeBadge.className = 'mode-badge mode-split'
+      } else if (this.mode.hotseatMode) {
+        modeBadge.hidden = false
+        modeBadge.textContent = '热座模式 · 回合轮流'
+        modeBadge.className = 'mode-badge mode-hotseat'
+      } else if (this.mode.challengeMode) {
+        modeBadge.hidden = false
+        modeBadge.textContent = `挑战模式 · ${CHALLENGE_SECONDS} 秒刷分`
+        modeBadge.className = 'mode-badge mode-challenge'
+      } else {
+        modeBadge.hidden = true
+      }
+    }
+    // UX-8 修复：分屏模式为 body 加类，启用 HUD P1/P2 侧标签（.hud-side-tag，CSS 控制显隐）
+    if (this.mode.splitMode && typeof document.body?.classList?.add === 'function') {
+      document.body.classList.add('split-mode')
     }
 
     this.canvas = $('game') as HTMLCanvasElement
@@ -243,7 +270,7 @@ export class GameLoop {
     refreshDriftTop()
     refreshBestSummary()
     refreshMatchTop()
-    requestAnimationFrame(this.frame)
+    this.ensureLoop()
   }
 
   /** 绑定暂停菜单控件事件：三个音量 slider + 重开/继续/触屏暂停按钮（守卫式，缺失元素跳过） */
@@ -378,11 +405,18 @@ export class GameLoop {
     }
   }
 
-  /** 绑定统计卡片展开交互（点击卡片在 前5条 / 全部10条 间切换，展开态由 .expanded 标记） */
+  /** 绑定统计卡片展开交互（点击卡片在 前5条 / 全部10条 间切换，展开态由 .expanded 标记；
+   *  UX-5 修复 2026-08-05：互斥展开——展开一个时自动收起其他，防三面板同展把开始按钮顶出视口） */
   private bindLeaderboardCards(): void {
     const cards = document.querySelectorAll?.('.lb-card-clickable') ?? []
     cards.forEach((card) => {
       card.addEventListener('click', () => {
+        const willExpand = !card.classList.contains('expanded')
+        if (willExpand) {
+          cards.forEach((other) => {
+            if (other !== card) other.classList.remove('expanded')
+          })
+        }
         card.classList.toggle('expanded')
         const target = card.getAttribute?.('data-target')
         if (target === 'drift-top') refreshDriftTop()
@@ -392,13 +426,14 @@ export class GameLoop {
     })
   }
 
-  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过；积分/SVG 下沉 track-preview.ts） */
+  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过；积分/SVG 下沉 track-preview.ts）；
+   *  轨迹主题色随赛道环境区分（2026-08-05 菜单优化，getEnvironmentPreviewColor） */
   private refreshTrackPreview(trackIndex: number): void {
     const preview = document.getElementById('track-preview')
     if (!preview) return
     const def = TRACK_DEFS[trackIndex]
     if (!def) return
-    const svg = buildTrackPreviewSvg(def)
+    const svg = buildTrackPreviewSvg(def, 200, 64, 8, getEnvironmentPreviewColor(def.environment))
     if (svg !== null) {
       preview.innerHTML = svg
     }
@@ -466,9 +501,39 @@ export class GameLoop {
     this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
   }
 
+  /** 确保帧循环已调度（幂等）：完赛后 RAF 链断（frame 因 shouldRender=false return），
+   *  回菜单/再开赛/热座交棒时须经此重启，否则画面冻结、音频不再被调制（2026-08-05） */
+  private ensureLoop(): void {
+    if (this.loopRunning) return
+    this.loopRunning = true
+    requestAnimationFrame(this.frame)
+  }
+
+  /** 静音车相关持续音（引擎/漂移胎声/胎噪；雨声可选）——离开 RACING 时调用，
+   *  防完赛/暂停后持续蜂鸣/噪声（完赛后 RAF 停摆，updateFrame 静音分支不再执行，2026-08-05）。
+   *  恢复比赛后由 updateFrame/帧块重新驱动（引擎 setSpeedRatio、胎噪 setLevel、漂移 start、雨声 start）。 */
+  private silenceDriveSounds(stopRain: boolean): void {
+    this.engineSound?.stop()
+    this.driftSound?.stop()
+    this.tireSound?.setLevel(0, 0, false)
+    if (stopRain) {
+      this.rainSound?.stop()
+    }
+  }
+
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
+    // 2026-08-05 音频修复：离开 RACING 时静音车相关持续音——完赛后 RAF 停摆、updateFrame 静音分支
+    // 不再执行，引擎/胎噪/漂移/雨声会停在最后一帧状态形成持续蜂鸣/噪声；暂停保留雨声（环境音），
+    // 完赛/回菜单连雨声一并停止（背景音乐 MusicPlayer 不受影响，持续播放）
+    if (newPhase !== PHASE_RACING) {
+      this.silenceDriveSounds(newPhase !== PHASE_PAUSED)
+    }
+    // 离开完赛态（回菜单/再开赛）重启帧循环（完赛时 RAF 链已断）
+    if (newPhase === PHASE_MENU || newPhase === PHASE_RACING) {
+      this.ensureLoop()
+    }
     // F3（F3）：进入暂停时清理摇杆残留输入（防恢复首帧误输入）；触屏暂停按钮仅比赛阶段可见
     if (newPhase === PHASE_PAUSED) {
       this.joystick.reset()
@@ -536,12 +601,8 @@ export class GameLoop {
     if (newPhase === PHASE_FINISHED) {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
       this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
-      // Batch 6（Batch 6）：小地图 canvas 惰性获取——仅单屏创建（分屏双世界无单一进度语义）；
-      // 特性检测 getContext（Node 测试环境无 HTMLCanvasElement 全局、未知 id 替身无该方法），判空自然跳过
-      const minimapEl = document.getElementById('hud-minimap') as HTMLCanvasElement | null
-      if (minimapEl !== null && !this.mode.splitMode && typeof minimapEl.getContext === 'function') {
-        this.minimap = new Minimap(this.race.tracks[0], minimapEl)
-      }
+      // Batch 6：小地图实例由 frame-render 在 RACING 首帧惰性创建（BUG-1 修复，2026-08-05：
+      // 原此处 FINISHED 创建导致首次比赛整局空白），此处不再重复创建
     }
     if (newPhase === PHASE_MENU) {
       this.resetRace()
@@ -620,9 +681,8 @@ export class GameLoop {
       this.race.phase = PHASE_RACING
       this.applyPhase(PHASE_RACING)
       // P0 修复（热座 P2）：P1 完赛时 frame() 因 shouldRender=false 直接 return，
-      // 未自续 RAF；P2 回合直接进入 RACING 后 RAF 链已断——此处主动重启帧循环，
+      // 未自续 RAF；P2 回合直接进入 RACING 后 RAF 链已断——applyPhase(RACING) 内 ensureLoop 重启帧循环，
       // 否则 P2 画面/HUD 永远冻结在 P1 状态（frame() 永不调用）
-      requestAnimationFrame(this.frame)
       return
     }
     // 菜单阶段仅空格/回车键开始游戏（其余键吞掉，防误触）
@@ -778,6 +838,8 @@ export class GameLoop {
     if (!shouldScheduleNextFrame(ur.shouldRender)) {
       // 完赛/挑战限时触发 finish：等价旧帧内 return（跳过渲染与 rAF 自续）
       // M16：决策下沉 frame-pure 纯函数（frame-pure.test.ts 锁定 shouldRender 契约）
+      // 2026-08-05：链断标记，回菜单/再开赛时 ensureLoop 重启（防画面冻结）
+      this.loopRunning = false
       return
     }
 
@@ -818,7 +880,11 @@ export class GameLoop {
       steer2,
     })
     this.minimap = rr.minimap
-    this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
+    // 2026-08-05 音频修复：引擎声仅 RACING 按车速调制——菜单/暂停不再以残留速度持续蜂鸣
+    // （尤其完赛后 RAF 停摆会停在最后高速帧）；完赛/暂停的静音由 applyPhase silenceDriveSounds 兼顾
+    if (this.phase === PHASE_RACING) {
+      this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
+    }
     requestAnimationFrame(this.frame)
   }
 
