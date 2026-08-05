@@ -7,7 +7,7 @@
   --accent: #ffd75e;
   --accent-2: #ff8c1a;
   --bg-overlay: rgba(0, 0, 0, 0.75);
-  --speed-fs: clamp(36px, 12vw, 56px);
+  --speed-fs: clamp(32px, 9vw, 44px);
   --title-fs: clamp(28px, 9vw, 64px);
   --subtitle-fs: clamp(16px, 4vw, 24px);
   --hud-fs: clamp(14px, 3vw, 20px);
@@ -61,7 +61,8 @@ canvas {
 }
 
 #hud-speed-unit {
-  font-size: var(--hint-fs);
+  /* UX-15 修复（2026-08-05）：单位字号适度提升，与数字形成 ≈2.2:1 层级（原 4:1 过悬殊） */
+  font-size: clamp(16px, 3.5vw, 20px);
   opacity: 0.85;
   margin-bottom: 8px;
 }
@@ -166,7 +167,8 @@ canvas {
 }
 
 #hud-speed-unit-2 {
-  font-size: var(--hint-fs);
+  /* UX-15 修复（2026-08-05）：同 P1 单位字号层级 */
+  font-size: clamp(16px, 3.5vw, 20px);
   opacity: 0.85;
   margin-bottom: 8px;
 }
@@ -472,18 +474,19 @@ canvas {
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 50%, rgba(255, 56, 100, 0) 70%);
-  box-shadow: 0 0 48px 14px rgba(255, 56, 100, 0.35);
+  /* UX-7 修复（2026-08-05）：光晕半径/透明度降低，防遮挡周围文字 */
+  box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.22);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
 
 @keyframes sun-pulse {
   0% {
     transform: translateX(-50%) scale(1);
-    opacity: 0.9;
+    opacity: 0.75;
   }
   100% {
     transform: translateX(-50%) scale(1.05);
-    opacity: 1;
+    opacity: 0.85;
   }
 }
 
@@ -848,9 +851,10 @@ canvas {
       inset 0 0 16px rgba(255, 215, 94, 0.2);
   }
   50% {
+    /* UX-14 修复（2026-08-05）：选中态脉冲峰值收敛，与中央预览光效错峰避免双层激光冲突 */
     box-shadow:
-      0 0 30px rgba(255, 215, 94, 0.65),
-      inset 0 0 22px rgba(255, 215, 94, 0.3);
+      0 0 22px rgba(255, 215, 94, 0.5),
+      inset 0 0 18px rgba(255, 215, 94, 0.25);
   }
 }
 
@@ -900,9 +904,10 @@ canvas {
       inset 0 0 16px rgba(74, 222, 128, 0.2);
   }
   50% {
+    /* UX-14 修复（2026-08-05）：P2 选中态同步收敛 */
     box-shadow:
-      0 0 30px rgba(74, 222, 128, 0.65),
-      inset 0 0 22px rgba(74, 222, 128, 0.3);
+      0 0 22px rgba(74, 222, 128, 0.5),
+      inset 0 0 18px rgba(74, 222, 128, 0.25);
   }
 }
 
@@ -926,35 +931,36 @@ canvas {
   border-color: rgba(0, 217, 255, 0.6);
 }
 
-/* 赛道缩略图预览（中央信息区）：由 controlPoints 积分生成的 SVG 轨迹 */
+/* 赛道缩略图预览（中央信息区）：由 controlPoints 积分生成的 SVG 轨迹；
+   2026-08-05 菜单优化：放大更醒目、轨迹主题色随环境区分（内联 stroke/fill/color），光晕用 currentColor 同色 */
 .track-preview-wrap {
-  margin: 4px auto 0;
-  height: 48px;
+  margin: 6px auto 0;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 #track-preview {
-  width: 160px;
-  height: 48px;
+  width: 200px;
+  height: 60px;
   overflow: visible;
 }
 
+/* 轨迹主题色由内联 stroke/color 属性提供（随环境区分）；此处不再用 stroke: var(--accent) 覆盖，
+   否则内联环境色会被 CSS 盖掉；光晕用 currentColor 跟随轨迹色 */
 #track-preview path {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 3;
+  stroke-width: 3.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 5px rgba(255, 215, 94, 0.55));
+  opacity: 0.95;
+  filter: drop-shadow(0 0 6px currentColor);
   animation: track-name-pop 0.4s ease-out;
 }
 
 #track-preview circle {
-  fill: var(--accent);
-  filter: drop-shadow(0 0 4px rgba(255, 215, 94, 0.8));
+  filter: drop-shadow(0 0 5px currentColor);
 }
 
 #track-name {
@@ -1185,7 +1191,24 @@ canvas {
   overflow: hidden;
   max-height: 100vh;
   overflow-y: auto;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+  /* UX-4 修复（2026-08-05）：滚动条预留槽位 + 细半透明样式——防「完赛!」标题被滚动条遮挡 */
+  scrollbar-gutter: stable;
+  padding: 0 10px calc(env(safe-area-inset-bottom) + 16px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 215, 94, 0.35) transparent;
+}
+
+#finish-screen::-webkit-scrollbar {
+  width: 8px;
+}
+
+#finish-screen::-webkit-scrollbar-thumb {
+  background: rgba(255, 215, 94, 0.35);
+  border-radius: 4px;
+}
+
+#finish-screen::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .finish-bg {
@@ -1204,7 +1227,8 @@ canvas {
   transform: translateX(-50%);
   border-radius: 50%;
   background: radial-gradient(circle, #ffeb3b 0%, #ff3864 45%, rgba(255, 56, 100, 0) 70%);
-  box-shadow: 0 0 60px 18px rgba(255, 56, 100, 0.3);
+  /* UX-6 修复（2026-08-05）：光晕收敛，防「回主菜单」按钮文字被晕染 */
+  box-shadow: 0 0 40px 12px rgba(255, 56, 100, 0.2);
   animation: sun-pulse 4s ease-in-out infinite alternate;
 }
 
@@ -1452,6 +1476,9 @@ canvas {
   border-radius: 10px;
   background: rgba(255, 215, 94, 0.12);
   color: #ffd75e;
+  /* UX-6 修复（2026-08-05）：文字描边阴影提升对比度，光晕背景下仍可辨认 */
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   font-family: var(--font-mono);
   font-size: clamp(14px, 3.5vw, 18px);
   cursor: pointer;
@@ -1610,6 +1637,9 @@ canvas {
   line-height: 1;
   cursor: pointer;
   z-index: 30;
+  /* 2026-08-05 暂停按钮可点性修复：父级 #hud 为 pointer-events:none（防 HUD 文字挡画面）会被继承，
+     导致真实鼠标/触摸点击穿透按钮落到 canvas、用户点不动；覆写 auto 恢复命中（程序化 .click() 不受影响） */
+  pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2013,4 +2043,77 @@ canvas {
 #start-screen ~ .joystick-base,
 body:not(.racing) .joystick-base {
   display: none !important;
+}
+
+/* ===== UX-3 修复（2026-08-05）：菜单模式徽章（分屏/热座/挑战显式标识，防误认为单屏） ===== */
+#menu-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 2.6vw, 15px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  border: 1px solid;
+  animation: content-fade-in 0.9s ease-out 0.2s both;
+}
+
+/* hidden 属性优先：单屏模式隐藏徽章（display 会覆盖 [hidden] 默认 none，需显式补回） */
+#menu-mode-badge[hidden] {
+  display: none;
+}
+
+#menu-mode-badge.mode-split {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(74, 222, 128, 0.12);
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+}
+
+#menu-mode-badge.mode-hotseat {
+  color: var(--menu-cyan);
+  border-color: rgba(0, 217, 255, 0.5);
+  background: rgba(0, 217, 255, 0.1);
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
+#menu-mode-badge.mode-challenge {
+  color: var(--accent-2);
+  border-color: rgba(255, 140, 26, 0.55);
+  background: rgba(255, 140, 26, 0.12);
+  text-shadow: 0 0 10px rgba(255, 140, 26, 0.3);
+}
+
+/* ===== UX-8 修复（2026-08-05）：分屏模式 HUD P1/P2 侧标签（默认隐藏，body.split-mode 时显示） ===== */
+.hud-side-tag {
+  display: none;
+}
+
+body.split-mode .hud-side-tag {
+  display: inline-block;
+  align-self: flex-end;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 2.2vw, 14px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+body.split-mode #hud .hud-side-tag {
+  color: var(--accent);
+  border: 1px solid rgba(255, 215, 94, 0.45);
+  background: rgba(255, 215, 94, 0.1);
+}
+
+body.split-mode #hud2 .hud-side-tag {
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  background: rgba(74, 222, 128, 0.1);
+  align-self: flex-start;
 }
