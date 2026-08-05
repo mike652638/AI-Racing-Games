@@ -326,9 +326,12 @@ canvas {
   width: 100%;
   height: 100%;
   padding-left: 8px;
-  font-size: 10px;
+  /* V-1（2026-08-05 审计）：标签对比度提升——字号 10→11px + 字间距 + 深色描边投影，防小字误读 */
+  font-size: 11px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   line-height: 12px;
   white-space: nowrap;
   pointer-events: none;
@@ -408,12 +411,38 @@ canvas {
 /* 榜单卡片内容区（#drift-top/#best-summary/#match-top 共享） */
 .lb-card-body {
   margin: 0;
-  font-size: var(--hint-fs);
+  /* 2026-08-05 LB-3：等宽数字 + 左对齐——排名号与时间数字纵向对齐整齐；
+   *  居中对齐会让"1."与"经典赛道 P1"中线分离导致视觉错位 */
+  /* LB-7：字号 clamp(14px, 3vw, 16px)→clamp(13px, 2.8vw, 14px)，面板更紧凑 */
+  font-size: clamp(13px, 2.8vw, 14px);
+  font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.9);
-  line-height: 1.6;
-  text-align: center;
+  /* LB-3：行高 1.6→1.4，三行内容更紧凑节省垂直空间 */
+  line-height: 1.4;
+  text-align: left;
+  /* LB-4：保留 pre-line 支持 \n 换行；同时加 padding 防止文字贴边溢出 */
   white-space: pre-line;
+  padding: 0 4px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* LB-5：所有状态限高——面板内部滚动，避免多榜单数据密度高时把"开始游戏"按钮挤出视口；
+ *  1280×720 视口下开始按钮 y≈650，榜单卡片顶 y≈480，留给面板总高度约 170px；
+ *  减去 lb-card-head (~26px) 与 padding (~12px)，剩约 132px；取 120px（6 行左右 @ 14px 行高）
+ *  确保按钮始终可见；移动端媒体查询另设更小值 */
+.lb-card-body {
+  max-height: 120px;
+  overflow-y: auto;
+  /* LB-3：滚动时首选项贴合滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
+}
+
+/* LB-5：展开态上限放宽到 135px——展开后用户期望看到更多内容，但仍保证开始按钮可见
+ *  1280×720 视口下开始按钮高 52px + marginTop 10px ≈ 62px，展开后面板顶 y=480 + 头 26px + 内容 135px + padding 12px = 653px，
+ *  留 17px 给按钮，比非展开态更紧但仍可用 */
+.lb-card-clickable.expanded .lb-card-body {
+  max-height: 135px;
 }
 
 /* 菜单/结算/暂停面板基础样式 */
@@ -1108,7 +1137,8 @@ canvas {
   background: rgba(0, 0, 0, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
-  padding: 10px 12px;
+  /* 2026-08-05 LB-6：减小 padding 10px→6px / 12px→8px，腾出横向空间减少文字换行 */
+  padding: 6px 8px;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
@@ -1569,6 +1599,14 @@ canvas {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* F-4（2026-08-05 审计）：热座交棒窗口弱化重开提示——降透明度/字号并停掉呼吸动画，
+   突出「按回车，P2 开始」交棒主路径，防误按 R 放弃交棒 */
+.finish-restart.muted {
+  opacity: 0.4;
+  animation: none;
+  font-size: calc(var(--subtitle-fs) * 0.85);
+}
+
 #finish-restart-btn {
   margin-top: 18px;
   padding: 10px 28px;
@@ -1722,6 +1760,20 @@ canvas {
 #pause-btn:hover,
 #pause-btn:active {
   background: rgba(0, 0, 0, 0.65);
+}
+
+/* U-2（2026-08-05 审计）：键鼠设备（hover:hover + pointer:fine）暂停按钮与 ESC 能力重复，
+   默认低透明度减少视觉噪声，hover/按下时增强；触屏设备保持全不透明 */
+@media (hover: hover) and (pointer: fine) {
+  #pause-btn {
+    opacity: 0.35;
+    transition: opacity 0.15s ease;
+  }
+
+  #pause-btn:hover,
+  #pause-btn:active {
+    opacity: 1;
+  }
 }
 
 /* 虚拟摇杆：样式统一由 CSS 控制，JS 仅负责显示/隐藏与位置更新 */

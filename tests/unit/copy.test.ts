@@ -2,14 +2,15 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  BEST_EMPTY_HINT,
   COUNTDOWN_HINTS,
   COUNTDOWN_HINT_README_KEYWORDS,
+  DRIFT_EMPTY_HINT,
   FINISH_DRIFT_HINT,
   MATCH_EMPTY_HINT,
   MENU_HINT,
   MENU_HINT_TOUCH,
   RACING_TOUCH_HINT,
-  STATS_EMPTY_HINT,
 } from '../../src/ui/copy'
 
 describe('copy.ts UI 文案常量', () => {
@@ -33,7 +34,8 @@ describe('copy.ts UI 文案常量', () => {
     expect(RACING_TOUCH_HINT.length).toBeGreaterThan(0)
     expect(FINISH_DRIFT_HINT.length).toBeGreaterThan(0)
     expect(MATCH_EMPTY_HINT.length).toBeGreaterThan(0)
-    expect(STATS_EMPTY_HINT.length).toBeGreaterThan(0)
+    expect(BEST_EMPTY_HINT.length).toBeGreaterThan(0)
+    expect(DRIFT_EMPTY_HINT.length).toBeGreaterThan(0)
   })
 })
 

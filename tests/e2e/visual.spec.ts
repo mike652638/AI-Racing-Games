@@ -228,23 +228,23 @@ test.describe('玩法链路（2026-08-05 新增）', () => {
 
   test('BOOST 蓄能：高速急转触发漂移后 boostCharge 增长', async ({ page }) => {
     await startGame(page)
-    // 全油门加速至满速（maxSpeed=6000 > 0.5×maxSpeed=3000 漂移速度阈值；acceleration 2400/s，
-    // 4s 确保即便 rAF 被 throttle 也稳定过阈值，2026-08-05 T-2 加固：原 2.5s 在部分环境下不足）
+    // LB-8（2026-08-05）：同时按 W+A，避免长直道先加速 4s 撞车流。
+    // W（throttle=1）+ A（steer=-1）合并到 input1：
+    // 加速到高速（maxSpeed=6000 > 0.5×maxSpeed=3000 漂移阈值）+ 持续转向
+    // → charge 累积 0.25s 激活漂移 → 0.76s 漂移激活窗口内 BOOST 蓄能 0.3/s → charge 约 0.23
     await page.keyboard.down('w')
-    await page.waitForTimeout(4_000)
-    // 持续左转向：DRIFT_STEER_THRESHOLD=0.7 → charge 累积 0.25s 激活漂移 →
-    // 漂移激活窗口（0.985^n 衰减至 0.5×maxSpeed ≈ 0.76s）内 BOOST 蓄能 0.3/s → charge 约 0.23
     await page.keyboard.down('a')
-    await page.waitForTimeout(1_500)
+    await page.waitForTimeout(4_000)
     const s = await page.evaluate(() => {
       const d = (window as { __gameDebug?: { boostCharge: number; driftActive: boolean } }).__gameDebug
       return { charge: d?.boostCharge ?? -1, driftActive: d?.driftActive ?? false }
     })
     await page.keyboard.up('a')
     await page.keyboard.up('w')
-    // 断言漂移已激活（说明确实进入蓄能路径）；charge 须 > 0
-    expect(s.driftActive, `高速急转后应进入漂移状态（实测 driftActive=${s.driftActive}）`).toBe(true)
-    expect(s.charge, `漂移激活后 boostCharge 应 > 0（实测 ${s.charge}）`).toBeGreaterThan(0)
+    // LB-8（2026-08-05）：charge 是累积值，driftActive 是瞬时状态。
+    // 4s 内有过漂移激活（charge 增长）但结束时可能已退出（active=false），
+    // 因此只断言 charge > 0（表示 BOOST 蓄能链路被触发过）。
+    expect(s.charge, `高速急转后 boostCharge 应 > 0（实测 ${s.charge}）`).toBeGreaterThan(0)
   })
 
   test('碰撞反馈：高速追击车流触发碰撞后 HUD 碰撞计数显示', async ({ page }) => {

@@ -25,8 +25,24 @@ export const RACING_TOUCH_HINT = '触屏：拖动右下角虚拟摇杆控制方�
 /** 结算面板漂移提示（#finish-drift-hint）：P1 漂移得分为 0 时显示 */
 export const FINISH_DRIFT_HINT = '甩尾过弯可获得漂移得分！'
 
+/** 赛道最佳空态追加说明（#best-summary，2026-08-05 LB-1 拆分：原共用 STATS_EMPTY_HINT
+ *  在漂移榜单显示"最佳成绩"文案错误，改为各自独立文案） */
+export const BEST_EMPTY_HINT = '完成比赛后这里会显示你的最佳圈速'
+
+/** 漂移榜单空态追加说明（#drift-top） */
+export const DRIFT_EMPTY_HINT = '完成比赛后这里会显示你的漂移高分'
+
 /** 对局战绩空态追加说明（#match-top） */
 export const MATCH_EMPTY_HINT = '仅分屏对局计入'
 
-/** 菜单统计面板空态引导（#best-summary/#drift-top） */
-export const STATS_EMPTY_HINT = '完成比赛后这里会显示你的最佳成绩'
+/** 结算面板标题（默认；挑战模式改用 FINISH_TITLE_CHALLENGE，2026-08-05 审计 F-2） */
+export const FINISH_TITLE_DEFAULT = '完赛!'
+
+/** 挑战模式结算标题（与内容行「挑战结束」呼应，防「完赛!」语义割裂） */
+export const FINISH_TITLE_CHALLENGE = '挑战结束'
+
+/** 结算屏重开提示（#finish-restart-hint 默认文案） */
+export const FINISH_RESTART_HINT = '按 R 重新开始'
+
+/** 热座 P1 完赛交棒窗口的重开提示（弱化 R，突出回车交棒；2026-08-05 审计 F-4） */
+export const HOTSEAT_RESTART_HINT = '按 R 可重跑 P1'

@@ -1,7 +1,7 @@
 import { getTrackDef, TRACK_DEFS } from '../engine/tracks'
 import { formatTime } from '../ui/format'
 import { loadBestTimeFor, loadDriftTop, loadMatchTop } from '../ui/save'
-import { MATCH_EMPTY_HINT, STATS_EMPTY_HINT } from '../ui/copy'
+import { BEST_EMPTY_HINT, DRIFT_EMPTY_HINT, MATCH_EMPTY_HINT } from '../ui/copy'
 
 /**
  * 菜单排行榜 DOM 刷新（Task D 拆分自 game-loop.ts）：
@@ -30,7 +30,7 @@ export function refreshDriftTop(): void {
   const top = loadDriftTop().slice(0, isCardExpanded(el) ? 10 : 5)
   el.textContent =
     top.length === 0
-      ? `暂无漂移记录\n${STATS_EMPTY_HINT}`
+      ? `暂无漂移记录\n${DRIFT_EMPTY_HINT}`
       : top
           .map(
             (e, i) =>
@@ -53,17 +53,22 @@ export function refreshBestSummary(): void {
     return
   }
   const lines: string[] = []
-  TRACK_DEFS.forEach((def, i) => {
+  // 2026-08-05 LB-2：编号重排——仅对有记录的赛道递增编号（1, 2, 3...），
+  // 修复原"trackDefIndex +1"导致的"1, 3, 5"跳号（用户误以为数据丢失）。
+  // trackDefIndex 仍可读，仅作为内部索引；显示名次用 rank 递增。
+  let rank = 0
+  TRACK_DEFS.forEach((def) => {
     const t1 = loadBestTimeFor(0, def.id)
     const t2 = loadBestTimeFor(1, def.id)
     // 双人均无纪录时跳过该赛道行（隐藏而非显示 "--"）
     if (t1 === null && t2 === null) return
+    rank++
     const p1 = t1 !== null ? formatTime(t1) : '--'
     const p2 = t2 !== null ? ` · P2 ${formatTime(t2)}` : ''
-    lines.push(`${i + 1}. ${def.name}  P1 ${p1}${p2}`)
+    lines.push(`${rank}. ${def.name}  P1 ${p1}${p2}`)
   })
   const visible = isCardExpanded(el) ? lines : lines.slice(0, 5)
-  el.textContent = visible.length > 0 ? visible.join('\n') : `暂无最佳成绩\n${STATS_EMPTY_HINT}`
+  el.textContent = visible.length > 0 ? visible.join('\n') : `暂无最佳成绩\n${BEST_EMPTY_HINT}`
 }
 
 /**
