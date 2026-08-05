@@ -16,6 +16,11 @@ export interface PlayerCarOptions {
   /** M18 环境车灯配色（night 模式车头核心灯色；缺省默认黄白 #ffe08a；
    *  canyon 红棕暖光 / alpine 冷白由 renderer 按环境传入） */
   headlightColor?: string
+  /** 2026-08-05 P2-5 车身主色（缺省默认红 #d8382f；分屏 P2 传蓝色以区分双人车辆归属，
+   *  与 HUD P1/P2 黄/绿标签语义一致） */
+  bodyColor?: string
+  /** 车身下缘暗部色（与 bodyColor 配套，缺省默认 #9c1f18） */
+  bodyDarkColor?: string
 }
 
 /** 玩家车高度占屏幕高度比例（任务 P0：15-20%） */
@@ -79,6 +84,8 @@ export function drawPlayerCar(
   const boosting = options?.boosting ?? false
   const flash = options?.flash ?? 0
   const headlightColor = options?.headlightColor ?? HEADLIGHT_CORE
+  const bodyColor = options?.bodyColor ?? BODY_COLOR
+  const bodyDarkColor = options?.bodyDarkColor ?? BODY_DARK_COLOR
   const carH = opts.height * PLAYER_CAR_HEIGHT_RATIO
   const carW = carH * PLAYER_CAR_ASPECT
   const cx = opts.width / 2 + laneOffsetToPx(laneOffset, opts, carW)
@@ -106,11 +113,11 @@ export function drawPlayerCar(
   ctx.fillStyle = WING_COLOR
   ctx.fillRect(cx - carW * 0.62, wingTop, carW * 1.24, carH * 0.06)
 
-  // 车身底盘（主色红）
-  ctx.fillStyle = BODY_COLOR
+  // 车身底盘（主色红；P2-5 支持 bodyColor 覆盖，分屏 P2 传蓝色区分归属）
+  ctx.fillStyle = bodyColor
   ctx.fillRect(cx - carW / 2, bottomY - carH, carW, carH)
   // 底盘下缘暗部
-  ctx.fillStyle = BODY_DARK_COLOR
+  ctx.fillStyle = bodyDarkColor
   ctx.fillRect(cx - carW / 2, bottomY - carH * 0.16, carW, carH * 0.16)
 
   // 尾翼支柱（左右各一，自尾翼下缘向下延伸衔接车身顶端；画在车身之后保证可见，

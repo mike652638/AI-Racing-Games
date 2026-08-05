@@ -97,7 +97,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player2.driftState.smoke,
       race.player2.raceTime,
-      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2, ctx.collisionFlash),
+      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2, ctx.collisionFlash, 2),
     )
     // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
     // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）

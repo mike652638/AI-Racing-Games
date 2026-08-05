@@ -58,6 +58,8 @@ export interface ScreenElements {
   pauseSfxVolume?: HTMLInputElement
   /** 暂停面板标题（#pause-title，Batch 3：带 ID 便于分屏时动态标注暂停玩家） */
   pauseTitle?: HTMLHeadingElement
+  /** 暂停面板赛道名（#pause-track-name，2026-08-05 P2-6：进入暂停时显示当前赛道名） */
+  pauseTrackName?: HTMLParagraphElement
   /** 比赛中触屏驾驶引导浮层（#racing-touch-hint） */
   racingTouchHint?: HTMLDivElement
 }

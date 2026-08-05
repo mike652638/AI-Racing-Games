@@ -174,12 +174,15 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   race.player2.boostCharge = boost2.charge
   const effInput2: CarInput = { ...input2, boost: boost2.boost }
 
-  // G4（G4）：BOOST 条——帧块直接操作（宽度 = P1 charge 相对 max-width 200px 的像素值，
-  // charge 0→200px 平滑映射；勿用百分比——百分比相对视口会被 max-width 截断导致 0.3~1.0 区间恒满条）
+  // G4（G4）：BOOST 条——帧块直接操作填充层宽度（charge 0→200px 平滑映射；勿用百分比——
+  // 百分比相对视口会被 max-width 截断导致 0.3~1.0 区间恒满条）。2026-08-05 P1-1 重构：
+  // 轨道 #boost-bar 固定 200px 常驻，仅 .boost-fill 填充层宽度随 charge 增长，未蓄能时
+  // 也能看到暗色空槽提示 BOOST 功能与蓄能进度
   ctx.boostBar ??= document.getElementById('boost-bar') as HTMLDivElement | null
   if (ctx.boostBar) {
     ctx.boostBar.hidden = false
-    ctx.boostBar.style.width = `${Math.round(race.player1.boostCharge * 200)}px`
+    const fill = ctx.boostBar.querySelector<HTMLDivElement>('.boost-fill')
+    if (fill) fill.style.width = `${Math.round(race.player1.boostCharge * 200)}px`
   }
 
   // H2（H2）：BOOST 音效与尾焰粒子——任一玩家 boost 激活且上一帧未激活时触发音效（边沿检测）；

@@ -59,6 +59,7 @@ export function collectScreenElements($: (id: string) => HTMLElement): ScreenEle
     pauseMusicVolume: $('pause-music-volume') as HTMLInputElement,
     pauseSfxVolume: $('pause-sfx-volume') as HTMLInputElement,
     pauseTitle: $('pause-title') as HTMLHeadingElement,
+    pauseTrackName: $('pause-track-name') as HTMLParagraphElement,
     finishRestartBtn: $('finish-restart-btn') as HTMLButtonElement,
   }
 }

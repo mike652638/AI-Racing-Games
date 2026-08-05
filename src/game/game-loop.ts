@@ -80,11 +80,11 @@ const MODIFIER_KEYS = [
 /** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
 const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
 
-/** 赛道难度星级 title 与 aria-label 文案（下标即难度） */
+/** 赛道难度星级文案（下标即难度；纯星级，title/aria-label 各自加"难度："前缀，2026-08-05 D-2 修复重复前缀） */
 const DIFFICULTY_HINT: Record<number, string> = {
-  1: '难度：★☆☆',
-  2: '难度：★★☆',
-  3: '难度：★★★',
+  1: '★☆☆',
+  2: '★★☆',
+  3: '★★★',
 }
 
 /**
@@ -330,7 +330,7 @@ export class GameLoop {
         starsEl.textContent = '★'.repeat(def.difficulty) + '☆'.repeat(3 - def.difficulty)
         // 星级颜色编码（diff-1 绿 / diff-2 金 / diff-3 粉红）+ 难度 title 提示
         starsEl.className = `track-stars diff-${def.difficulty}`
-        starsEl.title = DIFFICULTY_HINT[def.difficulty]
+        starsEl.title = `难度：${DIFFICULTY_HINT[def.difficulty]}`
         if (typeof starsEl.setAttribute === 'function') {
           starsEl.setAttribute('aria-label', `难度：${DIFFICULTY_HINT[def.difficulty]}`)
         }
@@ -614,6 +614,13 @@ export class GameLoop {
         } else {
           pauseTitle.textContent = 'PAUSED'
         }
+      }
+      // 2026-08-05 P2-6：暂停画面显示当前赛道名（#pause-track-name），帮助玩家确认暂停的是哪条赛道
+      const pauseTrack = this.screenElements.pauseTrackName
+      if (pauseTrack) {
+        const trackId = this.trackManager.getTrackId(0)
+        const def = TRACK_DEFS.find((d) => d.id === trackId)
+        pauseTrack.textContent = def ? `赛道：${def.name}` : ''
       }
     }
     const pauseBtn = this.hudElements.pauseBtn

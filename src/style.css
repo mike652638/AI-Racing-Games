@@ -289,32 +289,49 @@ canvas {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
-/* BOOST 氮气条（#boost-bar：G4 帧块按 P1 charge 百分比设置宽度；底部固定横条，黄→橙渐变填充） */
+/* BOOST 氮气条（#boost-bar：G4 帧块按 P1 charge 百分比设置宽度；底部固定横条，
+ * 黄→橙渐变填充。2026-08-05 P1-1 重构为「固定轨道 + 填充层」双元素——轨道常驻
+ * 显示暗色底槽，玩家在未蓄能时也能感知 BOOST 功能与蓄能进度；.boost-fill 宽度
+ * 由 frame-update 按 charge 设置。 */
 #boost-bar {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  width: 0;
-  max-width: 200px;
-  height: 8px;
-  border-radius: 4px;
+  width: 200px;
+  height: 12px;
+  border-radius: 6px;
   overflow: hidden;
-  background: linear-gradient(90deg, #ffd166, #ff8c1a);
-  box-shadow: 0 0 8px rgba(255, 140, 26, 0.5);
-  transition: width 0.1s ease;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   z-index: 30;
-  border: 1px solid transparent;
   box-sizing: border-box;
 }
 
+#boost-bar .boost-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, #ffd166, #ff8c1a);
+  box-shadow: 0 0 8px rgba(255, 140, 26, 0.5);
+  transition: width 0.1s ease;
+}
+
 #boost-bar span {
-  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   padding-left: 8px;
   font-size: 10px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.9);
-  line-height: 8px;
+  line-height: 12px;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 /* BOOST 未蓄能红色闪烁反馈（game-loop 在键盘按下且 charge<=0 时触发） */
@@ -423,6 +440,9 @@ canvas {
 #start-screen {
   background: #0b0518;
   overflow: hidden;
+  overflow-y: auto; /* 2026-08-05 P1-2 修复：菜单内容超高时允许纵向滚动，
+                      * 避免底部"空格键开始·切换赛道"提示文字被 justify-content:center
+                      * + overflow:hidden 裁剪出视口而完全不可见 */
   z-index: 60;
 }
 
@@ -1227,6 +1247,7 @@ canvas {
   margin-bottom: 4px;
   padding: 10px 36px;
   font-size: clamp(15px, 3.8vw, 20px);
+  flex-shrink: 0; /* 2026-08-05 P1-2：开始按钮不随内容超高被压缩变形 */
 }
 
 #start-btn::before {
@@ -1252,7 +1273,7 @@ canvas {
 
 #start-screen .hint,
 #menu-hint-touch {
-  margin-top: 28px;
+  margin-top: 14px; /* 2026-08-05 P1-2：28px→14px，给底部提示文字更多空间避免被裁出视口 */
   font-size: var(--hint-fs);
   opacity: 0.85;
   animation: pulse 1.6s ease-in-out infinite;
@@ -2129,10 +2150,15 @@ canvas {
   }
 }
 
-/* ===== 菜单阶段隐藏虚拟摇杆（右下角圆环） ===== */
-#start-screen ~ .joystick-base,
+/* ===== 菜单阶段隐藏虚拟摇杆（右下角圆环） =====
+ * 2026-08-05 P0 修复：原 #start-screen ~ .joystick-base 不依赖 body class，且
+ * .joystick-base DOM 位置在 #start-screen 之后（通用兄弟选择器恒匹配），配合
+ * !important 在 RACING 阶段也压过 .joystick-base.touch-visible { display: block }，
+ * 导致触屏摇杆在比赛中完全不可见。改为仅 MENU 阶段（body:not(.racing)）隐藏且去掉
+ * !important，让 touch-visible 在 RACING 阶段正常胜出。 */
+body:not(.racing) #start-screen ~ .joystick-base,
 body:not(.racing) .joystick-base {
-  display: none !important;
+  display: none;
 }
 
 /* ===== UX-3 修复（2026-08-05）：菜单模式徽章（分屏/热座/挑战显式标识，防误认为单屏） ===== */

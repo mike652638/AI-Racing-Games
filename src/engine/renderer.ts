@@ -74,6 +74,9 @@ export interface RenderView {
   /** 玩家实时转向输入（-1..1，game 层 CarInput.steer 透传）：驱动车辆转向倾斜；
    *  缺省 undefined 时 drawPlayerCar 回退 laneOffset 推导（无延迟的即时响应） */
   steer?: number
+  /** 2026-08-05 P2-5 玩家序号（1 | 2）：分屏 P2 时给玩家车传蓝色车身，与 HUD P1/P2
+   *  标签语义一致，帮助双人分辨车辆归属；缺省 undefined（P1）走默认红色 */
+  playerIndex?: 1 | 2
 }
 
 interface MountainLayer {
@@ -84,6 +87,10 @@ interface MountainLayer {
   /** 离屏预渲染的山形位图 */
   offscreen: HTMLCanvasElement
 }
+
+/** 2026-08-05 P2-5 分屏 P2 玩家车车身主色/暗部（蓝色，与 HUD P1 黄 / P2 绿标签语义并列区分车辆归属） */
+const P2_BODY_COLOR = '#2563eb'
+const P2_BODY_DARK_COLOR = '#1e40af'
 
 /** 雨滴数量（确定性生成，渲染时按 timeSec 下落） */
 const RAIN_DROPS = 80
@@ -452,6 +459,9 @@ export class Renderer {
         flash: v.collisionFlash,
         // M18：环境车灯配色（canyon 红棕 / alpine 冷白，其余 undefined 走默认黄白）
         headlightColor: envProfile.headlightColor,
+        // 2026-08-05 P2-5：分屏 P2 传蓝色车身（#2563eb）区分归属；P1/单屏 undefined 走默认红
+        bodyColor: v.playerIndex === 2 ? P2_BODY_COLOR : undefined,
+        bodyDarkColor: v.playerIndex === 2 ? P2_BODY_DARK_COLOR : undefined,
       })
     }
     if (raining && !renderOpts?.skipRain) {

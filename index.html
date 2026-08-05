@@ -46,7 +46,7 @@
       <div id="challenge-timer" hidden></div>
       <div id="challenge-score" hidden></div>
       <canvas id="hud-minimap" width="110" height="110" hidden></canvas>
-      <div id="boost-bar" hidden><span>BOOST</span></div>
+      <div id="boost-bar" hidden><div class="boost-fill"></div><span>BOOST</span></div>
       <button id="pause-btn" type="button" aria-label="暂停" hidden>⏸</button>
     </div>
     <div id="hud2" hidden>
@@ -204,6 +204,7 @@
     </div>
     <div id="pause-screen" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <h1 id="pause-title">PAUSED</h1>
+      <p id="pause-track-name" class="hint"></p>
       <p class="hint">按 ESC 继续</p>
       <div id="pause-controls">
         <button id="pause-resume" type="button">继续</button>
@@ -211,7 +212,7 @@
         <label>音乐 <input id="pause-music-volume" type="range" min="0" max="100" value="80"><span id="pause-music-volume-value">80%</span></label>
         <label>音效 <input id="pause-sfx-volume" type="range" min="0" max="100" value="100"><span id="pause-sfx-volume-value">100%</span></label>
         <button id="pause-restart" type="button">重新开始（R）</button>
-        <button id="pause-quit-btn" type="button">退出游戏</button>
+        <button id="pause-quit-btn" type="button">返回菜单</button>
       </div>
     </div>
     <div id="racing-touch-hint" class="racing-touch-hint" hidden>

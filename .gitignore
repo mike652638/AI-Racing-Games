@@ -10,6 +10,8 @@ shots/
 # Playwright e2e 产物（测试结果/截图/trace）
 test-results/
 playwright-report/
+# Playwright MCP 临时快照（页面截图/控制台日志，2026-08-05 添加）
+.playwright-mcp/
 
 # EdgeOne Pages 部署产物（MCP 生成，非源码）
 .edgeone/

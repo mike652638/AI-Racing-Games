@@ -144,6 +144,7 @@ export function viewFor(
   boosting = false,
   steer = 0,
   collisionFlash = 0,
+  playerIndex?: 1 | 2,
 ): RenderView {
   _viewCache.track = ctx.segments
   _viewCache.curvePrefixSum = ctx.curvePrefixSum
@@ -161,6 +162,8 @@ export function viewFor(
   _viewCache.collisionFlash = collisionFlash
   // 玩家实时转向输入（-1..1，比赛渲染传 ctx.steer1/steer2；菜单预览缺省 0）：驱动车辆转向倾斜
   _viewCache.steer = steer
+  // 2026-08-05 P2-5：分屏 P2 玩家序号（2 → 蓝色车身；缺省 undefined/P1 → 默认红）
+  _viewCache.playerIndex = playerIndex
   return _viewCache
 }
 
