@@ -119,12 +119,21 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
   }
 
   // Batch 6（Batch 6）：小地图（#hud-minimap）——仅单屏比赛阶段显示玩家赛道进度；
-  // 菜单切赛道后 race.tracks[0] 引用更新，据此重建轨迹折线；分屏不创建（构造器已判空，此处双保险）
+  // 菜单切赛道后 race.tracks[0] 引用更新，据此重建轨迹折线；分屏不创建（构造器已判空，此处双保险）。
+  // BUG-1 修复（2026-08-05）：惰性创建——旧逻辑仅在 applyPhase(FINISHED) 创建实例，
+  // 首次比赛 RACING 阶段 minimap 恒为 null → 小地图整局空白；改为 RACING 首帧惰性创建
+  // （分屏跳过；node 测试环境无 document/getContext，特性检测安全跳过）
+  const showMinimap = ctx.phase === PHASE_RACING && !ctx.splitMode
+  if (!minimap && showMinimap && typeof document !== 'undefined') {
+    const minimapEl = document.getElementById('hud-minimap') as HTMLCanvasElement | null
+    if (minimapEl !== null && typeof minimapEl.getContext === 'function') {
+      minimap = new Minimap(race.tracks[0], minimapEl)
+    }
+  }
   if (minimap) {
     if (minimap.trackContext !== race.tracks[0]) {
       minimap = new Minimap(race.tracks[0], minimap.canvas)
     }
-    const showMinimap = ctx.phase === PHASE_RACING && !ctx.splitMode
     minimap.canvas.hidden = !showMinimap
     if (showMinimap) {
       // 热座 P2 回合小地图跟随当前回合玩家（与单屏渲染数据源一致）

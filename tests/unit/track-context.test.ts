@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 import { SEGMENT_LENGTH } from '../../src/engine/track'
+import { TRAFFIC_SPAWN_SAFE_ZONE } from '../../src/engine/traffic'
 import { createTrackContext, refreshTraffic } from '../../src/game/track-context'
 
 describe('createTrackContext', () => {
@@ -43,5 +44,20 @@ describe('createTrackContext', () => {
     const classic = createTrackContext(TRACK_DEFS[0])
     const scurve = createTrackContext(TRACK_DEFS[2])
     expect(scurve.lapLength).toBeLessThan(classic.lapLength)
+  })
+  it('出生安全窗口：全部 9 条赛道的初始车流均不在玩家出生点前方窗口内（防开局碰撞）', () => {
+    for (const def of TRACK_DEFS) {
+      const ctx = createTrackContext(def)
+      for (const car of ctx.traffic) {
+        expect(car.z, `${def.id} 赛道车流 z=${car.z} 落在出生窗口内`).toBeGreaterThanOrEqual(TRAFFIC_SPAWN_SAFE_ZONE)
+      }
+    }
+  })
+  it('出生安全窗口：refreshTraffic 重建后同样生效（重置回菜单再开赛不回归旧问题）', () => {
+    const ctx = createTrackContext(TRACK_DEFS[0])
+    refreshTraffic(ctx)
+    for (const car of ctx.traffic) {
+      expect(car.z).toBeGreaterThanOrEqual(TRAFFIC_SPAWN_SAFE_ZONE)
+    }
   })
 })

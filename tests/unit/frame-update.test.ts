@@ -3,6 +3,7 @@ import { updateFrame, type FrameUpdateContext } from '../../src/game/frame-updat
 import { createModeStrategy, type InputRoutingContext, type ModeStrategy } from '../../src/game/mode-strategy'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING } from '../../src/game/phase'
 import { createRaceState } from '../../src/game/state'
+import { RACE_START_GRACE } from '../../src/game/constants'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
 import type { TrackManager } from '../../src/game/track-manager'
 
@@ -224,8 +225,10 @@ describe('帧间状态写回', () => {
     const r = updateFrame(DT, ctx)
     expect(r.collisionFlash).toBeLessThan(0.8)
     expect(r.collisionFlash).toBeCloseTo(0.8 * Math.exp(-6 * DT), 5)
-    // 命中：让玩家车流碰撞（P1 位于车流位置，速度比 flashSeed(3000/6000)=0.5→flash=0.5）
+    // 命中：让玩家车流碰撞（P1 位于车流位置，速度比 flashSeed(3000/6000)=0.5→flash=0.5）；
+    // raceTime 置达起步保护期阈值（碰撞门控：raceTime < RACE_START_GRACE 免疫，2026-08-05）
     const hitCtx = makeCtx({ lastCollisionCount: 0, collisionFlash: 0 })
+    hitCtx.race.player1.raceTime = RACE_START_GRACE
     hitCtx.race.player1.cameraZ = 1000
     hitCtx.race.player1.carState.speed = 3000
     hitCtx.race.player1.carState.position = 0.5

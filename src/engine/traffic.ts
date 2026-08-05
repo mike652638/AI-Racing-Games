@@ -24,6 +24,12 @@ export const TRAFFIC_Z_TOL = 80
 export const TRAFFIC_X_TOL = 0.9
 /** 车流基础巡航速度 */
 export const TRAFFIC_CRUISE_SPEED = 2400
+/**
+ * 出生安全窗口（世界单位，2026-08-05 运行时实测修复）：玩家出生点（z=0）前方该窗口内不生成车流，
+ * 避免开局即「碰撞 ×1」/静止时被连续撞击（见 docs/reports/research_report_runtime_visual_auto.md 问题 1）。
+ * 仅游戏运行时（track-context）启用；createTraffic 缺省 0 保持旧行为与 bot 基线确定性不变。
+ */
+export const TRAFFIC_SPAWN_SAFE_ZONE = 1600
 
 /** 避让触发纵向距离（世界单位）：车在玩家前方该距离内视为逼近 */
 const AVOID_Z_DIST = 350
@@ -34,14 +40,20 @@ const AVOID_STEP = 0.8
 /** 避让变道目标 offset 幅度（clamp |offset| ≤ 该值） */
 const AVOID_LANE_EDGE = 0.85
 
-/** 按种子确定性生成均匀分布的环形车流 */
-export function createTraffic(lapLength: number, seed = 777, count = 8): TrafficCar[] {
+/**
+ * 按种子确定性生成均匀分布的环形车流。
+ * spawnSafeZone（尾参，缺省 0 = 旧行为）：启用时把落在玩家出生点前方窗口 [0, spawnSafeZone) 内的车
+ * 重映射至 [spawnSafeZone, lapLength)（均匀压缩，rnd() 消费顺序不变，确定性保持），防开局碰撞。
+ */
+export function createTraffic(lapLength: number, seed = 777, count = 8, spawnSafeZone = 0): TrafficCar[] {
   const rnd = mulberry32(seed)
   const cars: TrafficCar[] = []
   for (let i = 0; i < count; i++) {
     // 注意：保持 rnd() 消费顺序与旧版对象字面量求值顺序一致（z → offset 符号 → offset 幅度 → speed → colorIndex），
     // 否则会改变确定性车流分布（tests/unit/collision.test.ts 依赖默认车流的精确分布）。
-    const z = ((i * lapLength) / count + rnd() * 200) % lapLength
+    const zRaw = ((i * lapLength) / count + rnd() * 200) % lapLength
+    // 出生安全窗口：缺省 0 时 zRaw % lapLength 与旧版逐位一致；启用时窗口内车辆整体后移出窗
+    const z = spawnSafeZone > 0 ? spawnSafeZone + (zRaw % (lapLength - spawnSafeZone)) : zRaw
     const offset = (rnd() < 0.5 ? -1 : 1) * (0.4 + rnd() * 0.4)
     const speed = TRAFFIC_CRUISE_SPEED * (0.8 + rnd() * 0.4)
     const colorIndex = Math.floor(rnd() * 4)

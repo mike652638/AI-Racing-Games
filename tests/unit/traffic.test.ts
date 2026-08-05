@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest'
-import { collideWithPlayer, createTraffic, updateTraffic, type TrafficCar } from '../../src/engine/traffic'
+import {
+  collideWithPlayer,
+  createTraffic,
+  TRAFFIC_SPAWN_SAFE_ZONE,
+  updateTraffic,
+  type TrafficCar,
+} from '../../src/engine/traffic'
 
 describe('createTraffic', () => {
   test('生成指定数量且确定性（同 seed 同结果）', () => {
@@ -29,6 +35,43 @@ describe('createTraffic', () => {
   test('cruiseOffset 初始化为出生 offset（巡航目标偏移）', () => {
     const traffic = createTraffic(20000, 777, 8)
     traffic.forEach((c) => expect(c.cruiseOffset).toBe(c.offset))
+  })
+})
+
+describe('createTraffic 出生安全窗口（防开局碰撞，2026-08-05）', () => {
+  test('缺省不启用：出生窗口内允许存在车辆（旧行为不变，bot 基线确定性锚点）', () => {
+    const traffic = createTraffic(20000, 777, 8)
+    // 首车 z = rnd()*200 ∈ [0,200)，必然落在窗口内——证明缺省路径与旧版一致
+    expect(traffic.some((c) => c.z < TRAFFIC_SPAWN_SAFE_ZONE)).toBe(true)
+  })
+  test('启用后：全部车辆落在 [TRAFFIC_SPAWN_SAFE_ZONE, lapLength) 内', () => {
+    const traffic = createTraffic(20000, 777, 8, TRAFFIC_SPAWN_SAFE_ZONE)
+    expect(traffic).toHaveLength(8)
+    traffic.forEach((c) => {
+      expect(c.z).toBeGreaterThanOrEqual(TRAFFIC_SPAWN_SAFE_ZONE)
+      expect(c.z).toBeLessThan(20000)
+    })
+  })
+  test('启用后确定性保持：同 seed 两次生成逐位一致', () => {
+    const a = createTraffic(20000, 777, 8, TRAFFIC_SPAWN_SAFE_ZONE)
+    const b = createTraffic(20000, 777, 8, TRAFFIC_SPAWN_SAFE_ZONE)
+    expect(a).toEqual(b)
+  })
+  test('启用后 rnd() 消费顺序不变：仅 z 重映射，offset/speed/colorIndex 与缺省版逐车一致', () => {
+    const base = createTraffic(20000, 777, 8)
+    const safe = createTraffic(20000, 777, 8, TRAFFIC_SPAWN_SAFE_ZONE)
+    safe.forEach((c, i) => {
+      expect(c.offset).toBe(base[i].offset)
+      expect(c.speed).toBe(base[i].speed)
+      expect(c.colorIndex).toBe(base[i].colorIndex)
+    })
+  })
+  test('启用后车辆仍保持间隔（窗口压缩不产生叠车）', () => {
+    const lapLength = 20000
+    const traffic = createTraffic(lapLength, 777, 8, TRAFFIC_SPAWN_SAFE_ZONE)
+    const sorted = [...traffic].sort((x, y) => x.z - y.z)
+    const gaps = sorted.map((c, i) => (sorted[(i + 1) % sorted.length].z - c.z + lapLength) % lapLength)
+    gaps.forEach((g) => expect(g).toBeGreaterThan(500))
   })
 })
 

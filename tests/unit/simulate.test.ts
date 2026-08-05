@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { simulateLaps } from '../../src/ai/simulate'
 import { createBotConfig } from '../../src/ai/bot'
 import { createCarConfig, updateCar, DEFAULT_CAR_CONFIG } from '../../src/physics/car'
+import { OFF_ROAD_PUSHBACK } from '../../src/game/constants'
 import { createTrack } from '../../src/engine/track'
 import { createStraightTrack } from '../helpers/track'
 
@@ -12,11 +13,12 @@ describe('updateCar 出界标记', () => {
     expect(clipped).toBe(false)
   })
 
-  test('强转向冲出路面时返回 true 且位置被钳制', () => {
+  test('强转向冲出路面时返回 true 且位置被钳制（含内侧推回，BUG-2 修复）', () => {
     const state = { position: 0.9, speed: DEFAULT_CAR_CONFIG.maxSpeed }
     const clipped = updateCar(1, { throttle: 0, brake: false, steer: 1 }, state, createCarConfig())
     expect(clipped).toBe(true)
-    expect(state.position).toBe(DEFAULT_CAR_CONFIG.roadHalfWidth)
+    // 钳制后向内侧推回 OFF_ROAD_PUSHBACK（脱离边缘线，下帧不再处于出界状态）
+    expect(state.position).toBe(DEFAULT_CAR_CONFIG.roadHalfWidth - OFF_ROAD_PUSHBACK)
   })
 })
 

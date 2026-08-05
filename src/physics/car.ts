@@ -1,5 +1,5 @@
 /** BOOST 氮气加速倍率（加速度 ×0.6）与速度上限倍率（1.15×maxSpeed），自 game/constants 导入 */
-import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT } from '../shared/constants'
+import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT, OFF_ROAD_PUSHBACK } from '../shared/constants'
 
 export interface CarConfig {
   maxSpeed: number
@@ -70,7 +70,11 @@ export function updateCar(
 
   if (Math.abs(state.position) > config.roadHalfWidth) {
     state.speed = Math.max(0, state.speed - config.offRoadDeceleration * dt)
-    state.position = Math.max(-config.roadHalfWidth, Math.min(config.roadHalfWidth, state.position))
+    // BUG-2 修复（2026-08-05）：钳制后向内侧推回 OFF_ROAD_PUSHBACK——旧版钳制恰在边缘线，
+    // 低速转向率 ∝ speed 使玩家「钉死边缘无法回路面」；推回后脱离出界判定，
+    // 恢复加速/转向权限，玩家可正常拐回路面（wet 路径同样生效，不改变减速语义）
+    const side = state.position > 0 ? 1 : -1
+    state.position = side * (config.roadHalfWidth - OFF_ROAD_PUSHBACK)
     return true
   }
   return false

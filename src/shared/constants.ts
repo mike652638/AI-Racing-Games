@@ -34,6 +34,13 @@ export const BOOST_DRAIN_RATE = 0.5
 export const COLLISION_SPEED_FACTOR = 0.5
 /** 碰撞冷却时长（秒），冷却期内不重复触发 */
 export const COLLISION_COOLDOWN = 1
+/**
+ * 起步保护期（秒，2026-08-05 运行时实测修复）：开赛/回合重置时碰撞冷却初值。
+ * 环形赛道上后方车流会在倒计时期（≈2.9s）环绕穿越出生点（classic 实测首次穿越 ≈1.9s），
+ * 静止玩家会被误撞（开局即「碰撞 ×1」）；保护期结束时玩家正常已起步驶离出生点，
+ * 不影响行驶中的正常碰撞。与 TRAFFIC_SPAWN_SAFE_ZONE（出生窗口排除）配套生效。
+ */
+export const RACE_START_GRACE = 5
 
 /** 渲染可视距离（分段数） */
 export const RENDER_DRAW_DISTANCE = 120
@@ -46,6 +53,13 @@ export const RENDER_DEPTH_RATIO = 0.84
 export const ROAD_HALF_WIDTH = 1
 /** 路缘宽度（世界单位） */
 export const EDGE_WIDTH = 0.15
+/**
+ * 出界内侧推回量（归一化路面半宽比例，2026-08-05 BUG-2 修复）：出界钳制后把车从边缘线
+ * 向内侧推回该量——旧逻辑钳制恰在边缘（|position| == halfWidth），低速转向率 ∝ speed
+ * 导致「钉死边缘无法回路面」（research_report_runtime_testing.md BUG-2）；
+ * 推回后脱离出界判定，恢复正常加速与转向权限。
+ */
+export const OFF_ROAD_PUSHBACK = 0.05
 
 /** 车流默认密度（条/圈）；赛道可通过 TrackDef.trafficCount 覆盖 */
 export const TRAFFIC_DEFAULT_COUNT = 14

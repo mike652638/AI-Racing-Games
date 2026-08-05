@@ -315,4 +315,34 @@ describe('小地图', () => {
     expect(result.minimap).toBeInstanceOf(Minimap)
     expect(result.minimap!.trackContext).toBe(race.tracks[0])
   })
+
+  test('BUG-1 回归：单屏比赛 minimap 为 null 时首帧惰性创建并显示（旧版需先经 FINISHED 才有）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const minimapCanvas = createMockCanvas(110, 110)
+    vi.stubGlobal('document', {
+      getElementById: (id: string): unknown => (id === 'hud-minimap' ? minimapCanvas : null),
+    })
+    const race = createRaceState()
+    race.player1.cameraZ = 400
+    const result = renderFrame(0.05, makeCtx({ phase: PHASE_RACING, splitMode: false, race, minimap: null }))
+    expect(result.minimap).not.toBeNull()
+    expect(result.minimap).toBeInstanceOf(Minimap)
+    expect(result.minimap!.trackContext).toBe(race.tracks[0])
+    expect(result.minimap!.canvas.hidden).toBe(false)
+    // 创建当帧即绘制（背景 fillRect + 起点标记 fillRect + 玩家点 arc 均有记录）
+    const calls = minimapCanvas.__ctx.__calls
+    expect(calls.fill ?? 0).toBeGreaterThan(0)
+    expect(calls.arc ?? 0).toBeGreaterThan(0)
+  })
+
+  test('BUG-1 回归：分屏比赛不惰性创建小地图（双世界无单一进度语义）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const minimapCanvas = createMockCanvas(110, 110)
+    const getElementById = vi.fn(() => minimapCanvas)
+    vi.stubGlobal('document', { getElementById })
+    const race = createRaceState()
+    const result = renderFrame(0.05, makeCtx({ phase: PHASE_RACING, splitMode: true, race, minimap: null }))
+    expect(result.minimap).toBeNull()
+    expect(getElementById).not.toHaveBeenCalled()
+  })
 })

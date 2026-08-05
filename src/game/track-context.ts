@@ -3,7 +3,7 @@ import { SEGMENT_LENGTH } from '../engine/track'
 import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites } from '../engine/sprites'
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
 import { getEnvironmentProfile } from '../engine/environment'
-import { createTraffic } from '../engine/traffic'
+import { createTraffic, TRAFFIC_SPAWN_SAFE_ZONE } from '../engine/traffic'
 import { TRAFFIC_DEFAULT_COUNT } from './constants'
 import type { TrackContext } from '../shared/types'
 
@@ -34,11 +34,17 @@ export function createTrackContext(def: TrackDef): TrackContext {
     spriteIndex: buildSpriteIndex(sprites, SEGMENT_LENGTH),
     sprites,
     roadStrips,
-    traffic: createTraffic(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT),
+    // 出生安全窗口（2026-08-05）：玩家出生点前方 TRAFFIC_SPAWN_SAFE_ZONE 内不生成车流，防开局碰撞
+    traffic: createTraffic(lapLength, 777, def.trafficCount ?? TRAFFIC_DEFAULT_COUNT, TRAFFIC_SPAWN_SAFE_ZONE),
   }
 }
 
-/** 重建本世界车流（重置后调用，引用替换；不触碰其它预计算字段） */
+/** 重建本世界车流（重置后调用，引用替换；不触碰其它预计算字段；同样启用出生安全窗口） */
 export function refreshTraffic(ctx: TrackContext): void {
-  ctx.traffic = createTraffic(ctx.lapLength, 777, ctx.def.trafficCount ?? TRAFFIC_DEFAULT_COUNT)
+  ctx.traffic = createTraffic(
+    ctx.lapLength,
+    777,
+    ctx.def.trafficCount ?? TRAFFIC_DEFAULT_COUNT,
+    TRAFFIC_SPAWN_SAFE_ZONE,
+  )
 }

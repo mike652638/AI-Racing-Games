@@ -1,4 +1,4 @@
-import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR } from './constants'
+import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR, RACE_START_GRACE } from './constants'
 import type { CarState } from '../physics/car'
 import { collideWithPlayer, type TrafficCar } from '../engine/traffic'
 import type { RaceState } from './state'
@@ -46,6 +46,9 @@ export function applyTrafficCollision(
  * 分屏语义（分屏升级为两个独立赛道世界后）：P1-P2 互碰已删除——左右画面是各自
  * 独立的赛道世界（各持 TrackContext），跨世界碰撞无意义。PlayerState.collisionCooldown
  * 单一字段仅用于各自世界内的车流碰撞冷却。
+ * 起步保护期（2026-08-05）：各玩家个人计时 raceTime < RACE_START_GRACE 时免疫车流碰撞——
+ * 环形赛道后方车流会在倒计时期环绕穿越出生点（classic 实测 ≈1.9s），误撞静止玩家（开局即「碰撞 ×1」）；
+ * 单测直接驱动碰撞时可显式将 raceTime 置为 ≥ RACE_START_GRACE 跳过保护期。
  */
 export function updateCollisions(
   race: RaceState,
@@ -55,22 +58,24 @@ export function updateCollisions(
 ): { hit: boolean; impact: number } {
   let hit = false
   let impact = 0
-  const r1 = applyTrafficCollision(
-    race.player1.carState,
-    race.player1.cameraZ,
-    race.tracks[0].traffic,
-    race.player1.collisionCooldown,
-    dt,
-    maxSpeed,
-  )
-  race.player1.collisionCooldown = r1.cooldown
-  if (r1.hit) {
-    race.collisionCount++
-    hit = true
-    impact = Math.max(impact, r1.impact)
+  if (race.player1.raceTime >= RACE_START_GRACE) {
+    const r1 = applyTrafficCollision(
+      race.player1.carState,
+      race.player1.cameraZ,
+      race.tracks[0].traffic,
+      race.player1.collisionCooldown,
+      dt,
+      maxSpeed,
+    )
+    race.player1.collisionCooldown = r1.cooldown
+    if (r1.hit) {
+      race.collisionCount++
+      hit = true
+      impact = Math.max(impact, r1.impact)
+    }
   }
 
-  if (splitMode) {
+  if (splitMode && race.player2.raceTime >= RACE_START_GRACE) {
     const r2 = applyTrafficCollision(
       race.player2.carState,
       race.player2.cameraZ,

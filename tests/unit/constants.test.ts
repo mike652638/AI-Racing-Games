@@ -13,6 +13,8 @@ import {
   DRIFT_SPEED_FACTOR,
   DRIFT_STEER_THRESHOLD,
   EDGE_WIDTH,
+  OFF_ROAD_PUSHBACK,
+  RACE_START_GRACE,
   RENDER_DEPTH_RATIO,
   RENDER_DRAW_DISTANCE,
   RENDER_HORIZON_RATIO,
@@ -44,6 +46,8 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
   it('碰撞常量值与约定一致', () => {
     expect(COLLISION_SPEED_FACTOR).toBe(0.5)
     expect(COLLISION_COOLDOWN).toBe(1)
+    // 起步保护期（2026-08-05）：覆盖倒计时 ≈2.9s + 开局短窗口（classic 首次环绕穿越 ≈1.9s）
+    expect(RACE_START_GRACE).toBe(5)
   })
 
   it('渲染常量值与约定一致', () => {
@@ -55,6 +59,8 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
   it('路面几何常量值与约定一致', () => {
     expect(ROAD_HALF_WIDTH).toBe(1)
     expect(EDGE_WIDTH).toBe(0.15)
+    // 出界内侧推回量（BUG-2 修复，2026-08-05）
+    expect(OFF_ROAD_PUSHBACK).toBe(0.05)
   })
 
   it('车流常量值与约定一致', () => {

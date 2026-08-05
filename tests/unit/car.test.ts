@@ -84,10 +84,11 @@ describe('转向模型', () => {
 })
 
 describe('路缘限制与出界减速', () => {
-  it('出界后横向位置被限制在路面内', () => {
+  it('出界后横向位置被限制在路面内（含内侧推回 OFF_ROAD_PUSHBACK，BUG-2 修复）', () => {
     const s = state(1.5, 100)
     updateCar(1, idle, s, config)
-    expect(s.position).toBe(1)
+    // 钳制后向内侧推回 0.05：不再恰在边缘线，脱离下帧出界判定
+    expect(s.position).toBe(0.95)
   })
 
   it('出界时速度被额外衰减（自然减速+出界衰减）', () => {
@@ -102,11 +103,29 @@ describe('路缘限制与出界减速', () => {
     expect(s.speed).toBe(0)
   })
 
-  it('转向冲出路面同样触发路缘限制', () => {
+  it('转向冲出路面同样触发路缘限制（左侧对称推回）', () => {
     const s = state(0.8, 100)
     updateCar(1, { ...idle, steer: 1 }, s, config)
-    expect(s.position).toBe(1)
+    expect(s.position).toBe(0.95)
     expect(s.speed).toBe(40)
+    const s2 = state(-0.8, 100)
+    updateCar(1, { ...idle, steer: -1 }, s2, config)
+    expect(s2.position).toBe(-0.95)
+  })
+
+  it('BUG-2 回归：出界推回后下一帧不再处于出界状态（可正常加速拐回路面）', () => {
+    const s = state(1.5, 100)
+    const off1 = updateCar(1, idle, s, config)
+    expect(off1).toBe(true)
+    // 推回至 0.95 后：无转向输入时位置不变且不再触发出界减速（速度按自然衰减）
+    const off2 = updateCar(1, { ...idle, throttle: 1 }, s, config)
+    expect(off2).toBe(false)
+    expect(s.position).toBe(0.95)
+    // 恢复加速权限：油门生效（40 + 50×1 = 90，大于纯出界后速度 40）
+    expect(s.speed).toBeGreaterThan(40)
+    // 转向拐回：内侧转向后 position 减小（转向率恢复正常速度比）
+    updateCar(1, { ...idle, throttle: 1, steer: -1 }, s, config)
+    expect(s.position).toBeLessThan(0.95)
   })
 
   it('路面内正常行驶不受路缘影响', () => {
