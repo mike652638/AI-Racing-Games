@@ -21,6 +21,8 @@ export function createTrackContext(def: TrackDef): TrackContext {
     treeRatio: env.treeRatio,
     treeColor: env.treeColor,
     treeColorLight: env.treeColorLight,
+    // V-2（2026-08-05 审计）：coast 环境海侧（+offset）不生成景物，防棕榈叠压海面
+    skipRightSprites: env.skipRightSprites,
   })
   // 道路段预计算（按曲率分段，创建时完成，运行时零重建）
   const roadStrips = buildRoadStrips(segments)

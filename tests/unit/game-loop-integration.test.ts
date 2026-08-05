@@ -901,10 +901,11 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
     expect(chEnv.getElement('challenge-score').hidden).toBe(false)
     // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
-    // 结算面板走挑战分支 → finish-time '挑战结束'
+    // 结算面板走挑战分支 → 标题 #finish-title 切「挑战结束」（F-2），finish-time 改显用时
     chEnv.driveFrames(1248)
     expect(chEnv.debugValue('phase')).toBe('finished')
-    expect(chEnv.getElement('finish-time').textContent).toBe('挑战结束')
+    expect(chEnv.getElement('finish-title').textContent).toBe('挑战结束')
+    expect(chEnv.getElement('finish-time').textContent.startsWith('用时')).toBe(true)
     // 挑战剩余时间递减（finished 后帧循环停止推进 raceTime，定格在完赛时刻）
     const last = chEnv.debugValue('challengeTimeLeft')
     expect(typeof last).toBe('number')

@@ -58,6 +58,9 @@ export interface RoadsideEnv {
   spacing?: number
   treeColor?: string
   treeColorLight?: string
+  /** V-2（2026-08-05 审计）：跳过右侧（+offset）景物生成（coast 海侧防叠压海面）；
+   *  仅影响 push，rand() 消费顺序不变，其余环境确定性逐字节不变 */
+  skipRightSprites?: boolean
 }
 
 /** 沿赛道确定性生成成对路边景物（左右各一，间隔 spacing；M17 支持环境驱动密度/树色/形状/旋转）。
@@ -74,6 +77,8 @@ export function createRoadsideSprites(
   const treeRatio = env.treeRatio ?? DEFAULT_TREE_RATIO
   const treeColor = env.treeColor ?? DEFAULT_TREE_COLOR
   const treeColorLight = env.treeColorLight ?? DEFAULT_TREE_COLOR_LIGHT
+  // V-2（2026-08-05 审计）：coast 环境海侧（+offset）不生成景物，防棕榈叠压海面
+  const skipRight = env.skipRightSprites === true
   // M17：环境决定"树位"的实际形状（desert 仙人掌 / coast 棕榈 / alpine 雪堆 / 其余树）
   const kindAtTreeSlot: SpriteKind = env.spriteKind ?? 'tree'
   // M17 增强：沙漠环境在相邻树位中点额外插入小仙人掌（scale 0.5，高度减半）
@@ -87,7 +92,9 @@ export function createRoadsideSprites(
     // UX-10：路灯用 LAMP_SIDE_OFFSET（1.8）外移至路外，其余景物保持 ROAD_SIDE_OFFSET（1.4）
     const sideOffset = kind === 'lamp' ? LAMP_SIDE_OFFSET : ROAD_SIDE_OFFSET
     sprites.push({ kind, z, offset: -sideOffset, height, treeColor, treeColorLight, rotation })
-    sprites.push({ kind, z, offset: sideOffset, height, treeColor, treeColorLight, rotation })
+    if (!skipRight) {
+      sprites.push({ kind, z, offset: sideOffset, height, treeColor, treeColorLight, rotation })
+    }
     // 沙漠小仙人掌：树位之间中点（z + spacing/2），高度减半、scale 0.5，左右各一
     if (insertSmallCactus && z + spacing / 2 < totalLength) {
       const smallZ = z + spacing / 2
@@ -100,15 +107,17 @@ export function createRoadsideSprites(
         treeColorLight,
         scale: 0.5,
       })
-      sprites.push({
-        kind: 'cactus',
-        z: smallZ,
-        offset: ROAD_SIDE_OFFSET,
-        height: TREE_HEIGHT * 0.5,
-        treeColor,
-        treeColorLight,
-        scale: 0.5,
-      })
+      if (!skipRight) {
+        sprites.push({
+          kind: 'cactus',
+          z: smallZ,
+          offset: ROAD_SIDE_OFFSET,
+          height: TREE_HEIGHT * 0.5,
+          treeColor,
+          treeColorLight,
+          scale: 0.5,
+        })
+      }
     }
   }
   return sprites
