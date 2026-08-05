@@ -46,5 +46,9 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    // game-loop-integration 长程模拟用例（多局全帧驱动 + canvas mock 全量录制）单 worker
+    // 堆占用可达 5GB+，为 fork worker 显式抬高堆上限（Vitest 4 顶层 execArgv；.npmrc
+    // node-options 仅作用于 npm 主进程，不会传入 worker；2026-08-05 审计复测 OOM 修复）
+    execArgv: ['--max-old-space-size=8192'],
   },
 })
