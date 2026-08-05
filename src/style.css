@@ -2546,3 +2546,35 @@ body.split-mode #hud2 .hud-side-tag {
     animation: none !important;
   }
 }
+
+/* ===== PWA 新版本提示条（S 修复 S1：registerType='prompt' 后由玩家确认刷新） ===== */
+.pwa-update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(10, 14, 26, 0.92);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.4);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: var(--hint-fs);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pwa-update-toast button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #1a1a1a;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--hint-fs);
+  cursor: pointer;
+}

@@ -231,6 +231,11 @@
     <div id="racing-touch-hint" class="racing-touch-hint" hidden>
       <p class="racing-touch-hint-text"></p>
     </div>
+    <!-- PWA 新版本提示（S 修复 S1：registerType='prompt' 后由玩家确认刷新，避免对局中被自动刷新打断） -->
+    <div id="pwa-update-toast" class="pwa-update-toast" hidden role="status" aria-live="polite">
+      <span>新版本已就绪</span>
+      <button id="pwa-update-refresh" type="button">立即刷新</button>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

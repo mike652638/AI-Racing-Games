@@ -8,7 +8,12 @@ export default defineConfig({
     // dev 模式仅注入 HTML 的 serve 插件），因此 vitest node 环境加载配置时
     // 不会执行 workbox 相关逻辑，测试不受影响。
     VitePWA({
-      registerType: 'autoUpdate',
+      // S 修复（S1）：autoUpdate → prompt——新版本不再自动刷新页面（会对局中途被打断），
+      // 改由 pwa-update.ts 提供「新版本就绪」提示 + 用户确认刷新（菜单外静默，不打断对局）。
+      registerType: 'prompt',
+      // 手动控制 SW 注册（pwa-update.ts setupPwaUpdate 调 registerSW）：禁用插件自动注入，
+      // 避免双重注册（插件注入脚本 + 手动 registerSW）导致回调重复触发。
+      injectRegister: null,
       // manifest 由插件在构建时生成 manifest.webmanifest，并自动注入 HTML
       manifest: {
         name: 'OutRun 伪 3D 复刻',
