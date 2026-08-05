@@ -514,8 +514,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
   it('分屏模式：P1 全油门跑完 2 圈（forest）进入结算，P2 静止不污染判定', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
-    // P1 选 forest（Digit7，2 圈短赛道，较 classic 3 圈减少约 40% 帧数；
-    // 脆弱性优化：短赛道使本用例回到默认 5000ms 超时内，无需放宽）
+    // P1 选 forest（Digit7，2 圈短赛道，较 classic 3 圈减少约 40% 帧数）
     splitEnv.fireKey('Digit7')
     expect(splitEnv.debugValue('selectedTrack')).toBe('forest')
     // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
@@ -533,7 +532,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
     // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
     expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
-  })
+    // 700 帧逐帧驱动为 CPU 密集：全量并行下 worker 争抢可能超默认 5000ms，显式放宽（2026-08-05 抗负载）
+  }, 15000)
 
   it('分屏模式：P2 全油门跑完 forest 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
     const splitEnv = stubEnvironment(true)
@@ -558,7 +558,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
     // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
     expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
-  })
+    // 同上：逐帧驱动抗负载，显式放宽超时（2026-08-05）
+  }, 15000)
 
   it('分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）', () => {
     const splitEnv = stubEnvironment(true)
