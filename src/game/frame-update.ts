@@ -67,6 +67,8 @@ export interface FrameUpdateContext {
 export interface FrameUpdateResult {
   /** false = 完赛/挑战限时触发 finish（旧 frame 的 return：跳过渲染段与 requestAnimationFrame 自续） */
   shouldRender: boolean
+  /** 本帧倒计时刚好归零（GO 瞬间，2026-08-05 审计 U-3：供触屏引导浮层推迟到 GO 后显示） */
+  countdownJustFinished: boolean
   /** 分屏最近活跃玩家（帧循环按输入更新，P1 优先，默认 P1） */
   lastActivePlayer: 1 | 2
   /** 上一帧 boost 是否激活（边沿检测快照写回） */
@@ -99,6 +101,26 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.tireSound?.setLevel(0, 0, false)
     return {
       shouldRender: true,
+      countdownJustFinished: false,
+      lastActivePlayer: ctx.lastActivePlayer,
+      boostActive: ctx.boostActive,
+      lastCollisionCount: ctx.lastCollisionCount,
+      collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
+      challengeTimer: ctx.challengeTimer,
+      challengeScore: ctx.challengeScore,
+      boostBar: ctx.boostBar,
+    }
+  }
+
+  // F-1（2026-08-05 审计修复）：起步倒计时冻结窗口——countdownRemaining > 0 时比赛未正式开始，
+  // raceTime/车流/玩家物理/碰撞/环境音全部冻结（与 runCountdown 视觉同步，GO 时刻归零），
+  // 消除圈速记录中的倒计时水分；归零瞬间返回 countdownJustFinished=true（U-3 引导浮层触发点）。
+  // 模拟时钟按帧 dt 递减而非墙钟 setTimeout：与 rAF 驱动同源，暂停不消耗、单测可确定性驱动。
+  if (race.countdownRemaining > 0) {
+    race.countdownRemaining = Math.max(0, race.countdownRemaining - dt)
+    return {
+      shouldRender: true,
+      countdownJustFinished: race.countdownRemaining === 0,
       lastActivePlayer: ctx.lastActivePlayer,
       boostActive: ctx.boostActive,
       lastCollisionCount: ctx.lastCollisionCount,
@@ -267,6 +289,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.onFinish()
     return {
       shouldRender: false,
+      countdownJustFinished: false,
       lastActivePlayer,
       boostActive,
       lastCollisionCount,
@@ -279,6 +302,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
 
   return {
     shouldRender: true,
+    countdownJustFinished: false,
     lastActivePlayer,
     boostActive,
     lastCollisionCount,

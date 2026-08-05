@@ -34,6 +34,12 @@ export interface FinishAccountingResult {
   driftWinner: 'P1' | 'P2' | null
   /** 胜场统计：仅首次进入完赛且分胜负时记录（平手/单人恒 null） */
   winStats: WinStats | null
+  /**
+   * P1 漂移榜名次（2026-08-05 审计 F-3）：直接消费 addDriftScore 返回的插入位置，
+   * 替代旧版 screens.ts 的 findIndex 同分回查（同分误判/挤出榜外显示空）；
+   * 0 = 未入 TOP10 或未记录（record=false/零分/挤出榜外）。
+   */
+  driftRankP1: number
 }
 
 /**
@@ -61,6 +67,7 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
       : null
 
   let winStats: WinStats | null = null
+  let driftRankP1 = 0
   if (record) {
     // 胜场统计：仅首次进入完赛时记录（finishShown 守卫防 ESC 重入重复计数）——
     // 热座 round 2 按 P1/P2 用时比较（平手不记）、分屏双完赛复用 driftWinner、单人恒 null；
@@ -78,14 +85,18 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
     }
     // G1（G1）：挑战模式无圈数完赛标记——P1 记分条件放宽为「完赛或挑战模式」且正分
     if ((finishedP1 || mode.challengeMode) && Math.round(race.player1.driftState.score) > 0) {
-      addDriftScore({
-        player: 'P1',
+      const p1Entry = {
+        player: 'P1' as const,
         trackId: trackManager.getTrackId(0),
         score: Math.round(race.player1.driftState.score),
         time: race.player1.raceTime,
         // H4（H4）：记录最高连击档位（排行榜权重展示）
         combo: Math.round(race.player1.driftState.combo),
-      })
+      }
+      // F-3（2026-08-05 审计）：名次直接取插入后的榜内位置（引用 indexOf 精确匹配本条），
+      // 被挤出 TOP10（entered=false）保持 0 → 结算面板显示「未进 TOP10」
+      const { top, entered } = addDriftScore(p1Entry)
+      if (entered) driftRankP1 = top.indexOf(p1Entry) + 1
     }
     // 挑战模式单屏：P2 恒不参与记分（finishedP2 恒 false，条件天然跳过）
     if (finishedP2 && (mode.splitMode || mode.hotseatMode) && Math.round(race.player2.driftState.score) > 0) {
@@ -108,5 +119,5 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
     }
   }
 
-  return { finishedP1, finishedP2, driftWinner, winStats }
+  return { finishedP1, finishedP2, driftWinner, winStats, driftRankP1 }
 }

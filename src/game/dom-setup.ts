@@ -36,6 +36,7 @@ export function collectScreenElements($: (id: string) => HTMLElement): ScreenEle
     startScreen: $('start-screen') as HTMLDivElement,
     finishScreen: $('finish-screen') as HTMLDivElement,
     pauseScreen: $('pause-screen') as HTMLDivElement,
+    finishTitle: $('finish-title') as HTMLHeadingElement,
     finishTime: $('finish-time') as HTMLParagraphElement,
     finishSpeed: $('finish-speed') as HTMLParagraphElement,
     finishBest: $('finish-best') as HTMLParagraphElement,
@@ -61,5 +62,6 @@ export function collectScreenElements($: (id: string) => HTMLElement): ScreenEle
     pauseTitle: $('pause-title') as HTMLHeadingElement,
     pauseTrackName: $('pause-track-name') as HTMLParagraphElement,
     finishRestartBtn: $('finish-restart-btn') as HTMLButtonElement,
+    finishRestartHint: $('finish-restart-hint') as HTMLParagraphElement,
   }
 }

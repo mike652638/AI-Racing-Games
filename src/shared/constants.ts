@@ -42,6 +42,14 @@ export const COLLISION_COOLDOWN = 1
  */
 export const RACE_START_GRACE = 5
 
+/**
+ * 起步倒计时冻结时长（秒，2026-08-05 运行时审计 F-1 修复）：
+ * 与 runCountdown 视觉节奏对齐（3→2→1 各 0.8s，GO 出现时刻 = 2.4s）。
+ * 该窗口内 raceTime/车流/玩家物理全部冻结，GO 后才正式起计——
+ * 消除圈速记录中约 2.9s 的倒计时水分，与 bot 无倒计时圈速口径一致。
+ */
+export const RACE_COUNTDOWN_SECONDS = 2.4
+
 /** 渲染可视距离（分段数） */
 export const RENDER_DRAW_DISTANCE = 120
 /** 地平线在屏幕高度中的比例 */

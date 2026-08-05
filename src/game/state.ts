@@ -20,6 +20,7 @@ export function createRaceState(): RaceState {
     lapTimes2: [],
     lastLap2: 1,
     phase: PHASE_MENU,
+    countdownRemaining: 0,
     finishShown: false,
   }
 }
@@ -36,5 +37,6 @@ export function resetRaceState(state: RaceState): void {
   state.lastLap = 1
   state.lapTimes2 = []
   state.lastLap2 = 1
+  state.countdownRemaining = 0
   state.finishShown = false
 }

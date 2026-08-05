@@ -42,6 +42,12 @@ export interface EnvironmentProfile {
   headlightColor?: string
   /** M17 地形装饰：沙漠沙丘（dunes）/ 海岸海面（sea）/ 峡谷岩壁（rock）；无则省略（默认草原无地形装饰） */
   terrain?: 'dunes' | 'sea' | 'rock'
+  /**
+   * 跳过右侧（+offset，海侧）景物生成（V-2，2026-08-05 审计）：
+   * coast 环境海面绘制在屏幕右侧地面，右侧路边棕榈会叠压海面呈“树长在海里”；
+   * 置 true 时 createRoadsideSprites 仅生成左侧（-offset）景物，其余环境不设。
+   */
+  skipRightSprites?: boolean
 }
 
 const PROFILES: Record<Environment, EnvironmentProfile> = {
@@ -184,6 +190,8 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     treeColorLight: '#388048',
     previewColor: '#6ec6ff',
     terrain: 'sea',
+    // V-2（2026-08-05 审计）：海侧（屏幕右侧）不生成棕榈，消除“树长在海里”叠压穿帮
+    skipRightSprites: true,
   },
   alpine: {
     id: 'alpine',

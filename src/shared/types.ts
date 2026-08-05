@@ -66,6 +66,12 @@ export interface RaceState {
   lastLap2: number
   /** 游戏阶段（菜单/比赛/暂停/结算） */
   phase: Phase
+  /**
+   * 起步倒计时剩余冻结时长（秒，2026-08-05 审计 F-1）：
+   * >0 时比赛未正式开始（raceTime/车流/玩家物理冻结，帧更新段按 dt 递减）；
+   * 归零瞬间正式起计（GO）。菜单/重置态为 0；热座交棒不走倒计时恒为 0。
+   */
+  countdownRemaining: number
   /** 结算面板是否已填充（避免重复写入记录） */
   finishShown: boolean
 }

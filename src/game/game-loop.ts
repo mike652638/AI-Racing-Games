@@ -23,7 +23,7 @@ import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
-import { CHALLENGE_SECONDS } from './constants'
+import { CHALLENGE_SECONDS, RACE_COUNTDOWN_SECONDS } from './constants'
 import { refreshBestSummary, refreshDriftTop, refreshMatchTop } from './top-refresh'
 // Task E（Task E）：frame 更新/渲染段、模式策略与结算记账下沉至独立纯函数模块
 import { accountFinish } from './finish-accounting'
@@ -115,6 +115,8 @@ export class GameLoop {
   private lastActivePlayer: 1 | 2 = 1
   /** 热座 P1 回合完赛用时（交棒时快照，供 round 2 结算胜负比较） */
   private prevP1Time: number | null = null
+  /** 本局 P1 漂移榜名次（2026-08-05 审计 F-3：accountFinish 返回，供挑战结算面板展示；0 = 未入榜/未记录） */
+  private driftRankP1 = 0
   private readonly canvas: HTMLCanvasElement
   private readonly hudElements: HudElements
   private readonly screenElements: ScreenElements
@@ -261,7 +263,8 @@ export class GameLoop {
     // Task A 缓存激活：初始赛道立即预热道路段离屏缓存（须以 race.tracks 为准才能命中 useCache 判定）
     this.syncRendererTrack(0)
     this.input = createInputManager(window)
-    this.joystick = new JoystickUI()
+    // U-4（2026-08-05 审计）：分屏模式触屏玩法为四分区触控，不常驻摇杆（防 P2 半屏语义混淆）
+    this.joystick = new JoystickUI({ splitMode: this.mode.splitMode })
     this.joystick.attach(this.canvas)
     // 菜单阶段隐藏虚拟摇杆（右下角圆环），比赛阶段再显示
     this.updateJoystickVisibility(false)
@@ -648,28 +651,13 @@ export class GameLoop {
     if (newPhase !== PHASE_PAUSED) {
       this.transitionScreenOut(this.screenElements.pauseScreen)
     }
-    // M18：首次进入 RACING 时在触屏设备显示一次驾驶引导浮层（2s 淡出）
-    if (newPhase === PHASE_RACING && !this.hasShownRacingTouchHint) {
-      this.hasShownRacingTouchHint = true
-      const hint = this.screenElements.racingTouchHint
-      if (hint && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches) {
-        const textEl = hint.querySelector<HTMLElement>('.racing-touch-hint-text')
-        if (textEl) textEl.textContent = RACING_TOUCH_HINT
-        hint.hidden = false
-        hint.classList.add('show')
-        const timer = globalThis.setTimeout(() => {
-          hint.classList.remove('show')
-          hint.hidden = true
-        }, 2000)
-        if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
-          ;(timer as { unref: () => void }).unref()
-        }
-      }
-    }
+    // U-3（2026-08-05 审计修复）：触屏驾驶引导浮层改由倒计时归零（GO）后触发——
+    // 原实现在 applyPhase(RACING) 即显示，2s 淡出早于倒计时 GO（≈2.9s）导致引导失效；
+    // 现由 frame 的 countdownJustFinished 边沿调用 showRacingTouchHint（见下）。
     // Task E（Task E）：结算记账下沉至 finish-accounting.ts 纯函数——
     // 完赛标记恒计算（applyPhaseToScreens 各阶段均需），记账写入仅首次进入完赛时执行（finishShown 守卫防重入）
     const firstFinish = newPhase === PHASE_FINISHED && !this.race.finishShown
-    const { finishedP1, finishedP2, driftWinner, winStats } = accountFinish({
+    const { finishedP1, finishedP2, driftWinner, winStats, driftRankP1 } = accountFinish({
       race: this.race,
       trackManager: this.trackManager,
       mode: this.mode,
@@ -679,6 +667,7 @@ export class GameLoop {
     })
     // 榜单刷新（DOM 副作用留在 GameLoop）：仅首次进入完赛时刷新漂移榜与对局榜
     if (firstFinish) {
+      this.driftRankP1 = driftRankP1
       refreshDriftTop()
       refreshMatchTop()
     }
@@ -692,6 +681,8 @@ export class GameLoop {
       driftWinner,
       winStats,
       challengeMode: this.mode.challengeMode,
+      // F-3（2026-08-05 审计）：挑战结算名次直接消费 addDriftScore 返回值（防 findIndex 同分误判）
+      driftRank: this.driftRankP1,
     })
     if (newPhase === PHASE_FINISHED) {
       this.bestTime = loadBestTime(this.trackManager.getTrackId(0))
@@ -701,6 +692,7 @@ export class GameLoop {
     }
     if (newPhase === PHASE_MENU) {
       this.resetRace()
+      this.driftRankP1 = 0
       // 菜单阶段隐藏虚拟摇杆（右下角圆环）
       this.updateJoystickVisibility(false)
       refreshDriftTop()
@@ -818,6 +810,9 @@ export class GameLoop {
     // 若无条件调用会致驾驶中按键反复弹出倒计时覆盖层，故以 phase === PHASE_MENU 守卫
     if (this.phase === PHASE_MENU) {
       this.startCountdown()
+      // F-1（2026-08-05 审计修复）：起步倒计时冻结窗口——与 runCountdown 视觉同步，
+      // GO 前 raceTime/车流/玩家物理全部冻结（updateFrame 按 dt 递减 countdownRemaining）
+      this.race.countdownRemaining = RACE_COUNTDOWN_SECONDS
     }
     this.applyPhase(
       nextPhase(
@@ -930,6 +925,10 @@ export class GameLoop {
     this.challengeTimer = ur.challengeTimer
     this.challengeScore = ur.challengeScore
     this.boostBar = ur.boostBar
+    // U-3（2026-08-05 审计修复）：触屏驾驶引导浮层在倒计时 GO 后显示（不再与倒计时重叠淡出）
+    if (ur.countdownJustFinished) {
+      this.showRacingTouchHint()
+    }
     // M18：BOOST 未蓄能反馈——键盘按下 Space/Enter 且 charge<=0 且未激活时，#boost-bar 红闪 300ms
     if (
       this.phase === PHASE_RACING &&
@@ -1035,6 +1034,29 @@ export class GameLoop {
   private startCountdown(): void {
     const overlay = document.getElementById('countdown-overlay')
     if (overlay) runCountdown(overlay)
+  }
+
+  /**
+   * 触屏驾驶引导浮层（U-3：倒计时 GO 后触发，每局仅一次）：
+   * 仅 hover:none 触屏设备显示，2s 淡出；文案取自 copy.ts 的 RACING_TOUCH_HINT。
+   */
+  private showRacingTouchHint(): void {
+    if (this.hasShownRacingTouchHint) return
+    this.hasShownRacingTouchHint = true
+    const hint = this.screenElements.racingTouchHint
+    if (hint && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches) {
+      const textEl = hint.querySelector<HTMLElement>('.racing-touch-hint-text')
+      if (textEl) textEl.textContent = RACING_TOUCH_HINT
+      hint.hidden = false
+      hint.classList.add('show')
+      const timer = globalThis.setTimeout(() => {
+        hint.classList.remove('show')
+        hint.hidden = true
+      }, 2000)
+      if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
+        ;(timer as { unref: () => void }).unref()
+      }
+    }
   }
 }
 

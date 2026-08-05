@@ -14,6 +14,27 @@ export interface JoystickInput {
 const DEADZONE = 0.15
 const RADIUS = 60
 
+/**
+ * 触屏设备判定（U-1，2026-08-05 审计修复）：触屏能力（maxTouchPoints/ontouchstart）
+ * 与主输入方式（hover:none 或 pointer:coarse）取交集——
+ * 旧版仅凭能力判定，带触屏的 Windows 笔记本（maxTouchPoints>0 但 hover:hover/pointer:fine）
+ * 会常驻幽灵摇杆；matchMedia 不可用（部分测试环境）时回退能力判定保持旧行为。
+ */
+export function detectTouchPrimaryInput(): boolean {
+  const hasTouchCapability =
+    typeof navigator !== 'undefined' &&
+    (navigator.maxTouchPoints > 0 || (typeof window !== 'undefined' && 'ontouchstart' in window))
+  if (!hasTouchCapability) return false
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true
+  return window.matchMedia('(hover: none), (pointer: coarse)').matches
+}
+
+/** JoystickUI 构造选项（U-4：分屏模式不常驻摇杆，触屏玩法为四分区触控） */
+export interface JoystickUIOptions {
+  /** 分屏模式：不加 touch-visible 常驻类（四分区已有 #touch-hint 引导） */
+  splitMode?: boolean
+}
+
 export function offsetToInput(dx: number, dy: number, radius: number): JoystickInput {
   const dist = Math.sqrt(dx * dx + dy * dy)
   if (dist < DEADZONE * radius) {
@@ -40,13 +61,11 @@ export class JoystickUI {
   /** 触屏设备：摇杆常驻右下角（touch-visible 类 + fixed 定位），非触屏保持按下才显示 */
   private readonly isTouchDevice: boolean
 
-  constructor() {
-    this.isTouchDevice =
-      typeof navigator !== 'undefined' &&
-      (navigator.maxTouchPoints > 0 || (typeof window !== 'undefined' && 'ontouchstart' in window))
+  constructor(options: JoystickUIOptions = {}) {
+    this.isTouchDevice = detectTouchPrimaryInput()
     this.base = document.createElement('div')
     this.base.className = 'joystick-base'
-    if (this.isTouchDevice) {
+    if (this.isTouchDevice && !options.splitMode) {
       this.base.classList.add('touch-visible')
     }
     this.knob = document.createElement('div')

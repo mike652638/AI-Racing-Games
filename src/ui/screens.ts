@@ -6,7 +6,6 @@ import {
   loadBestDriftScoreFor,
   loadBestTime,
   loadBestTimeFor,
-  loadDriftTop,
   saveBestDriftScore,
   saveBestDriftScoreFor,
   saveBestTime,
@@ -15,13 +14,21 @@ import {
 } from './save'
 import { CHALLENGE_TARGET_SCORE } from '../shared/constants'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
-import { FINISH_DRIFT_HINT } from './copy'
+import {
+  FINISH_DRIFT_HINT,
+  FINISH_RESTART_HINT,
+  FINISH_TITLE_CHALLENGE,
+  FINISH_TITLE_DEFAULT,
+  HOTSEAT_RESTART_HINT,
+} from './copy'
 
 /** 屏幕 DOM 引用：启动/结算/暂停面板及结算文本（P2 行仅分屏时存在） */
 export interface ScreenElements {
   startScreen: HTMLDivElement
   finishScreen: HTMLDivElement
   pauseScreen: HTMLDivElement
+  /** 结算面板标题（#finish-title，默认「完赛!」；挑战模式切「挑战结束」，2026-08-05 审计 F-2） */
+  finishTitle?: HTMLHeadingElement
   finishTime: HTMLParagraphElement
   finishSpeed: HTMLParagraphElement
   finishBest: HTMLParagraphElement
@@ -52,6 +59,8 @@ export interface ScreenElements {
   pauseQuit?: HTMLButtonElement
   /** 结算屏返回主菜单按钮（#finish-restart-btn，click 回菜单；M19） */
   finishRestartBtn?: HTMLButtonElement
+  /** 结算屏重开提示（#finish-restart-hint，默认「按 R 重新开始」；热座交棒窗口弱化，F-4） */
+  finishRestartHint?: HTMLParagraphElement
   /** 暂停菜单音乐分轨音量 slider（#pause-music-volume，input range 0-100；G7） */
   pauseMusicVolume?: HTMLInputElement
   /** 暂停菜单音效分轨音量 slider（#pause-sfx-volume，input range 0-100；G7） */
@@ -79,6 +88,8 @@ export interface FinishPanelOptions {
   driftWinner: 'P1' | 'P2' | null
   winStats: WinStats | null
   challengeMode: boolean
+  /** P1 漂移榜名次（2026-08-05 审计 F-3：accountFinish 返回；0 = 未入 TOP10/未记录，挑战结算显示「未进 TOP10」） */
+  driftRank?: number
 }
 
 /**
@@ -134,18 +145,22 @@ function fillFinishPanel(
   race.finishShown = true
 
   const trackId0 = race.tracks[0].def.id
+  // F-2（2026-08-05 审计）：结算标题按模式切换——挑战模式「挑战结束」，其余「完赛!」（元素复用时恢复默认）
+  if (elements.finishTitle) {
+    elements.finishTitle.textContent = opts.challengeMode ? FINISH_TITLE_CHALLENGE : FINISH_TITLE_DEFAULT
+  }
   if (elements.finishDriftHint) {
     elements.finishDriftHint.hidden = true
   }
   if (opts.challengeMode) {
-    // G1（G1）：挑战模式结算——限时刷分展示：时间行'挑战结束'、漂移得分行、漂移榜排名（前 10 内）
+    // G1（G1）：挑战模式结算——限时刷分展示：用时行、漂移得分行、漂移榜排名（F-3 改消费记账返回值）
     const score = Math.round(race.player1.driftState.score)
-    elements.finishTime.textContent = '挑战结束'
+    elements.finishTime.textContent = `用时 ${formatTime(race.player1.raceTime)}`
     elements.finishSpeed.textContent = ''
-    // 漂移榜排名：loadDriftTop() 按 score 降序，findIndex 匹配本局得分 → 名次（无匹配/挤出榜外显示空）
-    const top = loadDriftTop()
-    const idx = top.findIndex((e) => e.score === score)
-    elements.finishBest.textContent = idx >= 0 ? `漂移榜第 ${idx + 1} 名` : ''
+    // F-3（2026-08-05 审计）：名次直接取 accountFinish 的 addDriftScore 插入位置——
+    // 旧版 findIndex 按分数回查在同分时高估名次、挤出榜外显示空；未入榜显示「未进 TOP10」
+    const rank = opts.driftRank ?? 0
+    elements.finishBest.textContent = rank > 0 ? `漂移榜第 ${rank} 名` : '未进 TOP10'
     // M15：挑战模式结算展示达标/未达标（目标 5000 分）
     const target = CHALLENGE_TARGET_SCORE
     const reached = score >= target
@@ -290,7 +305,8 @@ function fillFinishPanel(
   hideIfEmpty(elements.finishBest)
   hideIfEmpty(elements.finishScore)
 
-  // 热座结算提示：round 1 提示交棒，round 2 按 P1/P2 用时显示胜负横幅；非热座隐藏
+  // 热座结算提示：round 1 提示交棒，round 2 按 P1/P2 用时显示胜负横幅；非热座隐藏。
+  // F-4（2026-08-05 审计）：交棒窗口同步弱化重开提示（「按 R 可重跑 P1」+ muted 类），防误按 R 放弃交棒
   if (elements.finishHint) {
     if (opts.hotseatMode && opts.hotseatRound === 1) {
       elements.finishHint.hidden = false
@@ -302,6 +318,13 @@ function fillFinishPanel(
       elements.finishHint.textContent = t1 < t2 ? 'P1 更快！' : t1 > t2 ? 'P2 更快！' : '平手！'
     } else {
       elements.finishHint.hidden = true
+    }
+  }
+  if (elements.finishRestartHint) {
+    const handoffWindow = opts.hotseatMode && opts.hotseatRound === 1
+    elements.finishRestartHint.textContent = handoffWindow ? HOTSEAT_RESTART_HINT : FINISH_RESTART_HINT
+    if (typeof elements.finishRestartHint.classList?.toggle === 'function') {
+      elements.finishRestartHint.classList.toggle('muted', handoffWindow)
     }
   }
 
