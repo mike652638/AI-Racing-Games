@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameLoop, resolvePerformanceConfig, viewFor } from '../../src/game/game-loop'
 import { createTrackContext } from '../../src/game/track-context'
-import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/game/phase'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/shared/phase'
 import { Renderer } from '../../src/engine/renderer'
 import { buildRoadStrips } from '../../src/engine/road-strip'
 import { createRoadsideSprites, spritesInRangeIndexed, type Sprite } from '../../src/engine/sprites'

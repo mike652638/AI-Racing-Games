@@ -4,7 +4,7 @@ import { createRaceState } from '../../src/game/state'
 import { createCarConfig } from '../../src/physics/car'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 import { createTrackContext, type TrackContext } from '../../src/game/track-context'
-import { DRIFT_SCORE_MAX } from '../../src/game/constants'
+import { DRIFT_SCORE_MAX } from '../../src/shared/constants'
 
 /** 双玩家各自独立赛道世界：P1 经典（3 圈）、P2 S 弯（2 圈） */
 const TRACKS: [TrackContext, TrackContext] = [createTrackContext(TRACK_DEFS[0]), createTrackContext(TRACK_DEFS[2])]

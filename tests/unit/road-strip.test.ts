@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildRoadStrips, renderRoadStripToCanvas, shadeColor, type RoadStrip } from '../../src/engine/road-strip'
-import { EDGE_WIDTH, ROAD_HALF_WIDTH } from '../../src/game/constants'
+import { EDGE_WIDTH, ROAD_HALF_WIDTH } from '../../src/shared/constants'
 
 // node 测试环境无 OffscreenCanvas，提供最小 mock（记录 fillRect 调用序列供纹理布局断言）
 interface MockFillRect {

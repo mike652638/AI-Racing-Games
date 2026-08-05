@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift, type DriftState } from '../../src/physics/drift'
 import { createCarConfig } from '../../src/physics/car'
-import { DRIFT_SCORE_MAX } from '../../src/game/constants'
+import { DRIFT_SCORE_MAX } from '../../src/shared/constants'
 
 const DT = 1 / 60
 

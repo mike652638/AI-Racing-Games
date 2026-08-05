@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { updateFrame, type FrameUpdateContext } from '../../src/game/frame-update'
 import { createModeStrategy, type InputRoutingContext, type ModeStrategy } from '../../src/game/mode-strategy'
-import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING } from '../../src/game/phase'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING } from '../../src/shared/phase'
 import { createRaceState } from '../../src/game/state'
-import { RACE_START_GRACE } from '../../src/game/constants'
+import { RACE_START_GRACE } from '../../src/shared/constants'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
 import type { TrackManager } from '../../src/game/track-manager'
 

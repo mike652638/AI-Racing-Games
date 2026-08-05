@@ -20,7 +20,7 @@ import {
   RENDER_HORIZON_RATIO,
   ROAD_HALF_WIDTH,
   TRAFFIC_DEFAULT_COUNT,
-} from '../../src/game/constants'
+} from '../../src/shared/constants'
 import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
 
 describe('constants 常量注册表（防魔法数字回潮）', () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { renderFrame, type FrameRenderContext } from '../../src/game/frame-render'
-import { PHASE_MENU, PHASE_RACING } from '../../src/game/phase'
+import { PHASE_MENU, PHASE_RACING } from '../../src/shared/phase'
 import { createRaceState } from '../../src/game/state'
 import { createCarConfig } from '../../src/physics/car'
 import { createMockCanvas } from '../__mocks__/canvas'

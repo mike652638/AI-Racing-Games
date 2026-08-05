@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { nextPhase, togglePause, PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED } from '../../src/ui/gamestate'
+// ui/gamestate 兼容层已移除（2026-08-05，src 内 0 消费方）：直接依赖 shared 唯一真源
+import { PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED } from '../../src/shared/phase'
+import { nextPhase, togglePause } from '../../src/shared/phase-logic'
 
 describe('nextPhase', () => {
   test('菜单按任意键进入比赛', () => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { simulateLaps } from '../../src/ai/simulate'
 import { createBotConfig } from '../../src/ai/bot'
 import { createCarConfig, updateCar, DEFAULT_CAR_CONFIG } from '../../src/physics/car'
-import { OFF_ROAD_PUSHBACK } from '../../src/game/constants'
+import { OFF_ROAD_PUSHBACK } from '../../src/shared/constants'
 import { createTrack } from '../../src/engine/track'
 import { createStraightTrack } from '../helpers/track'
 

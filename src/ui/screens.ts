@@ -14,7 +14,7 @@ import {
   type WinStats,
 } from './save'
 import { CHALLENGE_TARGET_SCORE } from '../shared/constants'
-import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
+import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
 import { FINISH_DRIFT_HINT } from './copy'
 
 /** 屏幕 DOM 引用：启动/结算/暂停面板及结算文本（P2 行仅分屏时存在） */

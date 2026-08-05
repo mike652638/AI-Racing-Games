@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyTrafficCollision, updateCollisions } from '../../src/game/collision'
 import { createRaceState, resetRaceState } from '../../src/game/state'
-import { RACE_START_GRACE } from '../../src/game/constants'
+import { RACE_START_GRACE } from '../../src/shared/constants'
 import type { CarState } from '../../src/physics/car'
 import type { TrafficCar } from '../../src/engine/traffic'
 

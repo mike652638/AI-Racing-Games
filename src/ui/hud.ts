@@ -1,7 +1,7 @@
 import type { CarConfig } from '../physics/car'
 import type { RaceState, TrackContext } from '../shared/types'
 import { formatLap, formatSpeed, formatTime, lapFromZ } from './format'
-import { PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
+import { PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
 import { DRIFT_SCORE_MAX } from '../shared/constants'
 
 /** HUD 全部 DOM 引用：P1/P2 速度、圈数、计时、最佳时间与漂移指示 */

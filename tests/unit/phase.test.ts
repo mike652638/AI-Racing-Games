@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED, type Phase } from '../../src/game/phase'
-import { nextPhase, togglePause } from '../../src/game/phase-logic'
+import { PHASE_MENU, PHASE_RACING, PHASE_FINISHED, PHASE_PAUSED, type Phase } from '../../src/shared/phase'
+import { nextPhase, togglePause } from '../../src/shared/phase-logic'
 
 describe('nextPhase（game/phase-logic）', () => {
   test('菜单按任意键进入比赛', () => {
