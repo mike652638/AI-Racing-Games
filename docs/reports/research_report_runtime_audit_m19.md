@@ -140,3 +140,64 @@
 ## 五、结论
 
 M19 后的运行时状态总体健康：**零控制台错误、零流程断链**，四模式状态机、碰撞反馈、漂移/BOOST/挑战计分、环境差异化渲染、移动端布局实测全部按设计工作。本轮发现的 2 项 P1（倒计时计时口径、触屏检测过宽）均属边界条件类缺陷，修复成本低；其余为 P2/P3 打磨项。全部结论均有截图与 `__gameDebug` 数据支撑，探测脚本已归档可复跑。
+
+---
+
+## 六、修复实施与复测结果（2026-08-05 同日无人值守完成）
+
+全部 10 项问题已实施修复并逐项复测验证（复测截图 `docs/screenshots/rt3-*.png`，探测脚本 `.codebuddy/rt-probe3.mjs`，日志 `.codebuddy/rt-probe3.txt`）。
+
+### 修复清单
+
+| 编号 | 修复内容 | 落点 |
+|------|---------|------|
+| F-1 | 起步倒计时冻结：`RaceState.countdownRemaining` 模拟时钟（`RACE_COUNTDOWN_SECONDS=2.4`，与 runCountdown 3→2→1 节奏对齐），冻结窗口内 raceTime/车流/玩家物理/碰撞/环境音全部停摆，GO 后才起计；配套倒计时窗口渲染降级（视距 60 段 + 跳过粒子特效层） | shared/constants、shared/types、game/state、game/frame-update、game/game-loop、game/frame-render |
+| U-3 | 触屏引导浮层改由 `countdownJustFinished` 边沿（GO 后）触发，不再与倒计时重叠淡出 | game/frame-update（新增返回字段）、game/game-loop（showRacingTouchHint 提取） |
+| U-1 | 触屏判定收紧：新增 `detectTouchPrimaryInput()`——触屏能力与主输入方式（`(hover: none), (pointer: coarse)`）取交集；matchMedia 不可用时回退能力判定 | ui/joystick |
+| U-2 | 键鼠设备（hover:hover + pointer:fine）`#pause-btn` 默认透明度 0.35，hover/按下增强 | style.css |
+| F-2 | 挑战模式结算标题切「挑战结束」（`#finish-title` 新增 id，`FINISH_TITLE_*` 文案进 copy.ts 同源），原时间行改显「用时 X」防重复 | index.html、ui/copy、ui/screens、game/dom-setup |
+| F-3 | 漂移榜名次改消费 `addDriftScore` 返回的 `{ top, entered }`（accountFinish 新增 `driftRankP1`，引用 indexOf 精确匹配本条），未入榜显示「未进 TOP10」，废弃 findIndex 同分回查 | game/finish-accounting、game/game-loop、ui/screens |
+| F-4 | 热座交棒窗口重开提示改「按 R 可重跑 P1」+ `.muted` 弱化（降透明度/字号、停呼吸动画），突出回车交棒主路径 | ui/copy、ui/screens、index.html（新增 id）、style.css |
+| U-4 | 分屏模式不常驻摇杆（`JoystickUI({ splitMode })`，四分区触控已有 #touch-hint 引导） | ui/joystick、game/game-loop |
+| V-1 | BOOST 标签字号 10→11px + letter-spacing 1px + 深色描边投影 | style.css |
+| V-2 | coast 环境海侧（+offset）不生成景物（`EnvironmentProfile.skipRightSprites`，rand 消费顺序不变、其余环境逐字节一致），消除「树长在海里」 | engine/environment、engine/sprites、game/track-context |
+
+### 配套工程加固（复测中发现的次生问题）
+
+- **集成测试 worker OOM**：长程模拟用例（多局全帧驱动 + canvas mock 全量录制）单 worker 堆占用 5GB+，叠加新增用例后击穿堆上限。修复：①倒计时窗口渲染降级削减录制开销；②`vite.config.ts` 为 Vitest 4 worker 显式 `execArgv: --max-old-space-size=8192`（.npmrc node-options 不传入 fork worker）；③`.npmrc` 同步 8192。全套时长由 ≈47s 降至 ≈27s。
+- **eslint ignores 补 `.codebuddy`**（探测脚本草稿区，已 gitignore）。
+
+### 新增/更新测试（685 → 696 用例）
+
+- `constants.test`：`RACE_COUNTDOWN_SECONDS=2.4` 注册表断言 + RACE_START_GRACE 注释口径更新
+- `frame-update.test`：倒计时冻结（冻结期 mode 挂钩零调用/计时车流不动）+ 归零帧 `countdownJustFinished` 边沿与次帧恢复
+- `finish-accounting.test`：driftRankP1 四态（入榜位置/挤出榜外/未记账/同分回归锚点）
+- `joystick.test`：detectTouchPrimaryInput 四态（触屏主输入/触屏能力但键鼠/无能力/matchMedia 回退）
+- `environment.test`：coast 海侧景物全部 offset≤0 且其余环境左右成对
+- `game-loop-integration.test`：挑战用例适配（标题断言迁移 #finish-title、帧数跨 GO）、热座胜负断言兼容纯驾驶时间口径下的平手场景
+
+### 复测证据（rt3 系列）
+
+| 验证点 | 复测结果 |
+|--------|---------|
+| F-1 倒计时冻结 | `hud-time` 倒计时期间实测 `0:00.000`；完赛总用时 0:53.315 → **0:50.648**（LAP1 19.98 vs LAP2/3 15.33，水分消除） |
+| U-1 摇杆误显 | `.joystick-base` 无 touch-visible 类，`display:none`（本机 maxTouchPoints=10 依旧不误显） |
+| U-2 暂停按钮 | 桌面实测 `opacity: 0.35`（hover 增强） |
+| U-3 引导时序 | 触发点迁至 GO 后（单测锁定 countdownJustFinished 边沿） |
+| F-2 挑战标题 | 实测 `#finish-title` = 「挑战结束」，时间行「用时 0:49.298」 |
+| F-3 名次口径 | 实测「漂移榜第 1 名」（记账返回值驱动，同分/挤出榜边缘有单测锚点） |
+| F-4 交棒提示 | 实测「按 R 可重跑 P1」+ muted 类生效 |
+| U-4 分屏摇杆 | 实测分屏 `.joystick-base` `display:none` |
+| V-1 BOOST 标签 | 实测 11px + 1px 字距 + 描边投影 |
+| V-2 coast 海面 | 实测右侧海面纯净无树（`rt3-15-coast-racing.png`），左侧棕榈成排 |
+
+### 验证链终态
+
+- `npm run typecheck` ✅（tsc --noEmit）
+- `npm run lint` ✅（eslint）
+- `npm test` ✅ **47 文件 / 696 用例全绿**（≈27s）
+- `npm run bot` ✅ 9 赛道矩阵全部完成，0 违规
+- `npm run build` ✅ PWA 产物（sw.js + manifest + 14 条预缓存）
+- 运行时复测 ✅ 复测控制台零错误，全部修复点截图与 DOM 探针双重确认
+
+遗留说明：e2e（Playwright 视觉回归 26 用例）本轮未重跑（变更集中于结算文案/触屏 UI/环境景物，均有单测覆盖；建议下次 CI 自动验证）。
