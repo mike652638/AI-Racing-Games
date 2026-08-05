@@ -240,23 +240,38 @@ describe('帧间状态写回', () => {
 })
 
 describe('惰性 DOM 缓存与 HUD 副作用', () => {
-  test('BOOST 条：惰性获取元素并写宽度（charge 0 → 0px），结果回传缓存', () => {
-    docElements = { 'boost-bar': makeElement() }
+  /** 构造带 .boost-fill 内层填充元素的 boost-bar 桩（P1-1 重构后轨道外层固定、
+   *  仅 .boost-fill 宽度随 charge 增长，updateFrame 经 querySelector 定位 fill；
+   *  fill 对象闭包持久引用，updateFrame 写入的 style.width 可被断言读到） */
+  function makeBoostBarStub(): {
+    hidden: boolean
+    querySelector: (sel: string) => { style: Record<string, string> } | null
+  } {
+    const fill = { style: {} }
+    return { hidden: false, querySelector: (sel: string) => (sel === '.boost-fill' ? fill : null) }
+  }
+
+  test('BOOST 条：惰性获取元素并写填充宽度（charge 0 → 0px），结果回传缓存', () => {
+    docElements = { 'boost-bar': makeBoostBarStub() }
     stubDocument()
     const r = updateFrame(DT, makeCtx({ boostBar: null }))
-    const bar = r.boostBar as unknown as StubElement
+    const bar = r.boostBar as unknown as {
+      hidden: boolean
+      querySelector: (s: string) => { style: Record<string, string> } | null
+    }
     expect(r.boostBar).not.toBeNull()
     expect(bar.hidden).toBe(false)
-    expect(bar.style.width).toBe('0px')
+    expect(bar.querySelector('.boost-fill')!.style.width).toBe('0px')
   })
 
-  test('BOOST 条：charge 0.5 → 宽度 100px', () => {
-    docElements = { 'boost-bar': makeElement() }
+  test('BOOST 条：charge 0.5 → 填充宽度 100px', () => {
+    docElements = { 'boost-bar': makeBoostBarStub() }
     stubDocument()
     const ctx = makeCtx({ boostBar: null })
     ctx.race.player1.boostCharge = 0.5
     const r = updateFrame(DT, ctx)
-    expect((r.boostBar as unknown as StubElement).style.width).toBe('100px')
+    const bar = r.boostBar as unknown as { querySelector: (s: string) => { style: Record<string, string> } | null }
+    expect(bar.querySelector('.boost-fill')!.style.width).toBe('100px')
   })
 
   test('挑战模式：倒计时与实时得分 HUD 惰性获取并填充文本（raceTime 0 → 剩余 60.0s）', () => {

@@ -228,19 +228,23 @@ test.describe('玩法链路（2026-08-05 新增）', () => {
 
   test('BOOST 蓄能：高速急转触发漂移后 boostCharge 增长', async ({ page }) => {
     await startGame(page)
-    // 全油门加速至高速（> 0.5×maxSpeed=3000 漂移速度阈值；acceleration 2400/s，2.5s 已近满速 6000）
+    // 全油门加速至满速（maxSpeed=6000 > 0.5×maxSpeed=3000 漂移速度阈值；acceleration 2400/s，
+    // 4s 确保即便 rAF 被 throttle 也稳定过阈值，2026-08-05 T-2 加固：原 2.5s 在部分环境下不足）
     await page.keyboard.down('w')
-    await page.waitForTimeout(2_500)
+    await page.waitForTimeout(4_000)
     // 持续左转向：DRIFT_STEER_THRESHOLD=0.7 → charge 累积 0.25s 激活漂移 →
     // 漂移激活窗口（0.985^n 衰减至 0.5×maxSpeed ≈ 0.76s）内 BOOST 蓄能 0.3/s → charge 约 0.23
     await page.keyboard.down('a')
     await page.waitForTimeout(1_500)
-    const charge = await page.evaluate(
-      () => (window as { __gameDebug?: { boostCharge: number } }).__gameDebug?.boostCharge ?? -1,
-    )
+    const s = await page.evaluate(() => {
+      const d = (window as { __gameDebug?: { boostCharge: number; driftActive: boolean } }).__gameDebug
+      return { charge: d?.boostCharge ?? -1, driftActive: d?.driftActive ?? false }
+    })
     await page.keyboard.up('a')
     await page.keyboard.up('w')
-    expect(charge, `漂移激活后 boostCharge 应 > 0（实测 ${charge}）`).toBeGreaterThan(0)
+    // 断言漂移已激活（说明确实进入蓄能路径）；charge 须 > 0
+    expect(s.driftActive, `高速急转后应进入漂移状态（实测 driftActive=${s.driftActive}）`).toBe(true)
+    expect(s.charge, `漂移激活后 boostCharge 应 > 0（实测 ${s.charge}）`).toBeGreaterThan(0)
   })
 
   test('碰撞反馈：高速追击车流触发碰撞后 HUD 碰撞计数显示', async ({ page }) => {
@@ -251,12 +255,21 @@ test.describe('玩法链路（2026-08-05 新增）', () => {
     await page.keyboard.down('w')
     await page.waitForTimeout(8_000)
     const s = await page.evaluate(() => {
-      const d = (window as { __gameDebug?: { collisions: number; collisionFlash: number } }).__gameDebug
+      const d = (window as { __gameDebug?: { collisions: number; collisionFlash: number; trafficCount: number } })
+        .__gameDebug
       const el = document.getElementById('hud-collision')
       return { collisions: d?.collisions ?? -1, hidden: el?.hidden ?? null, text: el?.textContent ?? null }
     })
     await page.keyboard.up('w')
-    expect(s.collisions, `全油门 8s 应发生至少 1 次碰撞（实测 ${s.collisions}）`).toBeGreaterThanOrEqual(1)
+    // T-1 加固（2026-08-05）：若 8s 内未碰撞（rAF 被 throttle + 车流避让 AI 协同致相对速度不足、
+    // 或出生窗口车流恰好让道），不直接判定失败，先输出诊断信息帮助定位是"测试时序"还是"逻辑缺陷"
+    if (s.collisions < 1) {
+      console.warn(
+        `[碰撞反馈] 8s 内未碰撞（collisions=${s.collisions}）。可能原因：rAF throttle 致相对速度不足、` +
+          `或车流避让 AI 恰好让道。若重复出现需复查碰撞判定或延长时间窗口。`,
+      )
+      expect(s.collisions, `全油门 8s 应发生至少 1 次碰撞（实测 ${s.collisions}）`).toBeGreaterThanOrEqual(1)
+    }
     expect(s.hidden, '碰撞后 #hud-collision 应可见').toBe(false)
     expect(s.text).toContain('碰撞')
   })
