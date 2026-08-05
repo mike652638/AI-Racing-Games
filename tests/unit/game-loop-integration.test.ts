@@ -12,6 +12,14 @@ import { refreshBestSummary } from '../../src/game/top-refresh'
 import { BEST_EMPTY_HINT, DRIFT_EMPTY_HINT, MATCH_EMPTY_HINT } from '../../src/ui/copy'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
+/**
+ * 长程模拟用例超时档位（抗负载脆弱性加固，2026-08-05）：
+ * 逐帧驱动整场比赛的用例墙钟耗时与机器负载强相关（实测最差：热座双人全赛季 ≈32s、
+ * 雨段驱动 1000+ 帧 ≈36s）。原 15s / 默认 5s 在负载下已贴线 → 统一放宽至抗负载档位。
+ */
+const SIM_TIMEOUT = 30_000
+const SIM_TIMEOUT_EPIC = 60_000
+
 /** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
 interface StubElement {
   textContent: string
@@ -349,34 +357,44 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.phase()).toBe(PHASE_RACING)
   })
 
-  it('全油门跑完总圈数后进入结算阶段', () => {
-    new GameLoop()
-    env.fireKey('Space')
-    env.fireKey('KeyW')
-    // 经典赛道 3 圈 ≈ 276000 世界单位；1075 帧为安全上限，完赛即提前终止（抗负载）
-    env.driveUntilFinished(1075)
-    expect(env.phase()).toBe(PHASE_FINISHED)
-    // 单屏不触碰 P2 结算行：保持初始 hidden（视觉缺陷回归）
-    expect(env.getElement('finish-time-2').hidden).toBe(true)
-    // 2026-08-05 空方框修复：单屏无 P2 内容，P2 结算卡片容器整体隐藏（不显示空边框卡片）
-    expect(env.getElement('finish-card-2').hidden).toBe(true)
-    // 单屏圈速行有内容，可见（非空边框）
-    expect(env.getElement('finish-laps').hidden).toBe(false)
-  })
+  it(
+    '全油门跑完总圈数后进入结算阶段',
+    () => {
+      new GameLoop()
+      env.fireKey('Space')
+      env.fireKey('KeyW')
+      // 经典赛道 3 圈 ≈ 276000 世界单位；1075 帧为安全上限，完赛即提前终止（抗负载）
+      env.driveUntilFinished(1075)
+      expect(env.phase()).toBe(PHASE_FINISHED)
+      // 单屏不触碰 P2 结算行：保持初始 hidden（视觉缺陷回归）
+      expect(env.getElement('finish-time-2').hidden).toBe(true)
+      // 2026-08-05 空方框修复：单屏无 P2 内容，P2 结算卡片容器整体隐藏（不显示空边框卡片）
+      expect(env.getElement('finish-card-2').hidden).toBe(true)
+      // 单屏圈速行有内容，可见（非空边框）
+      expect(env.getElement('finish-laps').hidden).toBe(false)
+      // 1075 帧逐帧驱动为 CPU 密集：慢机器可能超默认 5000ms，显式放宽（抗负载加固）
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('完赛后回菜单重启帧循环（防 RAF 链断导致画面冻结，2026-08-05 音频/冻结修复）', () => {
-    new GameLoop()
-    env.fireKey('Space')
-    env.fireKey('KeyW')
-    env.driveUntilFinished(1075)
-    expect(env.phase()).toBe(PHASE_FINISHED)
-    // 完赛帧 early-return 未自续 rAF（loopRunning=false）；回菜单经 applyPhase(MENU) 的
-    // ensureLoop 恰好重启一次（防重复调度致双倍速，也防链断致冻结）
-    const before = env.rafCount()
-    env.fireKey('Enter')
-    expect(env.phase()).toBe(PHASE_MENU)
-    expect(env.rafCount()).toBe(before + 1)
-  })
+  it(
+    '完赛后回菜单重启帧循环（防 RAF 链断导致画面冻结，2026-08-05 音频/冻结修复）',
+    () => {
+      new GameLoop()
+      env.fireKey('Space')
+      env.fireKey('KeyW')
+      env.driveUntilFinished(1075)
+      expect(env.phase()).toBe(PHASE_FINISHED)
+      // 完赛帧 early-return 未自续 rAF（loopRunning=false）；回菜单经 applyPhase(MENU) 的
+      // ensureLoop 恰好重启一次（防重复调度致双倍速，也防链断致冻结）
+      const before = env.rafCount()
+      env.fireKey('Enter')
+      expect(env.phase()).toBe(PHASE_MENU)
+      expect(env.rafCount()).toBe(before + 1)
+      // 含整场 1075 帧驱动：慢机器可能超默认 5000ms（2026-08-05 全量跑曾 10.7s），显式放宽
+    },
+    SIM_TIMEOUT,
+  )
 
   it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 4px 全高分隔线）', () => {
     // 重新构造分屏环境（window.location.search = '?split=1'），覆盖 beforeEach 的单屏 stub
@@ -515,241 +533,278 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env.getElement('p2-track-name').hidden).toBe(true)
   })
 
-  it('分屏模式：P1 全油门跑完 2 圈（forest）进入结算，P2 静止不污染判定', () => {
-    const splitEnv = stubEnvironment(true)
-    new GameLoop()
-    // P1 选 forest（Digit7，2 圈短赛道，较 classic 3 圈减少约 40% 帧数）
-    splitEnv.fireKey('Digit7')
-    expect(splitEnv.debugValue('selectedTrack')).toBe('forest')
-    // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
-    // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
-    splitEnv.fireKey('Space')
-    splitEnv.fireKey('KeyW')
-    // forest 2 圈：700 帧为安全上限，完赛即提前终止（抗负载）
-    splitEnv.driveUntilFinished(700)
-    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // C3 双人结算：P1 完赛填 P1 行（E1：分屏加 'P1 ' 前缀），P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
-    expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
-    expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
-    expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
-    // D3 漂移竞速横幅：未双完赛（P2 未完赛）时保持隐藏
-    expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
-    // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
-    expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
-    // 700 帧逐帧驱动为 CPU 密集：全量并行下 worker 争抢可能超默认 5000ms，显式放宽（2026-08-05 抗负载）
-  }, 15000)
+  it(
+    '分屏模式：P1 全油门跑完 2 圈（forest）进入结算，P2 静止不污染判定',
+    () => {
+      const splitEnv = stubEnvironment(true)
+      new GameLoop()
+      // P1 选 forest（Digit7，2 圈短赛道，较 classic 3 圈减少约 40% 帧数）
+      splitEnv.fireKey('Digit7')
+      expect(splitEnv.debugValue('selectedTrack')).toBe('forest')
+      // KeyW 同时被 input manager 记录（pressed 含 KeyW）→ P1 全油门；
+      // P2 无方向键输入保持静止（cameraZ=0，lapFromZ 恒为第 1 圈，不触发 finishedP2）
+      splitEnv.fireKey('Space')
+      splitEnv.fireKey('KeyW')
+      // forest 2 圈：700 帧为安全上限，完赛即提前终止（抗负载）
+      splitEnv.driveUntilFinished(700)
+      expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+      // C3 双人结算：P1 完赛填 P1 行（E1：分屏加 'P1 ' 前缀），P2 静止显示"未完赛"（视觉缺陷回归：P2 行须可见）
+      expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
+      expect(splitEnv.getElement('finish-time-2').textContent).toBe('P2 未完赛')
+      expect(splitEnv.getElement('finish-time-2').hidden).toBe(false)
+      // D3 漂移竞速横幅：未双完赛（P2 未完赛）时保持隐藏
+      expect(splitEnv.getElement('finish-drift-winner').hidden).toBe(true)
+      // P1（P1）：分屏时 P1 圈速行加 'P1 ' 前缀（formatLapTimes 输出 LAP 1: ...）
+      expect(splitEnv.getElement('finish-laps').textContent.startsWith('P1 LAP')).toBe(true)
+      // 700 帧逐帧驱动为 CPU 密集：全量并行下 worker 争抢可能超默认 5000ms，显式放宽（2026-08-05 抗负载）
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('分屏模式：P2 全油门跑完 forest 2 圈进入结算，面板填 P2 数据、P1 未完赛', () => {
-    const splitEnv = stubEnvironment(true)
-    new GameLoop()
-    // P2 选 forest（Shift+Digit7，短赛道降帧数；断言语义与赛道无关）
-    splitEnv.fireKey('Digit7', true)
-    expect(splitEnv.debugValue('selectedTrack2')).toBe('forest')
-    // Enter 开始比赛（P1/P2 均不触发方向键），随后 ArrowUp 驱动 P2 全油门；
-    // P1 无输入保持静止（raceTime 仍随帧递增，但 cameraZ=0 不跨圈 → 未完赛）
-    splitEnv.fireKey('Enter')
-    splitEnv.fireKey('ArrowUp')
-    splitEnv.driveUntilFinished(700)
-    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    const time2 = splitEnv.getElement('finish-time-2')
-    expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
-    // 视觉缺陷回归：P2 结算行必须显式可见（index.html 初始 hidden，仅写 textContent 不够）
-    expect(time2.hidden).toBe(false)
-    expect(splitEnv.getElement('finish-speed-2').hidden).toBe(false)
-    expect(splitEnv.getElement('finish-laps-2').hidden).toBe(false)
-    expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
-    // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
-    expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
-    // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
-    expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
-    // 同上：逐帧驱动抗负载，显式放宽超时（2026-08-05）
-  }, 15000)
+  it(
+    '分屏模式：P2 全油门跑完 forest 2 圈进入结算，面板填 P2 数据、P1 未完赛',
+    () => {
+      const splitEnv = stubEnvironment(true)
+      new GameLoop()
+      // P2 选 forest（Shift+Digit7，短赛道降帧数；断言语义与赛道无关）
+      splitEnv.fireKey('Digit7', true)
+      expect(splitEnv.debugValue('selectedTrack2')).toBe('forest')
+      // Enter 开始比赛（P1/P2 均不触发方向键），随后 ArrowUp 驱动 P2 全油门；
+      // P1 无输入保持静止（raceTime 仍随帧递增，但 cameraZ=0 不跨圈 → 未完赛）
+      splitEnv.fireKey('Enter')
+      splitEnv.fireKey('ArrowUp')
+      splitEnv.driveUntilFinished(700)
+      expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+      const time2 = splitEnv.getElement('finish-time-2')
+      expect(time2.textContent.startsWith('P2 总用时')).toBe(true)
+      // 视觉缺陷回归：P2 结算行必须显式可见（index.html 初始 hidden，仅写 textContent 不够）
+      expect(time2.hidden).toBe(false)
+      expect(splitEnv.getElement('finish-speed-2').hidden).toBe(false)
+      expect(splitEnv.getElement('finish-laps-2').hidden).toBe(false)
+      expect(splitEnv.getElement('finish-time').textContent).toBe('P1 未完赛')
+      // P2 圈速行非空（formatLapTimes(lapTimes2) 输出）
+      expect(splitEnv.getElement('finish-laps-2').textContent).not.toBe('')
+      // P1（P1）：分屏时 P2 圈速行恒加 'P2 ' 前缀
+      expect(splitEnv.getElement('finish-laps-2').textContent.startsWith('P2 LAP')).toBe(true)
+      // 同上：逐帧驱动抗负载，显式放宽超时（2026-08-05）
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）', () => {
-    const splitEnv = stubEnvironment(true)
-    new GameLoop()
-    // 双人同选 forest（Digit7 / Shift+Digit7）：短赛道 2 圈将帧数从 1075 降至 700，
-    // 回到默认 5000ms 超时内（原 15000/30000ms 放宽已消除）
-    splitEnv.fireKey('Digit7')
-    splitEnv.fireKey('Digit7', true)
-    // KeyW 驱动 P1（P1 键盘映射）、ArrowUp 驱动 P2（P2 键盘映射）同时全油门零转向。
-    // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
-    // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
-    splitEnv.fireKey('Space')
-    splitEnv.fireKey('KeyW')
-    splitEnv.fireKey('ArrowUp')
-    splitEnv.driveUntilFinished(700)
-    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // E1：分屏结算 P1 行加 'P1 ' 前缀（与 P2 行对称，圈速行除外）
-    expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
-    expect(splitEnv.getElement('finish-speed').textContent.startsWith('P1 平均速度')).toBe(true)
-    expect(splitEnv.getElement('finish-best').textContent.startsWith('P1')).toBe(true)
-    expect(splitEnv.getElement('finish-score').textContent.startsWith('P1 漂移得分')).toBe(true)
-    // 双方均零漂移（无转向输入）：Math.round(0) >= Math.round(0) → P1 获胜；
-    // 横幅须可见、文本含 'P1 获胜' 且精确匹配（含 DRIFT 竞速 前缀）
-    const banner = splitEnv.getElement('finish-drift-winner')
-    expect(banner.hidden).toBe(false)
-    expect(banner.textContent).toContain('P1 获胜')
-    expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
-  })
+  it(
+    '分屏模式：双人完赛时漂移竞速横幅显示 P1 获胜（得分平局归 P1）',
+    () => {
+      const splitEnv = stubEnvironment(true)
+      new GameLoop()
+      // 双人同选 forest（Digit7 / Shift+Digit7）：短赛道 2 圈将帧数从 1075 降至 700；
+      // 实测 700 帧双世界在慢机器仍超默认 5000ms（最差 ≈12s）→ 由 SIM_TIMEOUT 档位兜底（抗负载加固）
+      splitEnv.fireKey('Digit7')
+      splitEnv.fireKey('Digit7', true)
+      // KeyW 驱动 P1（P1 键盘映射）、ArrowUp 驱动 P2（P2 键盘映射）同时全油门零转向。
+      // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
+      // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
+      splitEnv.fireKey('Space')
+      splitEnv.fireKey('KeyW')
+      splitEnv.fireKey('ArrowUp')
+      splitEnv.driveUntilFinished(700)
+      expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+      // E1：分屏结算 P1 行加 'P1 ' 前缀（与 P2 行对称，圈速行除外）
+      expect(splitEnv.getElement('finish-time').textContent.startsWith('P1 总用时')).toBe(true)
+      expect(splitEnv.getElement('finish-speed').textContent.startsWith('P1 平均速度')).toBe(true)
+      expect(splitEnv.getElement('finish-best').textContent.startsWith('P1')).toBe(true)
+      expect(splitEnv.getElement('finish-score').textContent.startsWith('P1 漂移得分')).toBe(true)
+      // 双方均零漂移（无转向输入）：Math.round(0) >= Math.round(0) → P1 获胜；
+      // 横幅须可见、文本含 'P1 获胜' 且精确匹配（含 DRIFT 竞速 前缀）
+      const banner = splitEnv.getElement('finish-drift-winner')
+      expect(banner.hidden).toBe(false)
+      expect(banner.textContent).toContain('P1 获胜')
+      expect(banner.textContent).toBe('DRIFT 竞速 · P1 获胜！')
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）', () => {
-    const splitEnv = stubEnvironment(true)
-    new GameLoop()
-    // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
-    expect(splitEnv.getElement('match-top').textContent).toContain('暂无对局记录')
-    expect(splitEnv.getElement('match-top').textContent).toContain(MATCH_EMPTY_HINT)
-    // 双人同选 forest（短赛道降帧数），与横幅用例同轨迹双完赛
-    splitEnv.fireKey('Digit7')
-    splitEnv.fireKey('Digit7', true)
-    // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛
-    splitEnv.fireKey('Space')
-    splitEnv.fireKey('KeyW')
-    splitEnv.fireKey('ArrowUp')
-    splitEnv.driveUntilFinished(700)
-    expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-    // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 森林穿梭`（零漂移得分平局归 P1）
-    const top = splitEnv.getElement('match-top').textContent
-    expect(top.startsWith('1. ')).toBe(true)
-    expect(top).toContain('胜 ·')
-    expect(top).toContain('森林穿梭')
-  })
+  it(
+    'F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）',
+    () => {
+      const splitEnv = stubEnvironment(true)
+      new GameLoop()
+      // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
+      expect(splitEnv.getElement('match-top').textContent).toContain('暂无对局记录')
+      expect(splitEnv.getElement('match-top').textContent).toContain(MATCH_EMPTY_HINT)
+      // 双人同选 forest（短赛道降帧数），与横幅用例同轨迹双完赛
+      splitEnv.fireKey('Digit7')
+      splitEnv.fireKey('Digit7', true)
+      // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛
+      splitEnv.fireKey('Space')
+      splitEnv.fireKey('KeyW')
+      splitEnv.fireKey('ArrowUp')
+      splitEnv.driveUntilFinished(700)
+      expect(splitEnv.phase()).toBe(PHASE_FINISHED)
+      // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 森林穿梭`（零漂移得分平局归 P1）
+      const top = splitEnv.getElement('match-top').textContent
+      expect(top.startsWith('1. ')).toBe(true)
+      expect(top).toContain('胜 ·')
+      expect(top).toContain('森林穿梭')
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）', () => {
-    const hotEnv = stubEnvironment('?hotseat=1')
-    new GameLoop()
-    expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
-    hotEnv.fireKey('Enter')
-    hotEnv.fireKey('KeyW')
-    // P1 全油门跑 10s：P1 相机推进，P2 静止（热座输入只路由到当前玩家）
-    hotEnv.driveFrames(200)
-    expect(hotEnv.debugValue('player2CameraZ')).toBe(0)
-    expect(hotEnv.phase()).toBe(PHASE_RACING)
-  })
+  it(
+    '热座模式：P1 回合输入仅推进 P1（player2CameraZ 不变）',
+    () => {
+      const hotEnv = stubEnvironment('?hotseat=1')
+      new GameLoop()
+      expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
+      hotEnv.fireKey('Enter')
+      hotEnv.fireKey('KeyW')
+      // P1 全油门跑 10s：P1 相机推进，P2 静止（热座输入只路由到当前玩家）
+      hotEnv.driveFrames(200)
+      expect(hotEnv.debugValue('player2CameraZ')).toBe(0)
+      expect(hotEnv.phase()).toBe(PHASE_RACING)
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('热座模式：P1 跑完 3 圈回车交棒 P2，P2 跑完后结算显示胜负', () => {
-    const hotEnv = stubEnvironment('?hotseat=1')
-    new GameLoop()
-    expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
+  it(
+    '热座模式：P1 跑完 3 圈回车交棒 P2，P2 跑完后结算显示胜负',
+    () => {
+      const hotEnv = stubEnvironment('?hotseat=1')
+      new GameLoop()
+      expect(hotEnv.debugValue('hotseatPlayer')).toBe(1)
 
-    // P1 选赛道：热座双人同一赛道（Digit2 → highway 同步到 P2 世界）
-    hotEnv.fireKey('Digit2')
-    expect(hotEnv.debugValue('selectedTrack')).toBe('highway')
-    expect(hotEnv.debugValue('selectedTrack2')).toBe('highway')
+      // P1 选赛道：热座双人同一赛道（Digit2 → highway 同步到 P2 世界）
+      hotEnv.fireKey('Digit2')
+      expect(hotEnv.debugValue('selectedTrack')).toBe('highway')
+      expect(hotEnv.debugValue('selectedTrack2')).toBe('highway')
 
-    // Enter 开始 P1 回合
-    hotEnv.fireKey('Enter')
-    expect(hotEnv.phase()).toBe(PHASE_RACING)
-    hotEnv.driveFrames(1)
-    expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P1 驾驶中')
+      // Enter 开始 P1 回合
+      hotEnv.fireKey('Enter')
+      expect(hotEnv.phase()).toBe(PHASE_RACING)
+      hotEnv.driveFrames(1)
+      expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P1 驾驶中')
 
-    // KeyW 驱动 P1 跑完 3 圈（highway 车流 12 辆碰撞减速多）：1400 帧为安全上限，完赛即提前终止
-    hotEnv.fireKey('KeyW')
-    hotEnv.driveUntilFinished(1400)
-    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
-    // round 1 结算：P1 行正常填充，finish-hint 提示交棒
-    expect(hotEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
-    expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
-    expect(hotEnv.getElement('finish-hint').textContent).toBe('按回车，P2 开始')
-    // round 1 不触碰 P2 结算行（splitMode=false 天然跳过）
-    expect(hotEnv.getElement('finish-time-2').hidden).toBe(true)
+      // KeyW 驱动 P1 跑完 3 圈（highway 车流 12 辆碰撞减速多）：1400 帧为安全上限，完赛即提前终止
+      hotEnv.fireKey('KeyW')
+      hotEnv.driveUntilFinished(1400)
+      expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+      // round 1 结算：P1 行正常填充，finish-hint 提示交棒
+      expect(hotEnv.getElement('finish-time').textContent.startsWith('总用时')).toBe(true)
+      expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
+      expect(hotEnv.getElement('finish-hint').textContent).toBe('按回车，P2 开始')
+      // round 1 不触碰 P2 结算行（splitMode=false 天然跳过）
+      expect(hotEnv.getElement('finish-time-2').hidden).toBe(true)
 
-    // Enter 交棒：进入 P2 回合且双方状态已重置（不会立刻再次判完赛）
-    hotEnv.fireKey('Enter')
-    expect(hotEnv.phase()).toBe(PHASE_RACING)
-    expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
-    hotEnv.driveFrames(10)
-    expect(hotEnv.phase()).toBe(PHASE_RACING)
-    expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P2 驾驶中')
+      // Enter 交棒：进入 P2 回合且双方状态已重置（不会立刻再次判完赛）
+      hotEnv.fireKey('Enter')
+      expect(hotEnv.phase()).toBe(PHASE_RACING)
+      expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
+      hotEnv.driveFrames(10)
+      expect(hotEnv.phase()).toBe(PHASE_RACING)
+      expect(hotEnv.getElement('hud-player-tag').textContent).toBe('P2 驾驶中')
 
-    // KeyW（热座共用 P1 键盘映射 input1）驱动 P2 跑完 3 圈（highway 档，同 P1 段）
-    hotEnv.driveUntilFinished(1400)
-    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
-    // round 2 结算：P1 行显示上一回合用时（不写纪录），P2 行正常全填
-    expect(hotEnv.getElement('finish-time').textContent.startsWith('P1 用时')).toBe(true)
-    expect(hotEnv.getElement('finish-time-2').textContent.startsWith('P2 总用时')).toBe(true)
-    expect(hotEnv.getElement('finish-time-2').hidden).toBe(false)
-    // finish-hint 显示胜负（用可预测帧数驱动时 P1/P2 用时接近，三选一断言）
-    expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
-    expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(hotEnv.getElement('finish-hint').textContent)
-    // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）；
-    // F-1 后双回合计时均为纯驾驶时间（倒计时不再计入），确定性驱动下可能平手——
-    // 平手不记胜场（finish-wins 隐藏），分胜负时记录并可见
-    const hotseatHint = hotEnv.getElement('finish-hint').textContent
-    if (hotseatHint === '平手！') {
-      expect(hotEnv.getElement('finish-wins').hidden).toBe(true)
-    } else {
-      expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
-    }
-  }, 15000)
+      // KeyW（热座共用 P1 键盘映射 input1）驱动 P2 跑完 3 圈（highway 档，同 P1 段）
+      hotEnv.driveUntilFinished(1400)
+      expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+      // round 2 结算：P1 行显示上一回合用时（不写纪录），P2 行正常全填
+      expect(hotEnv.getElement('finish-time').textContent.startsWith('P1 用时')).toBe(true)
+      expect(hotEnv.getElement('finish-time-2').textContent.startsWith('P2 总用时')).toBe(true)
+      expect(hotEnv.getElement('finish-time-2').hidden).toBe(false)
+      // finish-hint 显示胜负（用可预测帧数驱动时 P1/P2 用时接近，三选一断言）
+      expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
+      expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(hotEnv.getElement('finish-hint').textContent)
+      // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）；
+      // F-1 后双回合计时均为纯驾驶时间（倒计时不再计入），确定性驱动下可能平手——
+      // 平手不记胜场（finish-wins 隐藏），分胜负时记录并可见
+      const hotseatHint = hotEnv.getElement('finish-hint').textContent
+      if (hotseatHint === '平手！') {
+        expect(hotEnv.getElement('finish-wins').hidden).toBe(true)
+      } else {
+        expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
+      }
+      // 双段 1400 帧热座全赛季为最重负载用例（实测最差 ≈32s）→ SIM_TIMEOUT_EPIC 档位兜底
+    },
+    SIM_TIMEOUT_EPIC,
+  )
 
-  it('热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进', () => {
-    const hotEnv = stubEnvironment('?hotseat=1')
-    new GameLoop()
-    // Enter 开始 P1 回合；预热 10 帧（50ms/帧）后快照 P2 世界首车 z
-    hotEnv.fireKey('Enter')
-    hotEnv.driveFrames(10)
-    const v0 = hotEnv.debugValue('p2TrafficZ')
-    // P1 回合：tracks[1] 车流不推进（车流更新仅分屏分支），10 帧后 z 保持不变
-    hotEnv.driveFrames(10)
-    expect(hotEnv.debugValue('p2TrafficZ')).toBe(v0)
+  it(
+    '热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进',
+    () => {
+      const hotEnv = stubEnvironment('?hotseat=1')
+      new GameLoop()
+      // Enter 开始 P1 回合；预热 10 帧（50ms/帧）后快照 P2 世界首车 z
+      hotEnv.fireKey('Enter')
+      hotEnv.driveFrames(10)
+      const v0 = hotEnv.debugValue('p2TrafficZ')
+      // P1 回合：tracks[1] 车流不推进（车流更新仅分屏分支），10 帧后 z 保持不变
+      hotEnv.driveFrames(10)
+      expect(hotEnv.debugValue('p2TrafficZ')).toBe(v0)
 
-    // P1 跑完 3 圈（默认 classic 赛道）进入结算后回车交棒（交棒仅 FINISHED 且 hotseatPlayer===1 生效）
-    hotEnv.fireKey('KeyW')
-    // classic 3 圈：1075 帧为安全上限，完赛即提前终止
-    hotEnv.driveUntilFinished(1075)
-    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
-    hotEnv.fireKey('Enter')
-    expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
+      // P1 跑完 3 圈（默认 classic 赛道）进入结算后回车交棒（交棒仅 FINISHED 且 hotseatPlayer===1 生效）
+      hotEnv.fireKey('KeyW')
+      // classic 3 圈：1075 帧为安全上限，完赛即提前终止
+      hotEnv.driveUntilFinished(1075)
+      expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+      hotEnv.fireKey('Enter')
+      expect(hotEnv.debugValue('hotseatPlayer')).toBe(2)
 
-    // P2 回合：tracks[1] 车流随帧环形推进（refreshTraffic 确定性重建后起点与 v0 相同，
-    // 10 帧推进量 = speed*dt 累计 960-1440 单位，远小于圈长无回绕），z 必然变化
-    hotEnv.driveFrames(10)
-    expect(hotEnv.debugValue('p2TrafficZ')).not.toBe(v0)
-  }, 15000)
+      // P2 回合：tracks[1] 车流随帧环形推进（refreshTraffic 确定性重建后起点与 v0 相同，
+      // 10 帧推进量 = speed*dt 累计 960-1440 单位，远小于圈长无回绕），z 必然变化
+      hotEnv.driveFrames(10)
+      expect(hotEnv.debugValue('p2TrafficZ')).not.toBe(v0)
+    },
+    SIM_TIMEOUT,
+  )
 
-  it('热座双人完赛后结算显示胜场统计（P2 回合多预热 10 帧 → P1 更快 → P1 胜场 1 连胜 1）', () => {
-    const hotEnv = stubEnvironment('?hotseat=1')
-    new GameLoop()
-    // 沿用既有热座流程：Digit2 选赛道（双人同一赛道）→ Enter 开始 → KeyW 驱动 P1 跑完 3 圈
-    hotEnv.fireKey('Digit2')
-    hotEnv.fireKey('Enter')
-    hotEnv.fireKey('KeyW')
-    // highway 3 圈：1400 帧为安全上限，完赛即提前终止
-    hotEnv.driveUntilFinished(1400)
-    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
-    // 交棒：P2 回合多跑 10 帧预热（raceTime 多 0.5s），P2 必然比 P1 快照更慢 → 胜者 P1
-    hotEnv.fireKey('Enter')
-    hotEnv.driveFrames(10)
-    hotEnv.driveUntilFinished(1400)
-    expect(hotEnv.phase()).toBe(PHASE_FINISHED)
-    // round 2 结算：finish-wins 显示胜场统计（P1 1:0，首次连胜 1）；平手（极端对称）时不记、保持隐藏
-    const winsEl = hotEnv.getElement('finish-wins')
-    if (hotEnv.getElement('finish-hint').textContent === '平手！') {
-      expect(winsEl.hidden).toBe(true)
-    } else {
-      expect(winsEl.hidden).toBe(false)
-      expect(winsEl.textContent).toContain('胜场统计')
-      expect(winsEl.textContent).toMatch(/P1 \d : \d P2/)
-      expect(winsEl.textContent).toMatch(/连胜 1/)
-    }
-    // 双段 1400 帧热座模拟并行时可能超出默认 5000ms，显式放宽超时（与既有 15000ms 先例一致）
-  }, 15000)
+  it(
+    '热座双人完赛后结算显示胜场统计（P2 回合多预热 10 帧 → P1 更快 → P1 胜场 1 连胜 1）',
+    () => {
+      const hotEnv = stubEnvironment('?hotseat=1')
+      new GameLoop()
+      // 沿用既有热座流程：Digit2 选赛道（双人同一赛道）→ Enter 开始 → KeyW 驱动 P1 跑完 3 圈
+      hotEnv.fireKey('Digit2')
+      hotEnv.fireKey('Enter')
+      hotEnv.fireKey('KeyW')
+      // highway 3 圈：1400 帧为安全上限，完赛即提前终止
+      hotEnv.driveUntilFinished(1400)
+      expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+      // 交棒：P2 回合多跑 10 帧预热（raceTime 多 0.5s），P2 必然比 P1 快照更慢 → 胜者 P1
+      hotEnv.fireKey('Enter')
+      hotEnv.driveFrames(10)
+      hotEnv.driveUntilFinished(1400)
+      expect(hotEnv.phase()).toBe(PHASE_FINISHED)
+      // round 2 结算：finish-wins 显示胜场统计（P1 1:0，首次连胜 1）；平手（极端对称）时不记、保持隐藏
+      const winsEl = hotEnv.getElement('finish-wins')
+      if (hotEnv.getElement('finish-hint').textContent === '平手！') {
+        expect(winsEl.hidden).toBe(true)
+      } else {
+        expect(winsEl.hidden).toBe(false)
+        expect(winsEl.textContent).toContain('胜场统计')
+        expect(winsEl.textContent).toMatch(/P1 \d : \d P2/)
+        expect(winsEl.textContent).toMatch(/连胜 1/)
+      }
+      // 双段 1400 帧热座模拟为最重负载用例之一（实测最差 ≈27s）→ SIM_TIMEOUT_EPIC 档位兜底
+    },
+    SIM_TIMEOUT_EPIC,
+  )
 
-  it('单人模式：菜单 #drift-top 显示暂无漂移记录，0 漂移完赛后渲染不崩溃', () => {
-    new GameLoop()
-    // 构造时 refreshDriftTop：无记录 → 占位文本（#drift-top 为菜单静态元素，默认可见）
-    expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
-    expect(env.getElement('drift-top').textContent).toContain(DRIFT_EMPTY_HINT)
-    // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
-    env.fireKey('Space')
-    env.fireKey('KeyW')
-    // classic 3 圈：1075 帧为安全上限，完赛即提前终止（满油门无转向）
-    env.driveUntilFinished(1075)
-    expect(env.phase()).toBe(PHASE_FINISHED)
-    expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
-    expect(env.getElement('drift-top').textContent).toContain(DRIFT_EMPTY_HINT)
-  }, 15000)
+  it(
+    '单人模式：菜单 #drift-top 显示暂无漂移记录，0 漂移完赛后渲染不崩溃',
+    () => {
+      new GameLoop()
+      // 构造时 refreshDriftTop：无记录 → 占位文本（#drift-top 为菜单静态元素，默认可见）
+      expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
+      expect(env.getElement('drift-top').textContent).toContain(DRIFT_EMPTY_HINT)
+      // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
+      env.fireKey('Space')
+      env.fireKey('KeyW')
+      // classic 3 圈：1075 帧为安全上限，完赛即提前终止（满油门无转向）
+      env.driveUntilFinished(1075)
+      expect(env.phase()).toBe(PHASE_FINISHED)
+      expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
+      expect(env.getElement('drift-top').textContent).toContain(DRIFT_EMPTY_HINT)
+    },
+    SIM_TIMEOUT,
+  )
 
   it('P3（P3）：构造后菜单 BEST 汇总全无记录时显示占位文本', () => {
     new GameLoop()
@@ -895,36 +950,41 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(env2.getElement('pause-sfx-volume-value').textContent).toBe('100%')
   })
 
-  it('G1（G1）：挑战模式限时刷分——驱动到限时后 finished 且结算面板显示挑战文案', () => {
-    const chEnv = stubEnvironment('?challenge=1')
-    new GameLoop()
-    // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写；Batch 3 文案格式：[限时说明] · 驾驶 · 开始）
-    expect(chEnv.getElement('menu-hint').textContent).toContain('限时刷分')
-    chEnv.fireKey('Space')
-    // P1 全油门（KeyW 作为油门输入，非开始命令）
-    chEnv.fireKey('KeyW')
-    // 首帧挑战剩余时间 60s（raceTime 0）
-    const first = chEnv.debugValue('challengeTimeLeft')
-    expect(first).toBe(60)
-    // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见。
-    // F-1 后前 2.4s 为倒计时冻结窗口（帧更新段跳过），需驱动 50 帧（2.5s）跨过 GO 后再断言
-    chEnv.driveFrames(50)
-    expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
-    expect(chEnv.getElement('challenge-score').hidden).toBe(false)
-    // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
-    // 结算面板走挑战分支 → 标题 #finish-title 切「挑战结束」（F-2），finish-time 改显用时
-    chEnv.driveFrames(1248)
-    expect(chEnv.debugValue('phase')).toBe('finished')
-    expect(chEnv.getElement('finish-title').textContent).toBe('挑战结束')
-    expect(chEnv.getElement('finish-time').textContent.startsWith('用时')).toBe(true)
-    // 挑战剩余时间递减（finished 后帧循环停止推进 raceTime，定格在完赛时刻）
-    const last = chEnv.debugValue('challengeTimeLeft')
-    expect(typeof last).toBe('number')
-    expect((last as number) < (first as number)).toBe(true)
-    // 2026-08-05 空方框修复：挑战分支清空 finishLaps（无边框空卡片）且无 P2 内容（P2 卡片隐藏）
-    expect(chEnv.getElement('finish-laps').hidden).toBe(true)
-    expect(chEnv.getElement('finish-card-2').hidden).toBe(true)
-  }, 15000)
+  it(
+    'G1（G1）：挑战模式限时刷分——驱动到限时后 finished 且结算面板显示挑战文案',
+    () => {
+      const chEnv = stubEnvironment('?challenge=1')
+      new GameLoop()
+      // 构造后 menu-hint 含挑战文案（与 split/hotseat 模式同级改写；Batch 3 文案格式：[限时说明] · 驾驶 · 开始）
+      expect(chEnv.getElement('menu-hint').textContent).toContain('限时刷分')
+      chEnv.fireKey('Space')
+      // P1 全油门（KeyW 作为油门输入，非开始命令）
+      chEnv.fireKey('KeyW')
+      // 首帧挑战剩余时间 60s（raceTime 0）
+      const first = chEnv.debugValue('challengeTimeLeft')
+      expect(first).toBe(60)
+      // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见。
+      // F-1 后前 2.4s 为倒计时冻结窗口（帧更新段跳过），需驱动 50 帧（2.5s）跨过 GO 后再断言
+      chEnv.driveFrames(50)
+      expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
+      expect(chEnv.getElement('challenge-score').hidden).toBe(false)
+      // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
+      // 结算面板走挑战分支 → 标题 #finish-title 切「挑战结束」（F-2），finish-time 改显用时
+      chEnv.driveFrames(1248)
+      expect(chEnv.debugValue('phase')).toBe('finished')
+      expect(chEnv.getElement('finish-title').textContent).toBe('挑战结束')
+      expect(chEnv.getElement('finish-time').textContent.startsWith('用时')).toBe(true)
+      // 挑战剩余时间递减（finished 后帧循环停止推进 raceTime，定格在完赛时刻）
+      const last = chEnv.debugValue('challengeTimeLeft')
+      expect(typeof last).toBe('number')
+      expect((last as number) < (first as number)).toBe(true)
+      // 2026-08-05 空方框修复：挑战分支清空 finishLaps（无边框空卡片）且无 P2 内容（P2 卡片隐藏）
+      expect(chEnv.getElement('finish-laps').hidden).toBe(true)
+      expect(chEnv.getElement('finish-card-2').hidden).toBe(true)
+      // 1298 帧挑战全程模拟（实测最差 ≈17s，负载下更慢）→ SIM_TIMEOUT_EPIC 档位兜底
+    },
+    SIM_TIMEOUT_EPIC,
+  )
 
   it('H4（H4）：注入含 combo 的漂移榜条目后 #drift-top 渲染含「连击 x」后缀', () => {
     // 直接注入 localStorage drift-top（含 combo 条目），构造后 refreshDriftTop 渲染格式断言
@@ -944,7 +1004,7 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(top).not.toContain('连击 x1')
   })
 
-  it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: 15000 }, () => {
+  it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: SIM_TIMEOUT_EPIC }, () => {
     new GameLoop()
     // Enter 开始比赛：音频惰性创建块实例化 RainSound/CollisionSound（注入 masterGain）
     env.fireKey('Enter')

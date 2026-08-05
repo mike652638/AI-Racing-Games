@@ -25,13 +25,13 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 src/
   engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、环境配置（environment.ts）、玩家车渲染；景物形状（sprite-draw）、屏幕特效（screen-effects）、车流绘制（traffic-draw）、地形装饰（terrain-draw）、道路渲染（road-surface）为 2026-08-05 从 renderer.ts 拆分的关注点模块
   physics/      # 车辆运动学（car）、漂移（drift）、双人按键映射（input）
-  game/         # 游戏核心（20 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
+  game/         # 游戏核心（25 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
   shared/       # 独立共享层（2026-08-05 解环 game↔ui）：常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源，engine/physics/ui 直接导入
   ai/           # bot 决策器（bot）、圈速模拟器（simulate）
   ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）（阶段常量/类型直接导入 shared/phase；原 gamestate 兼容层 2026-08-05 已删除）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（47 文件 685 用例）
+  unit/         # Vitest 单测（48 文件 706 用例；连同 tests/bench 冒烟合计 49 文件 707 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
@@ -80,7 +80,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，47 文件 685 用例），失败即修复
+- `/test`：`npm test`（vitest run，49 文件 707 用例，含 tests/bench 冒烟），失败即修复
 - `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）

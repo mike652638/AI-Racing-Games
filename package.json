@@ -23,6 +23,9 @@
     "*.{ts,js,tsx,jsx}": [
       "eslint --fix",
       "prettier --write"
+    ],
+    "*.md": [
+      "prettier --write"
     ]
   },
   "devDependencies": {

@@ -34,6 +34,13 @@ npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 }
 ```
 
+另有性能与安全工具：
+
+```bash
+npm run bench        # 性能基准（投影/漂移/输入热路径帧分配与耗时，--reuse 对比复用路径）
+npm run scan         # 安全静态扫描（innerHTML/监听器对称性/定时器/类型泄漏）
+```
+
 ## 操作说明
 
 - 任意键：开始游戏
@@ -74,6 +81,8 @@ npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 | M15    | 架构重构（mode-strategy/finish-accounting/frame-update/frame-render 下沉）、漂移摩擦声/胎噪、PWA 离线发布、菜单/结算动画升级、UI/UX 修复、CI 工程化（eslint/prettier/husky/lint-staged）                                                                                                                                                  | ✅   |
 | M16    | 运行时实测修复（天空条纹/热座 P2 渲染/菜单光晕/移动端适配）、碰撞反馈增强（屏幕红闪 vignette + HUD 碰撞计数 + 双层碰撞音 + 横向弹开）、道路视觉优化（路面 9 带渐变 + 颗粒噪点）、倒计时提示文案与 README 同源（copy.ts）、`shouldScheduleNextFrame` 纯函数化、Playwright 视觉回归（`npm run test:e2e`，桌面 1280×720 + 移动横屏 812×375） | ✅   |
 | M17    | 环境差异化（`TrackDef.environment` + environment.ts 配置，9 赛道天空/草地/远山/景物差异化）、差异化景物形状（cactus/palm/snowpile + rotation 随机化 + 沙漠小仙人掌）、地形扩展（沙漠沙丘/海岸海面波浪/峡谷岩壁锯齿顶线）                                                                                                                  | ✅   |
+| M18    | UI/UX 深度打磨：可访问性（榜单卡片键盘展开 + focus-visible + ARIA + prefers-reduced-motion 降级）、颜色令牌化、屏幕切换过渡、碰撞/BOOST/漂移得分反馈增强、环境渲染细节（精灵限高/车灯色/路缘立体感）、文案 copy.ts 同源、移动端触屏引导浮层                                                                                               | ✅   |
+| M19    | 潜在改进点收尾：debug 钩子生产剥离（DEV 门控死码消除）、输入采集去重（collectSteerInputs 下沉 mode-strategy）、ui/gamestate 死层删除、e2e 玩法链路扩展（BOOST 蓄能 + 碰撞反馈，双 project）                                                                                                                                               | ✅   |
 
 ## 测试命令
 
@@ -89,7 +98,7 @@ npm run bot        # bot 自动跑圈（输出圈速与违规报告）
 src/
   engine/       # 伪3D投影、路面分段渲染、视差山景、路边景物（含环境差异化形状）、漂移烟雾、车流渲染、赛道定义（tracks.ts）、环境配置、玩家车渲染
   physics/      # 车辆运动学、漂移、双人按键映射
-  game/         # GameLoop 主循环（20 文件）、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、碰撞、赛道上下文、常量（re-export shared）
+  game/         # GameLoop 主循环（25 文件）、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、碰撞、赛道上下文、常量（re-export shared）
   ai/           # bot 决策器、圈速模拟器
   shared/       # 独立共享层：游戏常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源（解环 game↔ui）
   ui/           # HUD、格式化、游戏状态机、启动/结算画面、存档、触屏摇杆、小地图
