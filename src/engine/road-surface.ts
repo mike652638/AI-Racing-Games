@@ -20,6 +20,15 @@ const START_LINE_MAX_K = 40
 const START_GRID_BLACK = '#000000'
 const START_GRID_WHITE = '#ffffff'
 
+/** M18 路缘柔和过渡：内侧暗色分隔线亮度因子（shadeColor(路缘色, 1-0.25)，形成"阴影"） */
+const CURB_SHADOW_FACTOR = 0.75
+/** M18 路缘柔和过渡：外侧高光条亮度因子（shadeColor(路缘色, 1+0.15)，形成"高光"） */
+const CURB_HIGHLIGHT_FACTOR = 1.15
+/** M18 路缘柔和过渡：分隔线/高光条的屏幕像素宽度 */
+const CURB_DETAIL_PX = 2
+/** M18 路缘柔和过渡：路缘屏幕宽度小于该值跳过细节（远端压缩段不可见，同时控制每帧成本） */
+const CURB_DETAIL_MIN_WIDTH = 6
+
 /** 道路段缓存资源（由 Renderer 持有并传入，本模块不感知 Renderer 内部实现） */
 export interface RoadSurfaceResources {
   /** 缓存消费对应的赛道引用（setTrack 时赋值；视图 track 与之同引用且缓存非空才走缓存路径） */
@@ -126,6 +135,11 @@ export function renderRoadSurface(
     if (!drawn) {
       drawFallbackSegment(ctx, cur, next, colors)
     }
+
+    // M18 路缘柔和过渡：内侧暗色分隔线 + 外侧高光条（"高光-主体-阴影"立体感）。
+    // 屏幕空间 2px 细分、随投影距离自动跳过（远端压缩段不可见）；缓存切片与逐段回退两条路径共享
+    // （在道路层之上叠加，不影响既有纹理烘焙布局），弯道/直道一致生效
+    drawCurbDetail(ctx, cur, next, colors)
 
     // B7 雨天湿滑路面（两条路径共享）：整段叠加暗色压暗（复用 cur/next 投影结果，零新增对象分配）；
     // 近处段（k < 30）再叠加半透明白色中心高光条（路面宽 35%，湿滑反光）
@@ -253,6 +267,59 @@ function drawFallbackSegment(
   // 左/右路缘
   drawQuad(ctx, cur.l2, cur.l1, next.l1, next.l2, colors.side)
   drawQuad(ctx, cur.r1, cur.r2, next.r2, next.r1, colors.side)
+}
+
+/** M18 路缘柔和过渡：左右路缘各绘制内侧暗色分隔线 + 外侧高光条。
+ *  左路缘外缘 l2 / 内缘 l1；右路缘外缘 r2 / 内缘 r1（内缘贴路面）。 */
+function drawCurbDetail(ctx: CanvasRenderingContext2D, cur: Quad, next: Quad, colors: { side: string }): void {
+  drawCurbSide(ctx, cur.l2, cur.l1, next.l1, next.l2, colors.side)
+  drawCurbSide(ctx, cur.r2, cur.r1, next.r1, next.r2, colors.side)
+}
+
+/** 单个路缘的立体感细节：以内缘/外缘投影点为基准，按屏幕像素宽取 2px 细分（近/远缘独立插值）。
+ *  帧内零对象分配；复用 shadeColor 纯函数派生色（不引入新色值）；近缘宽度不足时自动跳过。 */
+function drawCurbSide(
+  ctx: CanvasRenderingContext2D,
+  outerNear: Projected,
+  innerNear: Projected,
+  innerFar: Projected,
+  outerFar: Projected,
+  sideColor: string,
+): void {
+  // 同 z 的投影点 y 相等（平地），路缘屏幕宽度即横向差
+  const wn = Math.abs(outerNear.x - innerNear.x)
+  const wf = Math.abs(outerFar.x - innerFar.x)
+  if (Math.min(wn, wf) < CURB_DETAIL_MIN_WIDTH) {
+    return
+  }
+  const tNear = CURB_DETAIL_PX / wn
+  const tFar = CURB_DETAIL_PX / wf
+  // 内侧暗色分隔线（贴路面 2px，阴影）
+  fillQuadCoords(
+    ctx,
+    innerNear.x,
+    innerNear.y,
+    innerNear.x + (outerNear.x - innerNear.x) * tNear,
+    innerNear.y,
+    innerFar.x + (outerFar.x - innerFar.x) * tFar,
+    innerFar.y,
+    innerFar.x,
+    innerFar.y,
+    shadeColor(sideColor, CURB_SHADOW_FACTOR),
+  )
+  // 外侧高光条（外缘 2px，高光）
+  fillQuadCoords(
+    ctx,
+    outerNear.x,
+    outerNear.y,
+    outerNear.x + (innerNear.x - outerNear.x) * tNear,
+    outerNear.y,
+    outerFar.x + (innerFar.x - outerFar.x) * tFar,
+    outerFar.y,
+    outerFar.x,
+    outerFar.y,
+    shadeColor(sideColor, CURB_HIGHLIGHT_FACTOR),
+  )
 }
 
 /** 起终点线：黑白棋盘格横条（16 列 × 2 行，B7）。覆盖当前段整个路面宽度（l1↔r1）、

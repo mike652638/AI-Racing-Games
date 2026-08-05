@@ -12,6 +12,11 @@ const TRACKS: [TrackContext, TrackContext] = [createTrackContext(TRACK_DEFS[0]),
 /** 用对象字面量模拟 HUD DOM 元素：仅暴露 updateHud 使用的 hidden/textContent/classList */
 function createMockHudElements(): HudElements {
   const element = () => ({ hidden: false, textContent: '' })
+  const elementWithClass = () => ({
+    hidden: false,
+    textContent: '',
+    classList: { add: vi.fn(), remove: vi.fn(), contains: vi.fn() },
+  })
   const container = () => ({ classList: { toggle: vi.fn() } })
   return {
     hudContainer: container() as unknown as HTMLDivElement,
@@ -27,7 +32,7 @@ function createMockHudElements(): HudElements {
     hudTime2: element(),
     hudBest2: element(),
     driftIndicator: element(),
-    driftScoreValue: element(),
+    driftScoreValue: elementWithClass(),
   } as unknown as HudElements
 }
 

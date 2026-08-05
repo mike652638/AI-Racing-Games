@@ -1,5 +1,5 @@
 import { RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../shared/constants'
-import { project, type ProjectionOptions } from './projection'
+import { clampSpriteScale, project, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
 import {
@@ -18,7 +18,7 @@ import { mulberry32 } from './scenery'
 import { getEnvironmentProfile } from './environment'
 import { DRAW_DISTANCE } from './road-geometry'
 import { projectSmoke } from './smoke-render'
-import { renderRoadStripToCanvas, type RoadStrip } from './road-strip'
+import { renderRoadStripToCanvas, shadeColor, type RoadStrip } from './road-strip'
 import { projectTraffic } from './traffic-render'
 // 渲染关注点拆分模块（2026-08-05 renderer 瘦身：景物形状/屏幕特效/车流/地形/道路渲染各自独立）
 import { drawBoostVignette, drawCollisionVignette, drawSpeedLines } from './screen-effects'
@@ -87,6 +87,11 @@ interface MountainLayer {
 
 /** 雨滴数量（确定性生成，渲染时按 timeSec 下落） */
 const RAIN_DROPS = 80
+
+/** M18 仙人掌明暗：远处明暗分档的投影 scale 阈值（scale 小于该值视为远处，两档明暗） */
+const CACTUS_SHADE_SCALE_THRESHOLD = 0.35
+/** M18 仙人掌明暗：远处明暗亮度因子（shadeColor ×0.8 ≈ 变暗 20%，偏冷降饱和） */
+const CACTUS_SHADE_FACTOR = 0.8
 
 /** 雨丝倾斜角（B7 天气交互化）：固定 15° 风向感（弧度），预计算 sin/cos 供离屏预渲染复用 */
 const RAIN_TILT = (15 * Math.PI) / 180
@@ -390,6 +395,8 @@ export class Renderer {
     const night = view?.night ?? false
     // M17：环境（缺省 plains 与旧版一致）驱动天空/草地色相
     const environment = view?.environment ?? 'plains'
+    // M18：环境车灯配色（night 赛道可见；canyon 红棕暖光 / alpine 冷白，其余缺省默认色）
+    const envProfile = getEnvironmentProfile(environment)
     const colors = updateLighting(timeSec, overcast, raining, night, environment)
 
     // 天空纵向渐变（P1）：skyTop → skyBottom 两段渐变填充至地平线，替代单色天空（消除山脊硬切感）；
@@ -405,7 +412,8 @@ export class Renderer {
     ctx.fillStyle = colors.grass
     ctx.fillRect(0, opts.horizon, opts.width, opts.height - opts.horizon)
     // M17 地形装饰（沙漠沙丘/海岸海面/峡谷岩壁）：在草地层之上、道路之前绘制（俯视地面的远景纹理）
-    drawTerrain(ctx, opts, environment, night)
+    // M18：传入累计时间 timeSec（海面波浪 y 随 time 轻微漂移；沙丘 sin 变形帧内零新建数组）
+    drawTerrain(ctx, opts, environment, night, timeSec)
 
     const baseIndex = trackIndexForCameraZ(v.track, cameraZ)
     const baseZ = Math.floor(cameraZ / SEGMENT_LENGTH) * SEGMENT_LENGTH
@@ -440,6 +448,10 @@ export class Renderer {
         night,
         boosting: !renderOpts?.skipBoostParticles && (v.boostParticles?.length ?? 0) > 0,
         steer: v.steer,
+        // M18：碰撞边框闪白（collision-feedback 状态驱动，0-1 指数衰减）
+        flash: v.collisionFlash,
+        // M18：环境车灯配色（canyon 红棕 / alpine 冷白，其余 undefined 走默认黄白）
+        headlightColor: envProfile.headlightColor,
       })
     }
     if (raining && !renderOpts?.skipRain) {
@@ -563,15 +575,24 @@ export class Renderer {
     if (!bottom) {
       return
     }
-    const hpx = clampSpriteHeight(sprite.kind, sprite.height * bottom.scale * opts.height * 0.5)
+    // M18：精灵近距缩放上限（MAX_SPRITE_SCALE）——在精灵侧 clamp，路面投影数学不动
+    const hpx = clampSpriteHeight(sprite.kind, sprite.height * clampSpriteScale(bottom.scale) * opts.height * 0.5)
     switch (sprite.kind) {
       case 'lamp':
         drawLamp(this.ctx, bottom.x, bottom.y, hpx)
         break
-      case 'cactus':
-        // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸
-        drawCactus(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.scale)
+      case 'cactus': {
+        // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸。
+        // M18：按投影 scale 远近两档明暗——远档 shadeColor×0.8 偏暗冷（降饱和感）、近档原色；
+        // treeColor 缺省时透传 undefined（drawCactus 内部回退默认色）
+        const baseColor = sprite.treeColor
+        const cactusColor =
+          baseColor !== undefined && bottom.scale < CACTUS_SHADE_SCALE_THRESHOLD
+            ? shadeColor(baseColor, CACTUS_SHADE_FACTOR)
+            : baseColor
+        drawCactus(this.ctx, bottom.x, bottom.y, hpx, cactusColor, sprite.scale)
         break
+      }
       case 'palm':
         // 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；rotation 随机化弯曲方向
         drawPalm(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight, sprite.rotation)

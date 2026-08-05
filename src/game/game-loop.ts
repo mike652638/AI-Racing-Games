@@ -7,6 +7,7 @@ import { JoystickUI } from '../ui/joystick'
 import { Minimap } from '../ui/minimap'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime, loadBestTimeFor } from '../ui/save'
+import { RACING_TOUCH_HINT } from '../ui/copy'
 import { createAudioRig } from './audio-rig'
 import type { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
 import type { MusicPlayer } from '../audio/music'
@@ -79,8 +80,12 @@ const MODIFIER_KEYS = [
 /** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
 const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
 
-/** 赛道难度星级 title 提示文案（下标即难度） */
-const DIFFICULTY_HINT: Record<number, string> = { 1: '入门', 2: '进阶', 3: '挑战' }
+/** 赛道难度星级 title 与 aria-label 文案（下标即难度） */
+const DIFFICULTY_HINT: Record<number, string> = {
+  1: '难度：★☆☆',
+  2: '难度：★★☆',
+  3: '难度：★★★',
+}
 
 /**
  * 游戏主循环：迁移自 main.ts 的全部运行时职责——DOM 引用、初始化、
@@ -160,6 +165,10 @@ export class GameLoop {
   private last = performance.now()
   /** 帧循环是否已调度 rAF（防重复调度导致双倍速）；完赛 return 时链断置 false，ensureLoop 重启（2026-08-05 音频/冻结修复） */
   private loopRunning = false
+  /** 比赛中触屏驾驶引导浮层是否已显示（每局仅首次进入 RACING 触发一次） */
+  private hasShownRacingTouchHint = false
+  /** BOOST 未蓄能红闪反馈上一次触发时间（300ms 冷却，防止每帧重复） */
+  private lastBoostDeniedAt = 0
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
@@ -405,23 +414,40 @@ export class GameLoop {
     }
   }
 
-  /** 绑定统计卡片展开交互（点击卡片在 前5条 / 全部10条 间切换，展开态由 .expanded 标记；
+  /** 绑定统计卡片展开交互（点击/Enter/Space 切换 前5条 / 全部10条，展开态由 .expanded + aria-expanded 标记；
    *  UX-5 修复 2026-08-05：互斥展开——展开一个时自动收起其他，防三面板同展把开始按钮顶出视口） */
   private bindLeaderboardCards(): void {
     const cards = document.querySelectorAll?.('.lb-card-clickable') ?? []
+    const updateAria = (c: Element) => {
+      if (typeof c.setAttribute === 'function') {
+        c.setAttribute('aria-expanded', String(c.classList.contains('expanded')))
+      }
+    }
+    const toggleCard = (card: Element) => {
+      const willExpand = !card.classList.contains('expanded')
+      if (willExpand) {
+        cards.forEach((other) => {
+          if (other !== card) {
+            other.classList.remove('expanded')
+            updateAria(other)
+          }
+        })
+      }
+      card.classList.toggle('expanded')
+      updateAria(card)
+      const target = card.getAttribute?.('data-target')
+      if (target === 'drift-top') refreshDriftTop()
+      else if (target === 'match-top') refreshMatchTop()
+      else if (target === 'best-summary') refreshBestSummary()
+    }
     cards.forEach((card) => {
-      card.addEventListener('click', () => {
-        const willExpand = !card.classList.contains('expanded')
-        if (willExpand) {
-          cards.forEach((other) => {
-            if (other !== card) other.classList.remove('expanded')
-          })
+      card.addEventListener('click', () => toggleCard(card))
+      card.addEventListener('keydown', (e: Event) => {
+        const ke = e as KeyboardEvent
+        if (ke.code === 'Enter' || ke.code === 'Space') {
+          e.preventDefault()
+          toggleCard(card)
         }
-        card.classList.toggle('expanded')
-        const target = card.getAttribute?.('data-target')
-        if (target === 'drift-top') refreshDriftTop()
-        else if (target === 'match-top') refreshMatchTop()
-        else if (target === 'best-summary') refreshBestSummary()
       })
     })
   }
@@ -521,6 +547,36 @@ export class GameLoop {
     }
   }
 
+  /**
+   * 屏幕退场过渡：为目标 DOM 元素加 .leaving 触发 CSS 淡出（150ms），
+   * 动画结束后才隐藏并移除类；若元素已离开/已隐藏或处于测试 mock 环境则幂等跳过/立即隐藏。
+   */
+  private transitionScreenOut(screen: HTMLElement | undefined): void {
+    if (!screen || screen.hidden) return
+    // 测试 mock 元素无 classList/addEventListener/contains：直接隐藏，避免崩溃
+    if (
+      !screen.classList ||
+      typeof screen.classList.contains !== 'function' ||
+      typeof screen.addEventListener !== 'function'
+    ) {
+      screen.hidden = true
+      return
+    }
+    if (screen.classList.contains('leaving')) return
+    screen.classList.add('leaving')
+    const cleanup = () => {
+      screen.removeEventListener('transitionend', cleanup)
+      screen.classList.remove('leaving')
+      screen.hidden = true
+    }
+    screen.addEventListener('transitionend', cleanup)
+    const timer = globalThis.setTimeout(cleanup, 250)
+    // Node 测试环境：unref 定时器，避免测试进程为等待 250ms 清理而保留大量 DOM 引用
+    if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
+      ;(timer as { unref: () => void }).unref()
+    }
+  }
+
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
@@ -570,6 +626,34 @@ export class GameLoop {
     // Batch 6（Batch 6）：小地图兜底显隐——退出 RACING（暂停/结算/回菜单）时隐藏（帧块按 phase 刷新，此处覆盖残留）
     if (this.minimap) {
       this.minimap.canvas.hidden = newPhase !== PHASE_RACING
+    }
+    // M18：屏幕切换过渡——菜单/暂停/结算退场淡出 150ms，不阻塞游戏循环
+    if (newPhase === PHASE_RACING) {
+      this.transitionScreenOut(this.screenElements.startScreen)
+    }
+    if (newPhase === PHASE_MENU) {
+      this.transitionScreenOut(this.screenElements.finishScreen)
+    }
+    if (newPhase !== PHASE_PAUSED) {
+      this.transitionScreenOut(this.screenElements.pauseScreen)
+    }
+    // M18：首次进入 RACING 时在触屏设备显示一次驾驶引导浮层（2s 淡出）
+    if (newPhase === PHASE_RACING && !this.hasShownRacingTouchHint) {
+      this.hasShownRacingTouchHint = true
+      const hint = this.screenElements.racingTouchHint
+      if (hint && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches) {
+        const textEl = hint.querySelector<HTMLElement>('.racing-touch-hint-text')
+        if (textEl) textEl.textContent = RACING_TOUCH_HINT
+        hint.hidden = false
+        hint.classList.add('show')
+        const timer = globalThis.setTimeout(() => {
+          hint.classList.remove('show')
+          hint.hidden = true
+        }, 2000)
+        if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
+          ;(timer as { unref: () => void }).unref()
+        }
+      }
     }
     // Task E（Task E）：结算记账下沉至 finish-accounting.ts 纯函数——
     // 完赛标记恒计算（applyPhaseToScreens 各阶段均需），记账写入仅首次进入完赛时执行（finishShown 守卫防重入）
@@ -835,6 +919,25 @@ export class GameLoop {
     this.challengeTimer = ur.challengeTimer
     this.challengeScore = ur.challengeScore
     this.boostBar = ur.boostBar
+    // M18：BOOST 未蓄能反馈——键盘按下 Space/Enter 且 charge<=0 且未激活时，#boost-bar 红闪 300ms
+    if (
+      this.phase === PHASE_RACING &&
+      this.input.getP1Input().boost === true &&
+      this.race.player1.boostCharge <= 0 &&
+      !this.boostActive &&
+      now - this.lastBoostDeniedAt > 300
+    ) {
+      this.lastBoostDeniedAt = now
+      if (this.boostBar) {
+        this.boostBar.classList.add('no-charge')
+        const timer = globalThis.setTimeout(() => {
+          this.boostBar?.classList.remove('no-charge')
+        }, 300)
+        if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
+          ;(timer as { unref: () => void }).unref()
+        }
+      }
+    }
     if (!shouldScheduleNextFrame(ur.shouldRender)) {
       // 完赛/挑战限时触发 finish：等价旧帧内 return（跳过渲染与 rAF 自续）
       // M16：决策下沉 frame-pure 纯函数（frame-pure.test.ts 锁定 shouldRender 契约）

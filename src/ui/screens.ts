@@ -15,6 +15,7 @@ import {
 } from './save'
 import { CHALLENGE_TARGET_SCORE } from '../shared/constants'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './gamestate'
+import { FINISH_DRIFT_HINT } from './copy'
 
 /** 屏幕 DOM 引用：启动/结算/暂停面板及结算文本（P2 行仅分屏时存在） */
 export interface ScreenElements {
@@ -35,6 +36,8 @@ export interface ScreenElements {
   finishCard2?: HTMLDivElement
   /** 热座交棒/胜负提示（#finish-hint，仅热座模式填充） */
   finishHint?: HTMLDivElement
+  /** 结算面板漂移提示（#finish-drift-hint，P1 漂移得分为 0 时显示） */
+  finishDriftHint?: HTMLDivElement
   /** 分屏漂移竞速排名横幅（#finish-drift-winner，仅分屏双完赛填充） */
   finishDriftWinner?: HTMLDivElement
   /** 胜场统计行（#finish-wins，热座/分屏分胜负时填充） */
@@ -55,6 +58,8 @@ export interface ScreenElements {
   pauseSfxVolume?: HTMLInputElement
   /** 暂停面板标题（#pause-title，Batch 3：带 ID 便于分屏时动态标注暂停玩家） */
   pauseTitle?: HTMLHeadingElement
+  /** 比赛中触屏驾驶引导浮层（#racing-touch-hint） */
+  racingTouchHint?: HTMLDivElement
 }
 
 /** 结算面板填充选项：双人完赛标记（applyPhaseToScreens 由 GameLoop 计算传入）；
@@ -85,18 +90,31 @@ export function applyPhaseToScreens(
   carConfig: CarConfig,
   opts: FinishPanelOptions,
 ): void {
+  /**
+   * 设置屏幕显隐时，若元素正处于 CSS 退场过渡（.leaving），则跳过 hidden 设置，
+   * 由 game-loop.transitionScreenOut 在 transitionend 后真正隐藏。
+   */
+  const setHidden = (el: HTMLElement | undefined, hidden: boolean): void => {
+    if (!el) return
+    // 退场过渡中的元素由 game-loop.transitionScreenOut 自行隐藏；测试 mock 环境无 contains 时直接放行显示
+    if (hidden && (typeof el.classList?.contains !== 'function' || el.classList.contains('leaving'))) {
+      return
+    }
+    el.hidden = hidden
+  }
+
   if (phase === PHASE_MENU) {
-    elements.startScreen.hidden = false
-    elements.finishScreen.hidden = true
-    elements.pauseScreen.hidden = true
+    setHidden(elements.startScreen, false)
+    setHidden(elements.finishScreen, true)
+    setHidden(elements.pauseScreen, true)
   } else if (phase === PHASE_RACING) {
-    elements.startScreen.hidden = true
-    elements.finishScreen.hidden = true
-    elements.pauseScreen.hidden = true
+    setHidden(elements.startScreen, true)
+    setHidden(elements.finishScreen, true)
+    setHidden(elements.pauseScreen, true)
   } else if (phase === PHASE_PAUSED) {
-    elements.pauseScreen.hidden = false
+    setHidden(elements.pauseScreen, false)
   } else if (phase === PHASE_FINISHED) {
-    elements.finishScreen.hidden = false
+    setHidden(elements.finishScreen, false)
     fillFinishPanel(elements, race, carConfig, opts)
   }
 }
@@ -114,6 +132,9 @@ function fillFinishPanel(
   race.finishShown = true
 
   const trackId0 = race.tracks[0].def.id
+  if (elements.finishDriftHint) {
+    elements.finishDriftHint.hidden = true
+  }
   if (opts.challengeMode) {
     // G1（G1）：挑战模式结算——限时刷分展示：时间行'挑战结束'、漂移得分行、漂移榜排名（前 10 内）
     const score = Math.round(race.player1.driftState.score)
@@ -167,6 +188,15 @@ function fillFinishPanel(
       }
     }
 
+    // M18：P1 漂移得分为 0 时显示漂移提示，引导玩家通过漂移获得得分
+    if (elements.finishDriftHint) {
+      const showHint = race.player1.driftState.score === 0
+      elements.finishDriftHint.hidden = !showHint
+      if (showHint) {
+        elements.finishDriftHint.textContent = FINISH_DRIFT_HINT
+      }
+    }
+
     // P1：分屏时 P1 圈速行加 'P1 ' 前缀（与 P2 圈速行对称）；单屏不加
     elements.finishLaps.textContent = `${opts.splitMode ? 'P1 ' : ''}${formatLapTimes(race.lapTimes).join('  ')}`
   } else {
@@ -176,6 +206,9 @@ function fillFinishPanel(
     elements.finishBest.textContent = ''
     elements.finishScore.textContent = ''
     elements.finishLaps.textContent = ''
+    if (elements.finishDriftHint) {
+      elements.finishDriftHint.hidden = true
+    }
   }
 
   // P2 结算卡片容器显隐：仅分屏或热座 round 2（有 P2 内容）时显示，否则整卡隐藏，

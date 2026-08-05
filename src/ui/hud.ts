@@ -133,8 +133,22 @@ export function updateHud(
   elements.driftIndicator.hidden = !driftPlayer.driftState.active
   if (driftPlayer.driftState.active) {
     // F6（F6）：得分达 DRIFT_SCORE_MAX 上限时显示 MAX 标记（drift.ts 已 clamp，非上限保持 Math.round 格式）
-    elements.driftScoreValue.textContent =
+    const nextScoreText =
       driftPlayer.driftState.score >= DRIFT_SCORE_MAX ? 'MAX' : String(Math.round(driftPlayer.driftState.score))
+    // M18：得分数字变化时触发一次性放大回弹动画（score-pop 250ms），防每帧重复触发
+    if (
+      elements.driftScoreValue.textContent !== nextScoreText &&
+      !elements.driftScoreValue.classList.contains('score-pop')
+    ) {
+      elements.driftScoreValue.classList.add('score-pop')
+      const timer = globalThis.setTimeout(() => {
+        elements.driftScoreValue.classList.remove('score-pop')
+      }, 250)
+      if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
+        ;(timer as { unref: () => void }).unref()
+      }
+    }
+    elements.driftScoreValue.textContent = nextScoreText
   }
 
   // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*0.25)，否则隐藏

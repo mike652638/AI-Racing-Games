@@ -1,6 +1,7 @@
 import { getTrackDef, TRACK_DEFS } from '../engine/tracks'
 import { formatTime } from '../ui/format'
 import { loadBestTimeFor, loadDriftTop, loadMatchTop } from '../ui/save'
+import { MATCH_EMPTY_HINT, STATS_EMPTY_HINT } from '../ui/copy'
 
 /**
  * 菜单排行榜 DOM 刷新（Task D 拆分自 game-loop.ts）：
@@ -29,7 +30,7 @@ export function refreshDriftTop(): void {
   const top = loadDriftTop().slice(0, isCardExpanded(el) ? 10 : 5)
   el.textContent =
     top.length === 0
-      ? '暂无漂移记录'
+      ? `暂无漂移记录\n${STATS_EMPTY_HINT}`
       : top
           .map(
             (e, i) =>
@@ -62,7 +63,7 @@ export function refreshBestSummary(): void {
     lines.push(`${i + 1}. ${def.name}  P1 ${p1}${p2}`)
   })
   const visible = isCardExpanded(el) ? lines : lines.slice(0, 5)
-  el.textContent = visible.length > 0 ? visible.join('\n') : '暂无最佳成绩'
+  el.textContent = visible.length > 0 ? visible.join('\n') : `暂无最佳成绩\n${STATS_EMPTY_HINT}`
 }
 
 /**
@@ -78,7 +79,7 @@ export function refreshMatchTop(): void {
   const top = loadMatchTop().slice(0, isCardExpanded(el) ? 10 : 5)
   el.textContent =
     top.length === 0
-      ? '暂无对局记录'
+      ? `暂无对局记录\n${MATCH_EMPTY_HINT}`
       : top
           .map(
             (e, i) =>

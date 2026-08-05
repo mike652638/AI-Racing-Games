@@ -9,6 +9,7 @@ import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { DRIFT_TOP_KEY } from '../../src/ui/save'
 import { refreshBestSummary } from '../../src/game/top-refresh'
+import { MATCH_EMPTY_HINT, STATS_EMPTY_HINT } from '../../src/ui/copy'
 import { createMockCanvas, type MockCanvas } from '../__mocks__/canvas'
 
 /** 最小 DOM 元素替身：覆盖 GameLoop 构造/updateHud/screens/joystick 触达的属性 */
@@ -593,7 +594,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
-    expect(splitEnv.getElement('match-top').textContent).toBe('暂无对局记录')
+    expect(splitEnv.getElement('match-top').textContent).toContain('暂无对局记录')
+    expect(splitEnv.getElement('match-top').textContent).toContain(MATCH_EMPTY_HINT)
     // 双人同选 forest（短赛道降帧数），与横幅用例同轨迹双完赛
     splitEnv.fireKey('Digit7')
     splitEnv.fireKey('Digit7', true)
@@ -727,21 +729,24 @@ describe('GameLoop 主循环集成冒烟测试', () => {
   it('单人模式：菜单 #drift-top 显示暂无漂移记录，0 漂移完赛后渲染不崩溃', () => {
     new GameLoop()
     // 构造时 refreshDriftTop：无记录 → 占位文本（#drift-top 为菜单静态元素，默认可见）
-    expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
+    expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
+    expect(env.getElement('drift-top').textContent).toContain(STATS_EMPTY_HINT)
     // 全油门无转向 → 漂移得分 0 → 不入榜，完赛后榜单仍为占位文本（不抛错）
     env.fireKey('Space')
     env.fireKey('KeyW')
     // classic 3 圈：1075 帧为安全上限，完赛即提前终止（满油门无转向）
     env.driveUntilFinished(1075)
     expect(env.phase()).toBe(PHASE_FINISHED)
-    expect(env.getElement('drift-top').textContent).toBe('暂无漂移记录')
+    expect(env.getElement('drift-top').textContent).toContain('暂无漂移记录')
+    expect(env.getElement('drift-top').textContent).toContain(STATS_EMPTY_HINT)
   }, 15000)
 
   it('P3（P3）：构造后菜单 BEST 汇总全无记录时显示占位文本', () => {
     new GameLoop()
     const summary = env.getElement('best-summary')
     // 无任何存档（P1/P2 均 null）→ 占位文本（元素存在即可断言，stub 对未知 id 自动建最小替身）
-    expect(summary.textContent).toBe('暂无最佳成绩')
+    expect(summary.textContent).toContain('暂无最佳成绩')
+    expect(summary.textContent).toContain(STATS_EMPTY_HINT)
   })
 
   it('P3（P3）：预设 9 条赛道存档后 BEST 汇总收起态渲染前 5 条且对应行含格式化时间', () => {

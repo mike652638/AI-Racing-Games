@@ -141,6 +141,19 @@ describe('createRoadsideSprites 环境景物（M17）', () => {
     expect(getEnvironmentProfile('highway').terrain).toBeUndefined()
   })
 
+  it('M18 环境车灯配色：canyon 红棕暖光 / alpine 冷白，其余环境缺省（默认玩家车黄白）', () => {
+    expect(getEnvironmentProfile('canyon').headlightColor).toBe('#ff8a5c')
+    expect(getEnvironmentProfile('alpine').headlightColor).toBe('#dff1ff')
+    // 非 night 环境不设（缺省 undefined → drawPlayerCar 走默认 HEADLIGHT_CORE）
+    expect(getEnvironmentProfile('plains').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('highway').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('s-curve').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('island').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('desert').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('forest').headlightColor).toBeUndefined()
+    expect(getEnvironmentProfile('coast').headlightColor).toBeUndefined()
+  })
+
   it('M17 棕榈 rotation 随机化：coast 棕榈既有左弯(-1)也有右弯(+1)', () => {
     const coastDef = TRACK_DEFS.find((d) => d.id === 'coast')!
     const ctx = createTrackContext(coastDef)

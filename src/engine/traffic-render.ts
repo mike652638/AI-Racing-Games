@@ -46,7 +46,9 @@ export function projectTraffic(
     if (!top) {
       continue
     }
-    // 宽度基于世界宽度 × 投影比例；高度用 bottom.y − top.y 精确像素差（确保车底贴合路面投影点）
+    // 宽度基于世界宽度 × 投影比例；高度用 bottom.y − top.y 精确像素差（确保车底贴合路面投影点）。
+    // 车流近距防护走既有 MAX_TRAFFIC_HEIGHT_PX（保宽高比 clamp，P2），
+    // 不叠加 clampSpriteScale——双重 clamp 会破坏宽高比契约（M18 实测取舍）
     let width = Math.max(CAR_WORLD_WIDTH * bottom.scale * (opts.width / 2), 3)
     let height = Math.max(bottom.y - top.y, 3)
     // 极近距离高度 clamp（P2）：与 clampSpriteHeight 同一思路——渲染层保护，不动 project 数学。

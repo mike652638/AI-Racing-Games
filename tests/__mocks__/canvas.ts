@@ -85,6 +85,8 @@ export function createMockCanvas(width = 800, height = 600): MockCanvas {
     clip: (...args: unknown[]): void => record('clip', args),
     drawImage: (...args: unknown[]): void => record('drawImage', args),
     arc: (...args: unknown[]): void => record('arc', args),
+    // M18：地形装饰海面波浪 ellipse（terrain-draw 测试用）
+    ellipse: (...args: unknown[]): void => record('ellipse', args),
     // 圆角矩形路径（minimap roundRectPath 使用；2026-08-05 补）
     arcTo: (...args: unknown[]): void => record('arcTo', args),
     clearRect: (...args: unknown[]): void => record('clearRect', args),

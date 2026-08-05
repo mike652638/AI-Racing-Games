@@ -206,6 +206,59 @@ describe('drawPlayerCar 玩家车辆精灵（P0）', () => {
     expect(laneOffsetToPx(10, opts, carW)).toBeLessThanOrEqual(maxShift)
     expect(laneOffsetToPx(-10, opts, carW)).toBeGreaterThanOrEqual(-maxShift)
   })
+
+  test('M18 碰撞边框闪白：flash=0（缺省）不绘制描边（零 rect/stroke）', () => {
+    const canvas = createMockCanvas(800, 600)
+    drawPlayerCar(canvas.__ctx, opts)
+    drawPlayerCar(canvas.__ctx, opts, { flash: 0 })
+    expect(canvas.__ctx.__calls.stroke ?? 0).toBe(0)
+    // 车身路径 rect 也零调用（flash=0 无任何描边路径）
+    expect(canvas.__ctx.__args.rect ?? []).toHaveLength(0)
+  })
+
+  test('M18 碰撞边框闪白：flash>0 时车身外描边（rect+stroke、白→红插值色、3px 线宽）', () => {
+    const canvas = createMockCanvas(800, 600)
+    drawPlayerCar(canvas.__ctx, opts, { flash: 0.8 })
+    // 描边路径：一次 rect（车身矩形）+ 一次 stroke
+    expect(canvas.__ctx.__calls.stroke ?? 0).toBe(1)
+    const rectArgs = (canvas.__ctx.__args.rect ?? []).find(
+      (a) => Math.abs((a[2] as number) - carW) < 1e-6 && Math.abs((a[3] as number) - carH) < 1e-6,
+    )
+    expect(rectArgs).toBeDefined()
+    expect(canvas.__ctx.lineWidth).toBe(3)
+    // 白(255,255,255) → 红(255,80,60) 插值 80%：g = 255-175×0.8 = 115、b = 255-195×0.8 = 99
+    expect(canvas.__ctx.strokeStyle).toBe('rgba(255, 115, 99, 0.800)')
+  })
+
+  test('M18 碰撞边框闪白：flash=1 满强度为红色端点、flash 随强度衰减可关闭', () => {
+    const canvas = createMockCanvas(800, 600)
+    drawPlayerCar(canvas.__ctx, opts, { flash: 1 })
+    expect(canvas.__ctx.__calls.stroke ?? 0).toBe(1)
+    expect(canvas.__ctx.strokeStyle).toBe('rgba(255, 80, 60, 1.000)')
+  })
+
+  test('M18 环境车灯配色：headlightColor 覆盖夜间核心灯色（缺省默认黄白）', () => {
+    // mock 的 fill 不记录颜色快照，测试内补丁捕获 fill 时刻的 fillStyle
+    const drawWith = (extra: { night: boolean; headlightColor?: string }): string[] => {
+      const canvas = createMockCanvas(800, 600)
+      const ctx = canvas.__ctx
+      const styles: string[] = []
+      const orig = (ctx as unknown as { fill: (...a: unknown[]) => void }).fill
+      ;(ctx as unknown as { fill: (...a: unknown[]) => void }).fill = (...a: unknown[]) => {
+        styles.push(String(ctx.fillStyle))
+        orig(...a)
+      }
+      drawPlayerCar(ctx, opts, extra)
+      return styles
+    }
+    const defaultStyles = drawWith({ night: true })
+    const canyonStyles = drawWith({ night: true, headlightColor: '#ff8a5c' })
+    // 缺省：核心灯色为默认黄白（HEADLIGHT_CORE = #ffe08a）
+    expect(defaultStyles).toContain('#ffe08a')
+    // 传入环境色时覆盖核心灯色
+    expect(canyonStyles).toContain('#ff8a5c')
+    expect(defaultStyles).not.toContain('#ff8a5c')
+  })
 })
 
 describe('Renderer 集成（P0：玩家车参与渲染管线）', () => {

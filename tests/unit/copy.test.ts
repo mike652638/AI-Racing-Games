@@ -1,7 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { COUNTDOWN_HINTS, COUNTDOWN_HINT_README_KEYWORDS, MENU_HINT, MENU_HINT_TOUCH } from '../../src/ui/copy'
+import {
+  COUNTDOWN_HINTS,
+  COUNTDOWN_HINT_README_KEYWORDS,
+  FINISH_DRIFT_HINT,
+  MATCH_EMPTY_HINT,
+  MENU_HINT,
+  MENU_HINT_TOUCH,
+  RACING_TOUCH_HINT,
+  STATS_EMPTY_HINT,
+} from '../../src/ui/copy'
 
 describe('copy.ts UI 文案常量', () => {
   it('倒计时提示恰好三条且不为空', () => {
@@ -18,6 +27,13 @@ describe('copy.ts UI 文案常量', () => {
   it('菜单提示非空', () => {
     expect(MENU_HINT.length).toBeGreaterThan(0)
     expect(MENU_HINT_TOUCH.length).toBeGreaterThan(0)
+  })
+
+  it('M18 新增文案常量非空', () => {
+    expect(RACING_TOUCH_HINT.length).toBeGreaterThan(0)
+    expect(FINISH_DRIFT_HINT.length).toBeGreaterThan(0)
+    expect(MATCH_EMPTY_HINT.length).toBeGreaterThan(0)
+    expect(STATS_EMPTY_HINT.length).toBeGreaterThan(0)
   })
 })
 

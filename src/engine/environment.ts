@@ -38,6 +38,8 @@ export interface EnvironmentProfile {
   treeColorLight: string
   /** 菜单赛道缩略图主题色（亮色，随环境区分；缺省回退金黄 #ffd75e，2026-08-05 菜单优化） */
   previewColor?: string
+  /** M18 环境车灯配色（night 赛道可见）：canyon 红棕暖光 / alpine 冷白；其余不设（玩家车默认黄白） */
+  headlightColor?: string
   /** M17 地形装饰：沙漠沙丘（dunes）/ 海岸海面（sea）/ 峡谷岩壁（rock）；无则省略（默认草原无地形装饰） */
   terrain?: 'dunes' | 'sea' | 'rock'
 }
@@ -127,6 +129,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     treeColor: '#4a5a2a',
     treeColorLight: '#5a6a30',
     previewColor: '#ff9a6e',
+    headlightColor: '#ff8a5c', // M18：峡谷夜间车灯红棕暖光
     terrain: 'rock',
   },
   desert: {
@@ -198,6 +201,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     treeColor: '#4a5a5a',
     treeColorLight: '#c8d8e8',
     previewColor: '#c8d8ff',
+    headlightColor: '#dff1ff', // M18：山岳夜间车灯冷白
   },
 }
 

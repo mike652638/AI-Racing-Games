@@ -18,3 +18,15 @@ export const MENU_HINT = '空格键开始 · 1-9 / 方向键 切换赛道'
 
 /** 菜单触屏提示（#menu-hint-touch） */
 export const MENU_HINT_TOUCH = '点击赛道开始 · 点击榜单可展开'
+
+/** 比赛中触屏驾驶引导浮层（#racing-touch-hint）：与实际 joystick 布局一致 */
+export const RACING_TOUCH_HINT = '触屏：拖动右下角虚拟摇杆控制方向与油门，左下角暂停按钮'
+
+/** 结算面板漂移提示（#finish-drift-hint）：P1 漂移得分为 0 时显示 */
+export const FINISH_DRIFT_HINT = '甩尾过弯可获得漂移得分！'
+
+/** 对局战绩空态追加说明（#match-top） */
+export const MATCH_EMPTY_HINT = '仅分屏对局计入'
+
+/** 菜单统计面板空态引导（#best-summary/#drift-top） */
+export const STATS_EMPTY_HINT = '完成比赛后这里会显示你的最佳成绩'

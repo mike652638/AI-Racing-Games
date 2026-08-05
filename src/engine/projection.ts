@@ -28,6 +28,23 @@ export interface Projected {
 }
 
 /**
+ * 精灵近距缩放上限（M18）：防 1/depth 投影在贴脸时产生超大精灵。
+ * 阈值依据：道路半宽 1 世界单位、相机高度——近距精灵最大视觉高度约 240px × 2.2 ≈ 528px，
+ * 超过即 clamp（与 sprites.ts 的 MAX_TREE_HEIGHT_PX 同思路，双保险）。
+ */
+export const MAX_SPRITE_SCALE = 2.2
+
+/**
+ * 精灵投影 scale clamp（M18）：近距贴脸时收敛到 MAX_SPRITE_SCALE。
+ * 注意：clamp 放在精灵侧（renderer drawSpriteProjected 消费），不放 project 内——
+ * project 同时被路面 quad 投影（road-geometry projectSegmentQuad）共用，路面数学必须保持原语义。
+ * 车流近距防护走既有 MAX_TRAFFIC_HEIGHT_PX（保宽高比 clamp，P2），不叠加本 clamp。
+ */
+export function clampSpriteScale(scale: number): number {
+  return Math.min(scale, MAX_SPRITE_SCALE)
+}
+
+/**
  * 将世界坐标投影到屏幕。
  * 地面平面 y=0，相机朝 +z 方向，z 增大即远离相机。
  * 相机后方或平齐的点返回 null（不可见）。

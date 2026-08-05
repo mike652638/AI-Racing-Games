@@ -405,6 +405,31 @@ describe('Renderer 状态切换', () => {
     expect(afterBaseGrad - afterFlashGrad).toBe(0)
   })
 
+  it('M18 碰撞车身边框闪白：view.collisionFlash>0 时玩家车描边 stroke 增量（边框闪白）', () => {
+    const { canvas, renderer } = createHarness()
+    const trackB = createTrackFromDef(TRACK_DEFS[0])
+    const baseView: RenderView = {
+      track: trackB,
+      curvePrefixSum: buildCurvePrefixSum(trackB),
+      spriteIndex: buildSpriteIndex(createRoadsideSprites(trackB), SEGMENT_LENGTH),
+      traffic: [],
+      collisionFlash: 0,
+    }
+    const flashView: RenderView = { ...baseView, collisionFlash: 0.8 }
+    // 逐帧取 stroke 增量（速度线 speedRatio=0 阈值以下不绘制，stroke 仅来自玩家车描边）
+    renderer.render(0, [], 0, baseView)
+    const before = callCount(canvas.__ctx.__calls, 'stroke')
+    renderer.render(0, [], 0, flashView)
+    const afterFlash = callCount(canvas.__ctx.__calls, 'stroke')
+    renderer.render(0, [], 0, baseView)
+    const afterBase = callCount(canvas.__ctx.__calls, 'stroke')
+    const flashIncr = afterFlash - before
+    const baseIncr = afterBase - afterFlash
+    // 闪帧玩家车 1 次描边；无闪帧 0 次
+    expect(flashIncr).toBe(1)
+    expect(baseIncr).toBe(0)
+  })
+
   it('night 车灯随变道方向偏移：shiftDir=1 渲染的 arc x 序列与 shiftDir=0 不同', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4])

@@ -10,6 +10,12 @@ export interface PlayerCarOptions {
   night?: boolean
   /** BOOST 激活：车尾橙色尾焰提示 */
   boosting?: boolean
+  /** M18 碰撞边框闪白强度（0-1，collision-feedback 驱动；0 或省略 = 不绘制）。
+   *  已落地（M16 设计意图）：flash>0 时车身外描边，色随强度白→红插值，线宽 3px */
+  flash?: number
+  /** M18 环境车灯配色（night 模式车头核心灯色；缺省默认黄白 #ffe08a；
+   *  canyon 红棕暖光 / alpine 冷白由 renderer 按环境传入） */
+  headlightColor?: string
 }
 
 /** 玩家车高度占屏幕高度比例（任务 P0：15-20%） */
@@ -34,6 +40,11 @@ const WHEEL_COLOR = '#14171c'
  * 半径倍率 1.6→1.25，防大团光晕笼罩车体影响辨识） */
 const HEADLIGHT_HALO = 'rgba(255, 235, 180, 0.25)'
 const HEADLIGHT_CORE = '#ffe08a'
+/** 碰撞边框闪白：白色端点（flash=0 时纯白）与红色端点（flash=1 时纯红，与 M16 碰撞红闪同理念） */
+const FLASH_WHITE_RGB = { r: 255, g: 255, b: 255 }
+const FLASH_RED_RGB = { r: 255, g: 80, b: 60 }
+/** 碰撞边框描边线宽（px） */
+const FLASH_LINE_WIDTH = 3
 /** BOOST 车尾尾焰色 */
 const BOOST_FLAME_COLOR = 'rgba(255, 180, 80, 0.85)'
 /** 夜间光柱合成模式与填充色（lighter 加亮近端路面） */
@@ -56,7 +67,8 @@ export function laneOffsetToPx(laneOffset: number, opts: ProjectionOptions, carW
 }
 
 /** 绘制玩家车辆精灵：屏幕底部固定位置（不参与世界投影）、随 laneOffset 横向平移、
- *  按 steer 倾斜（save/rotate/restore，±5°）、夜间车头双灯 + 光柱、BOOST 车尾尾焰 */
+ *  按 steer 倾斜（save/rotate/restore，±5°）、夜间车头双灯 + 光柱、BOOST 车尾尾焰；
+ *  M18：碰撞边框闪白（flash 白→红插值描边，M16 设计意图已落地）+ 环境车灯配色（headlightColor） */
 export function drawPlayerCar(
   ctx: CanvasRenderingContext2D,
   opts: ProjectionOptions,
@@ -65,6 +77,8 @@ export function drawPlayerCar(
   const laneOffset = options?.laneOffset ?? 0
   const night = options?.night ?? false
   const boosting = options?.boosting ?? false
+  const flash = options?.flash ?? 0
+  const headlightColor = options?.headlightColor ?? HEADLIGHT_CORE
   const carH = opts.height * PLAYER_CAR_HEIGHT_RATIO
   const carW = carH * PLAYER_CAR_ASPECT
   const cx = opts.width / 2 + laneOffsetToPx(laneOffset, opts, carW)
@@ -159,13 +173,28 @@ export function drawPlayerCar(
     ctx.beginPath()
     ctx.arc(cx + lampDX, lampY, r * 1.25, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = HEADLIGHT_CORE
+    ctx.fillStyle = headlightColor
     ctx.beginPath()
     ctx.arc(cx - lampDX, lampY, r, 0, Math.PI * 2)
     ctx.fill()
     ctx.beginPath()
     ctx.arc(cx + lampDX, lampY, r, 0, Math.PI * 2)
     ctx.fill()
+  }
+
+  // M18 碰撞车身边框闪白（M16 设计意图落地）：车身外描边（随转向倾斜变换），
+  // 色随 flash 强度白→红插值（低闪白亮、高闪红），线宽 3px；
+  // flash 状态由 collision-feedback 驱动（renderer 传 view.collisionFlash），此处纯消费
+  if (flash > 0) {
+    const a = Math.min(1, flash)
+    const r = Math.round(FLASH_WHITE_RGB.r + (FLASH_RED_RGB.r - FLASH_WHITE_RGB.r) * a)
+    const g = Math.round(FLASH_WHITE_RGB.g + (FLASH_RED_RGB.g - FLASH_WHITE_RGB.g) * a)
+    const b = Math.round(FLASH_WHITE_RGB.b + (FLASH_RED_RGB.b - FLASH_WHITE_RGB.b) * a)
+    ctx.lineWidth = FLASH_LINE_WIDTH
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`
+    ctx.beginPath()
+    ctx.rect(cx - carW / 2, bottomY - carH, carW, carH)
+    ctx.stroke()
   }
 
   ctx.restore()

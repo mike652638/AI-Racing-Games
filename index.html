@@ -47,7 +47,7 @@
       <div id="challenge-score" hidden></div>
       <canvas id="hud-minimap" width="110" height="110" hidden></canvas>
       <div id="boost-bar" hidden><span>BOOST</span></div>
-      <button id="pause-btn" type="button" hidden>⏸</button>
+      <button id="pause-btn" type="button" aria-label="暂停" hidden>⏸</button>
     </div>
     <div id="hud2" hidden>
       <div class="hud-side-tag" aria-hidden="true">P2</div>
@@ -150,26 +150,26 @@
         <p id="p2-track-name" hidden>经典赛道</p>
         <p id="touch-hint">触屏：右下角虚拟摇杆控制方向与油门，左下角暂停按钮</p>
         <div class="leaderboard-cards">
-          <div class="lb-card lb-card-clickable" data-target="best-summary">
+          <div class="lb-card lb-card-clickable" data-target="best-summary" tabindex="0" role="button" aria-expanded="false">
             <div class="lb-card-head">赛道最佳</div>
-            <div id="best-summary">暂无最佳成绩</div>
+            <div class="lb-card-body" id="best-summary">暂无最佳成绩</div>
           </div>
-          <div class="lb-card lb-card-clickable" data-target="drift-top">
+          <div class="lb-card lb-card-clickable" data-target="drift-top" tabindex="0" role="button" aria-expanded="false">
             <div class="lb-card-head">漂移榜单</div>
-            <div id="drift-top">暂无漂移记录</div>
+            <div class="lb-card-body" id="drift-top">暂无漂移记录</div>
           </div>
-          <div class="lb-card lb-card-clickable" data-target="match-top">
+          <div class="lb-card lb-card-clickable" data-target="match-top" tabindex="0" role="button" aria-expanded="false">
             <div class="lb-card-head">对局战绩</div>
-            <div id="match-top">暂无对局记录</div>
+            <div class="lb-card-body" id="match-top">暂无对局记录</div>
           </div>
         </div>
-        <button id="start-btn" type="button">开始游戏</button>
+        <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
         <p class="hint" id="menu-hint">空格键开始 · 1-9 / 方向键 切换赛道</p>
         <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 点击榜单可展开</p>
       </div>
     </div>
     <!-- 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（放在 #start-screen 外面，避免被父元素 hidden 连带隐藏） -->
-    <div id="countdown-overlay" hidden aria-hidden="true">
+    <div id="countdown-overlay" hidden aria-live="polite">
       <div class="countdown-number"></div>
       <div class="countdown-hints"></div>
     </div>
@@ -185,6 +185,7 @@
           <p class="finish-line" id="finish-speed"></p>
           <p class="finish-line finish-record" id="finish-best"></p>
           <p class="finish-line finish-score" id="finish-score"></p>
+          <p class="finish-line finish-hint" id="finish-drift-hint" hidden></p>
         </div>
         <div class="finish-line finish-laps" id="finish-laps"></div>
         <div class="finish-card p2-card finish-line" id="finish-card-2" hidden>
@@ -197,11 +198,11 @@
         <div class="finish-line finish-banner" id="finish-drift-winner" hidden></div>
         <div class="finish-line finish-stats" id="finish-wins" hidden></div>
         <div class="finish-line finish-hint" id="finish-hint" hidden></div>
-        <button id="finish-restart-btn" class="btn-secondary" type="button">回主菜单</button>
+        <button id="finish-restart-btn" class="btn-primary" type="button">回主菜单</button>
         <p class="hint finish-line finish-restart">按 R 重新开始</p>
       </div>
     </div>
-    <div id="pause-screen" hidden>
+    <div id="pause-screen" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
       <h1 id="pause-title">PAUSED</h1>
       <p class="hint">按 ESC 继续</p>
       <div id="pause-controls">
@@ -212,6 +213,9 @@
         <button id="pause-restart" type="button">重新开始（R）</button>
         <button id="pause-quit-btn" type="button">退出游戏</button>
       </div>
+    </div>
+    <div id="racing-touch-hint" class="racing-touch-hint" hidden>
+      <p class="racing-touch-hint-text"></p>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
