@@ -108,6 +108,8 @@ interface Environment {
   rafCount: () => number
   getCanvas: () => MockCanvas
   getElement: (id: string) => StubElement
+  /** C+E 竖屏兼容（2026-08-05）：返回 document.body 替身（portrait-mode 类切换断言用） */
+  getBody: () => StubElement
   /** P6（P6）：触发指定元素记录的事件监听器（pause-volume input / pause-restart click 等） */
   fireElementEvent: (id: string, type: string) => void
 }
@@ -276,6 +278,7 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     rafCount: () => rafCallbacks.length,
     getCanvas: () => (gameCanvas ??= createMockCanvas(800, 600)),
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
+    getBody: () => documentStub.body as unknown as StubElement,
     fireElementEvent,
   }
 }
@@ -1073,5 +1076,39 @@ describe('性能优化集成验证（Task 10）', () => {
     // 不传 roadStrips 的 setTrack 不清空既有缓存（渐进式集成：渲染路径零回归，缓存仅预热）
     renderer.setTrack(createStraightTrack(10), [])
     expect(cache.size).toBe(roadStrips.length)
+  })
+})
+
+describe('C+E 竖屏兼容（2026-08-05）：旋转遮罩可跳过 + portrait-mode 状态', () => {
+  it('竖屏遮罩「竖屏继续」→ body.portrait-mode 激活 + 遮罩隐藏（会话记忆键写入降级安全）', () => {
+    const env = stubEnvironment()
+    new GameLoop()
+    const toggleMock = env.getBody().classList.toggle as ReturnType<typeof vi.fn>
+    toggleMock.mockClear()
+    // 默认遮罩可见（stub 初始 hidden=false）
+    expect(env.getElement('rotate-hint').hidden).toBe(false)
+    env.fireElementEvent('rotate-play-portrait', 'click')
+    expect(toggleMock).toHaveBeenCalledWith('portrait-mode', true)
+    expect(env.getElement('rotate-hint').hidden).toBe(true)
+  })
+
+  it('竖屏遮罩「横屏体验」→ 仅隐藏遮罩，不激活 portrait-mode', () => {
+    const env = stubEnvironment()
+    new GameLoop()
+    const toggleMock = env.getBody().classList.toggle as ReturnType<typeof vi.fn>
+    toggleMock.mockClear()
+    env.fireElementEvent('rotate-play-landscape', 'click')
+    expect(toggleMock).not.toHaveBeenCalledWith('portrait-mode', true)
+    expect(env.getElement('rotate-hint').hidden).toBe(true)
+  })
+
+  it('sessionStorage 缺失时构造/点击均优雅降级（try/catch 包裹，不崩溃）', () => {
+    // stub window 无 sessionStorage：构造时 getItem、点击时 setItem 均抛错 → 被捕获降级
+    const env = stubEnvironment()
+    new GameLoop()
+    expect(env.getElement('rotate-hint')).toBeTruthy()
+    // 点击「竖屏继续」仍能正常激活 portrait-mode（记忆失败仅影响下次会话重弹遮罩）
+    env.fireElementEvent('rotate-play-portrait', 'click')
+    expect(env.getBody().classList.toggle).toHaveBeenCalledWith('portrait-mode', true)
   })
 })

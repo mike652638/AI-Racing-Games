@@ -80,6 +80,9 @@ const MODIFIER_KEYS = [
 /** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
 const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
 
+/** C+E 竖屏兼容（2026-08-05）：「竖屏继续」的会话记忆键——刷新后不再重弹旋转遮罩 */
+const PORTRAIT_MODE_KEY = 'portrait-mode-ok'
+
 /** 赛道难度星级文案（下标即难度；纯星级，title/aria-label 各自加"难度："前缀，2026-08-05 D-2 修复重复前缀） */
 const DIFFICULTY_HINT: Record<number, string> = {
   1: '★☆☆',
@@ -287,6 +290,9 @@ export class GameLoop {
 
     this.installDebugSinks()
 
+    // C+E 竖屏兼容（2026-08-05）：「竖屏继续 / 横屏体验」按钮与 portrait-mode 状态
+    this.bindPortraitMode()
+
     // S 修复 S3：全局监听经清理函数登记（destroy() 时移除）
     window.addEventListener('keydown', this.onKeyDown)
     this.onCleanup(() => window.removeEventListener('keydown', this.onKeyDown))
@@ -437,6 +443,50 @@ export class GameLoop {
     // S 修复 S3：resize 监听经清理函数登记
     this.onCleanup(() => window.removeEventListener('resize', this.resize))
     this.resize()
+  }
+
+  /** C+E 竖屏兼容（2026-08-05）：竖屏不再强制横屏。
+   * 「竖屏继续」→ 激活 body.portrait-mode（菜单紧凑布局 + HUD 竖屏适配）并会话记忆，
+   * 「横屏体验」→ 仅关闭遮罩等待用户手动旋转。测试/无 DOM 环境防御式跳过。 */
+  private bindPortraitMode(): void {
+    const hint = document.getElementById('rotate-hint')
+    // 测试 mock 环境无该元素：跳过（不影响既有行为）
+    if (!hint || !document.body.classList || typeof document.body.classList.toggle !== 'function') return
+
+    const setPortraitMode = (on: boolean): void => {
+      document.body.classList.toggle('portrait-mode', on)
+      hint.hidden = true
+      try {
+        if (on) window.sessionStorage.setItem(PORTRAIT_MODE_KEY, '1')
+        else window.sessionStorage.removeItem(PORTRAIT_MODE_KEY)
+      } catch {
+        /* sessionStorage 不可用（隐私模式/测试环境）时静默降级：仅本次会话生效 */
+      }
+    }
+
+    const playPortrait = document.getElementById('rotate-play-portrait')
+    const playLandscape = document.getElementById('rotate-play-landscape')
+    if (playPortrait && typeof playPortrait.addEventListener === 'function') {
+      const onClick = (): void => setPortraitMode(true)
+      playPortrait.addEventListener('click', onClick)
+      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+      this.onCleanup(() => playPortrait.removeEventListener('click', onClick))
+    }
+    if (playLandscape && typeof playLandscape.addEventListener === 'function') {
+      const onClick = (): void => setPortraitMode(false)
+      playLandscape.addEventListener('click', onClick)
+      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+      this.onCleanup(() => playLandscape.removeEventListener('click', onClick))
+    }
+
+    // 会话内已选择过竖屏：直接应用 portrait-mode 并隐藏遮罩，避免竖屏重进页面时遮罩闪出
+    let remembered = false
+    try {
+      remembered = window.sessionStorage.getItem(PORTRAIT_MODE_KEY) === '1'
+    } catch {
+      /* 忽略 */
+    }
+    if (remembered) setPortraitMode(true)
   }
 
   /** 开始按钮加载态：禁用点击 + 文案切换（dataset 缺失元素安全跳过） */

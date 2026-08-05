@@ -139,6 +139,68 @@ canvas {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
+/* C+E 竖屏兼容（2026-08-05）：遮罩内提供「竖屏继续 / 横屏体验」两个操作按钮，
+ * 竖屏不再强制横屏——选择竖屏后进入 portrait-mode（菜单紧凑布局 + 竖屏 HUD 适配） */
+#rotate-hint .rotate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 26px;
+  width: min(240px, 68vw);
+}
+
+#rotate-hint .rotate-actions button {
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: clamp(15px, 4vw, 19px);
+  letter-spacing: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+#rotate-hint .rotate-actions button:active {
+  transform: scale(0.97);
+}
+
+#rotate-play-portrait {
+  border: 2px solid var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.18);
+  color: var(--color-accent);
+}
+
+#rotate-play-portrait:hover {
+  background: rgba(var(--color-accent-rgb), 0.4);
+  color: #fff;
+}
+
+#rotate-play-landscape {
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+#rotate-play-landscape:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#rotate-hint .rotate-actions button:focus-visible {
+  outline: 2px solid var(--menu-cyan);
+  outline-offset: 3px;
+}
+
+/* 遮罩被 JS 隐藏时（用户已选择竖屏/横屏）须压过竖屏媒体查询的 display:flex */
+#rotate-hint[hidden] {
+  display: none !important;
+}
+
 @keyframes rotate-phone {
   0%,
   100% {
@@ -1913,6 +1975,93 @@ canvas {
   #rotate-hint {
     display: none;
   }
+}
+
+/* ===== C+E 竖屏兼容（2026-08-05）：body.portrait-mode 由「竖屏继续」激活 ===== */
+
+/* C：竖屏菜单——内容超高时改为顶部对齐（修复 flex 居中在溢出时顶部被裁剪，
+ * 与 #start-screen 的 overflow-y:auto 配合实现完整滚动查看） */
+body.portrait-mode #start-screen {
+  justify-content: flex-start;
+  padding-top: calc(22px + env(safe-area-inset-top));
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+body.portrait-mode .title-wrap {
+  margin-bottom: 4px;
+}
+
+body.portrait-mode .title-sub {
+  margin-bottom: 2px;
+}
+
+body.portrait-mode #track-select {
+  gap: 8px;
+  max-width: 400px;
+  margin: 4px auto 4px;
+  padding: 0 10px;
+}
+
+body.portrait-mode .track-option {
+  padding: 6px 8px;
+  min-height: 46px;
+}
+
+body.portrait-mode .leaderboard-cards {
+  gap: 6px;
+  max-width: 460px;
+}
+
+body.portrait-mode .lb-card {
+  padding: 8px 10px;
+}
+
+body.portrait-mode .lb-card-body {
+  max-height: 150px;
+}
+
+body.portrait-mode #touch-hint {
+  margin-top: 4px;
+}
+
+/* E：竖屏游戏——渲染层按视口比例自动投影（道路略窄但完整可玩），HUD 做竖屏适配 */
+body.portrait-mode #boost-bar {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(220px, 52vw);
+}
+
+body.portrait-mode #pause-btn {
+  left: 14px;
+  bottom: 14px;
+}
+
+body.portrait-mode #hud {
+  right: 10px;
+  top: calc(8px + env(safe-area-inset-top));
+}
+
+/* 竖屏空间有限：隐藏 HUD 侧边玩家标签，减少右上角堆叠遮挡 */
+body.portrait-mode #hud .hud-side-tag {
+  display: none;
+}
+
+body.portrait-mode #hud-minimap {
+  width: 76px;
+  height: 76px;
+  margin-top: 4px;
+}
+
+/* 竖屏挑战模式：顶部计时/得分条收窄防溢出 */
+body.portrait-mode #challenge-timer,
+body.portrait-mode #challenge-score {
+  font-size: clamp(13px, 3.2vw, 18px);
+  padding: 4px 10px;
+}
+
+/* 竖屏分屏：左右半屏在窄比例下过窄，提示横屏体验更佳（仅提示，不强制） */
+body.portrait-mode #hud2 .hud-side-tag {
+  display: none;
 }
 
 /* 竖屏手机：进一步缩小 HUD 间距与字号，避免遮挡画面 */
