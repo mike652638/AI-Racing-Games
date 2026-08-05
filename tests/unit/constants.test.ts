@@ -4,10 +4,12 @@ import {
   BOOST_CHARGE_RATE,
   BOOST_DRAIN_RATE,
   BOOST_MAX_SPEED_MULT,
+  BOOST_PARTICLE_LIFETIME,
   CHALLENGE_SECONDS,
   CHALLENGE_TARGET_SCORE,
   COLLISION_COOLDOWN,
   COLLISION_SPEED_FACTOR,
+  COMBO_MULTIPLIER_STEP,
   DRIFT_CHARGE_THRESHOLD,
   DRIFT_SCORE_MAX,
   DRIFT_SPEED_FACTOR,
@@ -20,6 +22,7 @@ import {
   RENDER_DRAW_DISTANCE,
   RENDER_HORIZON_RATIO,
   ROAD_HALF_WIDTH,
+  SMOKE_LIFETIME,
   TRAFFIC_DEFAULT_COUNT,
 } from '../../src/shared/constants'
 import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
@@ -72,5 +75,11 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
 
   it('road-geometry 兼容导出 DRAW_DISTANCE 与真源 RENDER_DRAW_DISTANCE 一致', () => {
     expect(DRAW_DISTANCE).toBe(RENDER_DRAW_DISTANCE)
+  })
+
+  it('S 修复新增常量值与约定一致（粒子寿命/连击倍率收敛至共享真源）', () => {
+    expect(SMOKE_LIFETIME).toBe(0.6)
+    expect(BOOST_PARTICLE_LIFETIME).toBe(0.6)
+    expect(COMBO_MULTIPLIER_STEP).toBe(0.25)
   })
 })

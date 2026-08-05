@@ -1,4 +1,11 @@
-import { DRIFT_CHARGE_THRESHOLD, DRIFT_SCORE_MAX, DRIFT_SPEED_FACTOR, DRIFT_STEER_THRESHOLD } from '../shared/constants'
+import {
+  COMBO_MULTIPLIER_STEP,
+  DRIFT_CHARGE_THRESHOLD,
+  DRIFT_SCORE_MAX,
+  DRIFT_SPEED_FACTOR,
+  DRIFT_STEER_THRESHOLD,
+  SMOKE_LIFETIME,
+} from '../shared/constants'
 import type { CarConfig, CarInput, CarState } from './car'
 
 export interface SmokeParticle {
@@ -33,7 +40,6 @@ export function createDriftState(): DriftState {
 const SPEED_RATIO_THRESHOLD = 0.5
 const CHARGE_DECAY = 2
 const SMOKE_INTERVAL = 1
-const SMOKE_LIFETIME = 0.6
 /** 漂移得分速率（得分/秒/单位速度） */
 const DRIFT_SCORE_RATE = 0.01
 
@@ -44,10 +50,8 @@ const DRIFT_SCORE_RATE = 0.01
  * 永远达不到 2s（浏览器实测 COMBO 永不显示）。0.5s 内 active 仍高于速度阈值，可叠 1 级 combo。
  */
 const COMBO_WINDOW_SECONDS = 0.5
-/** 连击上限：倍率封顶 1 + 10 * 0.25 = 3.5x */
+/** 连击上限：倍率封顶 1 + 10 * COMBO_MULTIPLIER_STEP = 3.5x */
 const COMBO_MAX = 10
-/** 每级连击的倍率步进 */
-const COMBO_MULTIPLIER_STEP = 0.25
 
 /** 漂移激活时的转向率倍率 */
 const DRIFT_TURN_MULTIPLIER = 1.5
@@ -55,6 +59,9 @@ const DRIFT_TURN_MULTIPLIER = 1.5
 /**
  * 更新漂移状态（纯函数：不修改入参 drift/carState/config，基于它们计算并返回新对象）。
  * 注意 smoke 数组与粒子均以复制方式推进，原对象（含粒子 t）保持不变。
+ * S 修复（分配优化）：当无存活烟雾且本帧不产生新烟雾时复用入参数组引用（空数组无内容，
+ * 不违反纯函数契约）；需复制时采用「写回原槽位 + 截断」替代临时 alive 数组，减少每帧分配。
+ * 实测烟雾粒子上限 ≤2（SMOKE_INTERVAL=1s / SMOKE_LIFETIME=0.6s），收益有限，纯保守优化。
  */
 export function updateDrift(
   dt: number,
@@ -65,14 +72,14 @@ export function updateDrift(
   cameraZ: number,
   scoreMultiplier = 1,
 ): DriftState {
-  const next: DriftState = { ...drift, smoke: [...drift.smoke] }
+  const next: DriftState = { ...drift }
   const charging =
     Math.abs(input.steer) > DRIFT_STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
 
   next.charge = charging ? Math.min(next.charge + dt, 1) : Math.max(next.charge - dt * CHARGE_DECAY, 0)
   next.active = next.charge > DRIFT_CHARGE_THRESHOLD
 
-  // 连击：仅 active 期间累积 comboTimer，满窗口 combo+1；得分按倍率 1+combo*0.25 累计并 clamp
+  // 连击：仅 active 期间累积 comboTimer，满窗口 combo+1；得分按倍率 1+combo*COMBO_MULTIPLIER_STEP 累计并 clamp
   if (next.active) {
     next.comboTimer += dt
     if (next.comboTimer >= COMBO_WINDOW_SECONDS) {
@@ -97,22 +104,33 @@ export function updateDrift(
   }
 
   next.lastSmoke += dt
-  if (next.active && next.lastSmoke >= SMOKE_INTERVAL) {
-    next.smoke.push({
-      x: state.position - Math.sign(input.steer) * 0.3,
-      z: cameraZ,
-      t: 0,
-    })
+  const emitSmoke = next.active && next.lastSmoke >= SMOKE_INTERVAL
+  if (emitSmoke) {
     next.lastSmoke = 0
   }
 
-  const alive: SmokeParticle[] = []
-  for (const particle of next.smoke) {
-    if (particle.t + dt <= SMOKE_LIFETIME) {
-      alive.push({ ...particle, t: particle.t + dt })
+  // 仅当需要修改烟雾数组（有存活粒子需老化 / 本帧产生新粒子）时才复制：
+  // 两者皆无时直接复用入参空数组引用（零分配，且不触碰入参数据）。
+  if (drift.smoke.length > 0 || emitSmoke) {
+    const smoke: SmokeParticle[] = [...drift.smoke]
+    if (emitSmoke) {
+      smoke.push({
+        x: state.position - Math.sign(input.steer) * 0.3,
+        z: cameraZ,
+        t: 0,
+      })
     }
+    // 老化写回原槽位并截断（替代临时 alive 数组）：粒子对象仍新建（纯函数契约：入参粒子 t 不可变）
+    let w = 0
+    for (let i = 0; i < smoke.length; i++) {
+      const particle = smoke[i]
+      if (particle.t + dt <= SMOKE_LIFETIME) {
+        smoke[w++] = { ...particle, t: particle.t + dt }
+      }
+    }
+    smoke.length = w
+    next.smoke = smoke
   }
-  next.smoke = alive
 
   return next
 }

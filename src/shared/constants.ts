@@ -71,3 +71,10 @@ export const OFF_ROAD_PUSHBACK = 0.05
 
 /** 车流默认密度（条/圈）；赛道可通过 TrackDef.trafficCount 覆盖 */
 export const TRAFFIC_DEFAULT_COUNT = 14
+
+/** 漂移烟雾粒子存活时长（秒，S 修复：drift.ts 生成/老化与 smoke-render.ts 透明度衰减共用同一真源） */
+export const SMOKE_LIFETIME = 0.6
+/** BOOST 尾焰粒子存活时长（秒，S 修复：frame-update 移除判定与 renderer 透明度衰减共用同一真源） */
+export const BOOST_PARTICLE_LIFETIME = 0.6
+/** 每级漂移连击的得分倍率步进（S 修复：drift 得分/hud COMBO 文案/top-refresh 榜单倍率共用同一真源） */
+export const COMBO_MULTIPLIER_STEP = 0.25

@@ -2,7 +2,7 @@ import type { CarConfig } from '../physics/car'
 import type { RaceState, TrackContext } from '../shared/types'
 import { formatLap, formatSpeed, formatTime, lapFromZ } from './format'
 import { PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
-import { DRIFT_SCORE_MAX } from '../shared/constants'
+import { COMBO_MULTIPLIER_STEP, DRIFT_SCORE_MAX } from '../shared/constants'
 
 /** HUD 全部 DOM 引用：P1/P2 速度、圈数、计时、最佳时间与漂移指示 */
 export interface HudElements {
@@ -151,13 +151,13 @@ export function updateHud(
     elements.driftScoreValue.textContent = nextScoreText
   }
 
-  // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*0.25)，否则隐藏
-  // （combo 已在 drift.ts 内 clamp 到 COMBO_MAX=10，倍率上限 3.5x）
+  // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*COMBO_MULTIPLIER_STEP)，否则隐藏
+  // （combo 已在 drift.ts 内 clamp 到 COMBO_MAX=10，倍率上限 3.5x；倍率步进与 drift.ts 同源）
   if (elements.driftCombo) {
     const combo = driftPlayer.driftState.combo
     elements.driftCombo.hidden = !(driftPlayer.driftState.active && combo >= 1)
     if (!elements.driftCombo.hidden) {
-      const mult = 1 + combo * 0.25
+      const mult = 1 + combo * COMBO_MULTIPLIER_STEP
       elements.driftCombo.textContent = `COMBO x${mult.toFixed(2)}`
     }
   }

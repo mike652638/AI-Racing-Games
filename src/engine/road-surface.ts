@@ -29,6 +29,25 @@ const CURB_DETAIL_PX = 2
 /** M18 路缘柔和过渡：路缘屏幕宽度小于该值跳过细节（远端压缩段不可见，同时控制每帧成本） */
 const CURB_DETAIL_MIN_WIDTH = 6
 
+/**
+ * 道路段投影复用缓冲（S 修复：消除 renderRoadSurface 主循环每帧 ~1200 个对象分配）。
+ * 循环内 cur/next 两段投影与中心线投影均为「同一迭代内立即消费」的同步写入，
+ * 模块级复用缓冲安全（渲染单线程同步执行；分屏两区域先后调用互不冲突）。
+ */
+const _quadCur: Quad = {
+  l1: { x: 0, y: 0, scale: 0 },
+  l2: { x: 0, y: 0, scale: 0 },
+  r1: { x: 0, y: 0, scale: 0 },
+  r2: { x: 0, y: 0, scale: 0 },
+}
+const _quadNext: Quad = {
+  l1: { x: 0, y: 0, scale: 0 },
+  l2: { x: 0, y: 0, scale: 0 },
+  r1: { x: 0, y: 0, scale: 0 },
+  r2: { x: 0, y: 0, scale: 0 },
+}
+const _centerProj: Projected = { x: 0, y: 0, scale: 0 }
+
 /** 道路段缓存资源（由 Renderer 持有并传入，本模块不感知 Renderer 内部实现） */
 export interface RoadSurfaceResources {
   /** 缓存消费对应的赛道引用（setTrack 时赋值；视图 track 与之同引用且缓存非空才走缓存路径） */
@@ -111,8 +130,9 @@ export function renderRoadSurface(
     }
     const wrappedIndex = (baseIndex + k) % track.length
     const segment = track[wrappedIndex]
-    const cur = projectSegmentQuad(opts, camera, z, curveSum)
-    const next = projectSegmentQuad(opts, camera, z + SEGMENT_LENGTH, curveSum + segment.curve)
+    // S 修复：复用模块级缓冲，主循环零对象分配（project 写入 _quadCur/_quadNext 槽位）
+    const cur = projectSegmentQuad(opts, camera, z, curveSum, _quadCur)
+    const next = projectSegmentQuad(opts, camera, z + SEGMENT_LENGTH, curveSum + segment.curve, _quadNext)
     if (!cur || !next) {
       continue
     }
@@ -168,7 +188,8 @@ export function renderRoadSurface(
     // 中心虚线：缓存路径已烘焙进纹理；fallback 路径保留逐段绘制（与原行为一致）
     if (!useCache && shouldDrawCenterLine(k)) {
       const cw = (cur.r1.x - cur.l1.x) * 0.06
-      const centerProj = project(opts, camera, { x: curveSum, y: 0, z })
+      // S 修复：复用模块级缓冲（z 恒 > cameraZ，投影必成功）
+      const centerProj = project(opts, camera, { x: curveSum, y: 0, z }, _centerProj)
       const centerX = centerProj ? centerProj.x : opts.width / 2
       drawQuad(
         ctx,

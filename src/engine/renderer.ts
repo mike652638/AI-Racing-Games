@@ -1,5 +1,5 @@
-import { RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../shared/constants'
-import { clampSpriteScale, project, type ProjectionOptions } from './projection'
+import { BOOST_PARTICLE_LIFETIME, RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../shared/constants'
+import { clampSpriteScale, project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
 import {
@@ -104,6 +104,11 @@ const CACTUS_SHADE_FACTOR = 0.8
 const RAIN_TILT = (15 * Math.PI) / 180
 const RAIN_TILT_SIN = Math.sin(RAIN_TILT)
 const RAIN_TILT_COS = Math.cos(RAIN_TILT)
+
+/** BOOST 尾焰粒子投影复用缓冲（S 修复：循环内立即消费，复用安全） */
+const _boostProj: Projected = { x: 0, y: 0, scale: 0 }
+/** 景物底部投影复用缓冲（S 修复：drawSpriteProjected 内立即消费，复用安全） */
+const _spriteProj: Projected = { x: 0, y: 0, scale: 0 }
 
 /** 雨滴数据：x 为宽度归一化坐标（0-1，绘制时乘宽度自适应视口），y0 为下落相位，len 为雨丝长度 */
 interface RainDrop {
@@ -524,12 +529,12 @@ export class Renderer {
       if (dz <= 0) {
         continue
       }
-      const proj = project(opts, this.camera, { x: p.x - this.camera.x, y: 0, z: p.z })
+      const proj = project(opts, this.camera, { x: p.x - this.camera.x, y: 0, z: p.z }, _boostProj)
       if (!proj) {
         continue
       }
       const radius = Math.max(proj.scale * opts.height * 0.15, 2)
-      const alpha = Math.max(1 - p.t / 0.6, 0)
+      const alpha = Math.max(1 - p.t / BOOST_PARTICLE_LIFETIME, 0)
       ctx.fillStyle = this.getFillStyle(255, 180, 80, alpha)
       ctx.beginPath()
       ctx.arc(proj.x, proj.y - radius * 0.5, radius, 0, Math.PI * 2)
@@ -577,11 +582,16 @@ export class Renderer {
   private drawSpriteProjected(sprite: Sprite, opts: ProjectionOptions, v: RenderView, camCurve: number): void {
     const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z) - camCurve
     const cx = centerX - this.camera.x
-    const bottom = project(opts, this.camera, {
-      x: cx + sprite.offset,
-      y: 0,
-      z: sprite.z,
-    })
+    const bottom = project(
+      opts,
+      this.camera,
+      {
+        x: cx + sprite.offset,
+        y: 0,
+        z: sprite.z,
+      },
+      _spriteProj,
+    )
     if (!bottom) {
       return
     }

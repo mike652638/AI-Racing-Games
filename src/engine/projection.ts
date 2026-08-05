@@ -48,8 +48,10 @@ export function clampSpriteScale(scale: number): number {
  * 将世界坐标投影到屏幕。
  * 地面平面 y=0，相机朝 +z 方向，z 增大即远离相机。
  * 相机后方或平齐的点返回 null（不可见）。
+ * 传入 out 时写入并返回同一引用（S 修复：渲染热路径每帧复用投影缓冲，消除每帧对象分配）；
+ * 不传 out 时新建对象返回（向后兼容，纯调用方无需改动）。
  */
-export function project(opts: ProjectionOptions, camera: Camera3D, point: Point3D): Projected | null {
+export function project(opts: ProjectionOptions, camera: Camera3D, point: Point3D, out?: Projected): Projected | null {
   const dz = point.z - camera.z
   if (dz <= 0) {
     return null
@@ -57,5 +59,11 @@ export function project(opts: ProjectionOptions, camera: Camera3D, point: Point3
   const scale = opts.depth / dz
   const x = opts.width / 2 + scale * (point.x - camera.x) * (opts.width / 2)
   const y = opts.horizon + scale * (camera.y - point.y) * (opts.height / 2)
+  if (out) {
+    out.x = x
+    out.y = y
+    out.scale = scale
+    return out
+  }
   return { x, y, scale }
 }

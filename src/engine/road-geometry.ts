@@ -20,23 +20,28 @@ export interface Quad {
   r2: Projected
 }
 
-/** 计算单个分段的四边形投影（纯函数），z 在相机后方返回 null */
-export function projectSegmentQuad(opts: ProjectionOptions, camera: Camera3D, z: number, centerX: number): Quad | null {
+/**
+ * 计算单个分段的四边形投影（纯函数），z 在相机后方返回 null。
+ * 传入 out 时复用其内部四个 Projected 槽位（S 修复：renderRoadSurface 每帧复用 scratch quad，
+ * 消除每段 5 个对象分配）；不传 out 时新建返回（向后兼容）。
+ */
+export function projectSegmentQuad(
+  opts: ProjectionOptions,
+  camera: Camera3D,
+  z: number,
+  centerX: number,
+  out?: Quad,
+): Quad | null {
   const cx = centerX - camera.x
-  const l1 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z })
-  const l2 = project(opts, camera, {
-    x: cx - ROAD_HALF_WIDTH - EDGE_WIDTH,
-    y: 0,
-    z,
-  })
-  const r1 = project(opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z })
-  const r2 = project(opts, camera, {
-    x: cx + ROAD_HALF_WIDTH + EDGE_WIDTH,
-    y: 0,
-    z,
-  })
+  const l1 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH, y: 0, z }, out ? out.l1 : undefined)
+  const l2 = project(opts, camera, { x: cx - ROAD_HALF_WIDTH - EDGE_WIDTH, y: 0, z }, out ? out.l2 : undefined)
+  const r1 = project(opts, camera, { x: cx + ROAD_HALF_WIDTH, y: 0, z }, out ? out.r1 : undefined)
+  const r2 = project(opts, camera, { x: cx + ROAD_HALF_WIDTH + EDGE_WIDTH, y: 0, z }, out ? out.r2 : undefined)
   if (!l1 || !l2 || !r1 || !r2) {
     return null
+  }
+  if (out) {
+    return out
   }
   return { l1, l2, r1, r2 }
 }
