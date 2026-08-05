@@ -46,6 +46,7 @@ export function collectScreenElements($: (id: string) => HTMLElement): ScreenEle
     finishBest2: $('finish-best-2') as HTMLParagraphElement,
     finishScore2: $('finish-score-2') as HTMLParagraphElement,
     finishLaps2: $('finish-laps-2') as HTMLDivElement,
+    finishCard2: $('finish-card-2') as HTMLDivElement,
     finishHint: $('finish-hint') as HTMLDivElement,
     finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
     finishWins: $('finish-wins') as HTMLDivElement,

@@ -31,6 +31,8 @@ export interface ScreenElements {
   finishBest2?: HTMLParagraphElement
   finishScore2?: HTMLParagraphElement
   finishLaps2?: HTMLDivElement
+  /** P2 结算卡片容器（#finish-card-2，仅分屏/热座 round 2 显示；其余模式整体隐藏防空边框，2026-08-05） */
+  finishCard2?: HTMLDivElement
   /** 热座交棒/胜负提示（#finish-hint，仅热座模式填充） */
   finishHint?: HTMLDivElement
   /** 分屏漂移竞速排名横幅（#finish-drift-winner，仅分屏双完赛填充） */
@@ -176,9 +178,16 @@ function fillFinishPanel(
     elements.finishLaps.textContent = ''
   }
 
+  // P2 结算卡片容器显隐：仅分屏或热座 round 2（有 P2 内容）时显示，否则整卡隐藏，
+  // 避免单屏/挑战/热座 round 1 显示空边框卡片（2026-08-05 空方框修复）
+  const hasP2Panel = opts.splitMode || (opts.hotseatMode && opts.hotseatRound === 2)
+  if (elements.finishCard2) {
+    elements.finishCard2.hidden = !hasP2Panel
+  }
+
   // P2 行：分屏或热座 round 2（P2 已跑）时填充并控制显隐；热座 round 1 P2 未跑天然跳过
   // （index.html 初始 hidden，仅写 textContent 会不可见）
-  if ((opts.splitMode || (opts.hotseatMode && opts.hotseatRound === 2)) && elements.finishTime2) {
+  if (hasP2Panel && elements.finishTime2) {
     const trackId1 = race.tracks[1].def.id
     if (opts.finishedP2) {
       // 全部 P2 结算行可见（视觉缺陷修复：显式 hidden=false）
@@ -233,6 +242,18 @@ function fillFinishPanel(
       if (elements.finishLaps2) elements.finishLaps2.textContent = ''
     }
   }
+
+  // 空行自动隐藏：内容被清空（挑战模式清 finishLaps、P1 未完赛清 speed/best/score 等）时整行隐藏，
+  // 避免显示空边框卡片（finish-laps 有边框）或卡片内空白行（2026-08-05 空方框修复）
+  const hideIfEmpty = (el: HTMLElement | undefined): void => {
+    if (el) {
+      el.hidden = el.textContent.trim() === ''
+    }
+  }
+  hideIfEmpty(elements.finishLaps)
+  hideIfEmpty(elements.finishSpeed)
+  hideIfEmpty(elements.finishBest)
+  hideIfEmpty(elements.finishScore)
 
   // 热座结算提示：round 1 提示交棒，round 2 按 P1/P2 用时显示胜负横幅；非热座隐藏
   if (elements.finishHint) {
