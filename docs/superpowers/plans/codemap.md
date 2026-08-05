@@ -10,6 +10,7 @@
 - **统一模板**：文档头部包含 Goal / Architecture / Tech Stack / Global Constraints，正文以 Task 列表展开，每个 Task 包含 Files、Interfaces、TDD 步骤与验证命令。
 - **checkbox 跟踪**：每个 Task 用 `- [x]` / `- [ ]` 标记完成状态，形成可扫描的进度。
 - **API 向后兼容**：扩展计划通常声明"现有 API 只做加法"，避免破坏既有单测与 bot 跑圈。
+- **与 specs/ 的衔接**：重大里程碑先经 `../specs/` 设计文档批准（如 M14 性能优化设计），再由本目录计划展开 Task 实施。
 
 ## Flow
 
@@ -28,6 +29,7 @@
 13. `2026-08-03-challenge-bonus-particles-matrix.md`：挑战加成/BOOST 粒子/尾灯/排行榜权重/回归矩阵（M13）：Task H1 挑战模式天气/难度加成计分、H2 BOOST 音效与视觉粒子、H3 车流夜间尾灯、H4 漂移连击排行榜权重、H5 updatePlayerFrame 返回 lastLap 消除桥接、H6 CollisionSound 强度分级、H7 结算面板可滚动、H8 run-bot 多赛道矩阵回归、H9 全量验证与冒烟、H10 codemap 刷新。
 14. `2026-08-03-performance-optimization-plan.md`：性能优化（M14）：Task 1-10 覆盖三层策略——道路离屏缓存（road-strip.ts 曲率段合并 + 离屏预渲染 + TrackContext.roadStrips）、每帧分配削减（spritesInRangeIndexed 复用数组 / viewFor 缓存对象 / fillStyle 缓存）、分屏与性能模式降级（PerformanceConfig 三档 + `?perf=1`）；附 `2026-08-03-performance-optimization-task8-report.md`（Task 8 实施报告）。
 15. `2026-08-04-improvements.md`：已识别改进实施（M15）：Task A-F 六条 lane——渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分与 pauseTitle、死代码清理与文档同步、工程化配置（ESLint/Prettier/husky/CI/.gitignore）。
+16. `2026-08-05-m18-ui-ux-polish.md`：UI/UX 深度打磨（M18）：Goal 概述 + 2 条并行 lane——Lane A designer 表现层 A1-A8（可访问性 / prefers-reduced-motion 降级 / 颜色令牌化 / 屏幕切换过渡 / 文案同源 / 触屏引导浮层 / BOOST 反馈 / 杂项）、Lane B fixer 引擎层 B1-B5（碰撞车身边框闪白 / MAX_SPRITE_SCALE 近距缩放上限 / 环境差异化车灯 / 路缘立体感 / 地形细节），双 lane 独立推进互不阻塞。
 
 ## Integration
 
@@ -55,3 +57,4 @@
 | `2026-08-03-performance-optimization-plan.md` | M14 性能优化：道路离屏缓存（road-strip.ts）、每帧分配削减、分屏/性能模式降级（Task 1-10） |
 | `2026-08-03-performance-optimization-task8-report.md` | M14 Task 8 实施报告：PerformanceConfig 三档与 `?perf` 查询参数落地 |
 | `2026-08-04-improvements.md` | M15 已识别改进实施：渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分与 pauseTitle、死代码清理与文档同步、工程化配置（Task A-F） |
+| `2026-08-05-m18-ui-ux-polish.md` | M18 UI/UX 深度打磨：双 lane 并行——Lane A designer 表现层 A1-A8（可访问性/reduced-motion/颜色令牌/过渡/文案/触屏引导/BOOST 反馈/杂项）、Lane B fixer 引擎层 B1-B5（碰撞闪白/MAX_SPRITE_SCALE/环境车灯/路缘立体感/地形细节） |

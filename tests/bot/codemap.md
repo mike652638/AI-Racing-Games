@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-黑盒集成验收脚本目录。提供 `npm run bot` 命令执行的无头跑圈脚本，通过 `src/ai/simulate.ts` 驱动 bot 在全部内置赛道（`TRACK_DEFS` 9 条，含 canyon/alpine 夜间赛道）上完成全赛道矩阵跑圈，输出逐赛道 JSON 报告与整体通过/失败判定，作为里程碑门禁的验收层。
+黑盒集成验收脚本目录。提供 `npm run bot` 命令执行的无头跑圈脚本，通过 `src/ai/simulate.ts` 驱动 bot 在全部内置赛道（`TRACK_DEFS` 9 条，含 canyon/alpine 夜间赛道）上完成全赛道矩阵跑圈，输出逐赛道 JSON 报告与整体通过/失败判定，作为里程碑门禁的验收层。自 M13 H8 引入全赛道矩阵回归以来，每里程碑（M14/M15/M16/M17）验收均保持 9 条赛道全部完成、0 违规超标（可复现：赛道/车流由确定性随机种子生成）。
 
 ## Design
 
@@ -10,7 +10,8 @@
 - **复用核心模块**：调用 `src/engine/tracks`（`TRACK_DEFS` / `createTrackFromDef`）、`src/physics/car`（`createCarConfig`）、`src/ai/bot`（`createBotConfig`）、`src/ai/simulate`（`simulateLaps`）的公开 API，与游戏生产逻辑共享同一物理与决策实现。
 - **全赛道矩阵回归**：遍历 `TRACK_DEFS`（9 条），每条赛道按自身 `def.laps`（2 或 3 圈）跑圈，覆盖经典/高速/S 弯/环岛/峡谷/沙漠/森林/海岸/山岳全部赛道；经典赛道（classic，第一条）作为基线对照（3 圈 ≈ 76.017s / 0 违规）。
 - **逐赛道 JSON 输出**：每条赛道一行 `JSON.stringify`（`TrackReport`），字段含 `trackId`、`name`、`laps`、`finished`、`lapTimesSec`、`totalTimeSec`、`avgSpeed`、`violations`、`offRoadTimeSec`（时间统一 `toFixed(3)`、平均速度 `toFixed(1)`）。
-- **退出码契约**：所有赛道均满足 `finished === true && violations <= MAX_VIOLATIONS`（`MAX_VIOLATIONS = 3`）时退出码为 0，否则为 1，便于 CI/脚本集成。
+- **退出码契约**：所有赛道均满足 `finished === true && violations <= MAX_VIOLATIONS`（`MAX_VIOLATIONS = 3`）时退出码为 0，否则为 1，便于 CI/脚本集成（`.github/workflows/ci.yml` 的 `Bot lap validation` step 直接以退出码判定，失败即中断流水线）。
+- **确定性可复现**：赛道生成（`createTrackFromDef`）与车流均由确定性随机种子驱动，同一提交下每次执行结果一致，支撑矩阵回归的稳定性断言。
 
 ## Flow
 
@@ -29,6 +30,7 @@
   - `src/ai/simulate`：`simulateLaps`
 - **被调用方**：
   - `package.json` 的 `bot` 脚本
+  - `.github/workflows/ci.yml` 的 `Bot lap validation` step（退出码 0/1 判定，CI 流水线第 6 步）
   - `AGENTS.md` 与 `docs/superpowers/plans/` 中的验证流程定义
 
 ## Files
