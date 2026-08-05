@@ -21,17 +21,19 @@ describe('路边景物生成', () => {
     expect(createRoadsideSprites(track, 1234)).toEqual(createRoadsideSprites(track, 1234))
   })
 
-  test('按间隔成对放置，z 从间距一半开始', () => {
+  test('按间隔成对放置，z 从间距一半开始（UX-10：树 ±1.4 / 路灯 ±1.8 外移路外）', () => {
     const track = createStraightTrack(50) // 总长 10000
     const sprites = createRoadsideSprites(track, 1, 800)
     const zs = [...new Set(sprites.map((s) => s.z))]
     expect(zs[0]).toBe(400)
     expect(zs.every((z, i) => i === 0 || z - zs[i - 1] === 800)).toBe(true)
-    expect(sprites.every((s) => Math.abs(s.offset) === 1.4)).toBe(true)
+    // 横向偏移按类型分层：树/仙人掌等 ±1.4，路灯 ±1.8（弯道路灯不再与路面相交）
+    expect(sprites.every((s) => Math.abs(s.offset) === (s.kind === 'lamp' ? 1.8 : 1.4))).toBe(true)
     for (const z of zs) {
       const pair = sprites.filter((s) => s.z === z)
       expect(pair).toHaveLength(2)
-      expect(new Set(pair.map((s) => s.offset))).toEqual(new Set([-1.4, 1.4]))
+      const expectAbs = pair[0].kind === 'lamp' ? 1.8 : 1.4
+      expect(new Set(pair.map((s) => s.offset))).toEqual(new Set([-expectAbs, expectAbs]))
     }
     expect(sprites.every((s) => s.height === 1.2 || s.height === 0.8)).toBe(true)
   })

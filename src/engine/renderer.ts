@@ -19,10 +19,11 @@ import { getEnvironmentProfile } from './environment'
 import { DRAW_DISTANCE } from './road-geometry'
 import { projectSmoke } from './smoke-render'
 import { renderRoadStripToCanvas, type RoadStrip } from './road-strip'
+import { projectTraffic } from './traffic-render'
 // 渲染关注点拆分模块（2026-08-05 renderer 瘦身：景物形状/屏幕特效/车流/地形/道路渲染各自独立）
 import { drawBoostVignette, drawCollisionVignette, drawSpeedLines } from './screen-effects'
-import { NO_STRIP, renderRoadSurface, type RoadSurfaceResources } from './road-surface'
-import { drawTraffic } from './traffic-draw'
+import { NO_STRIP, renderRoadSurface, drawDistanceFog, type RoadSurfaceResources } from './road-surface'
+import { drawSingleTraffic } from './traffic-draw'
 import { drawCactus, drawLamp, drawPalm, drawSnowpile, drawTree } from './sprite-draw'
 import { drawTerrain } from './terrain-draw'
 
@@ -417,8 +418,12 @@ export class Renderer {
       roadStrips: this.roadStrips,
     }
     renderRoadSurface(ctx, opts, this.camera, roadResources, v.track, baseIndex, baseZ, cameraZ, maxK, raining)
-    this.drawSprites(cameraZ, opts, v, maxK)
-    drawTraffic(this.ctx, this.camera, v.traffic, cameraZ, opts, night)
+    // 景物 + 车流合并景深绘制（2026-08-05 z-order 修复）：旧版先画全部景物再画全部车流，
+    // 远处车永远覆盖近处树/路灯（不合常理）；改为按 z 降序交错绘制，近者正确遮挡远者
+    this.drawWorldObjects(cameraZ, opts, v, maxK, night)
+    // 距离大气透视（2026-08-05 道路平滑化）：远端路面/景物/车流渐融天空雾色，
+    // 消除远端密集分段条纹与平板感；画在世界物体之上、烟雾/玩家车之下（近处不受影响）
+    drawDistanceFog(ctx, opts, colors.skyBottom)
     if (!renderOpts?.skipSmoke) {
       this.drawSmoke(smoke, cameraZ, opts)
     }
@@ -510,9 +515,17 @@ export class Renderer {
     }
   }
 
-  /** 绘制路边景物（远→近）；数据取自视图 v；maxK 为降级后的可视段数（Task 9，视距 = maxK × SEGMENT_LENGTH）；
-   *  各形状的具体绘制在 sprite-draw.ts（纯函数） */
-  private drawSprites(cameraZ: number, opts: ProjectionOptions, v: RenderView, maxK: number): void {
+  /** 绘制路边景物与车流的合并景深通道（2026-08-05）：两类世界物体各自投影后按 z 降序
+   *  双指针归并绘制（画家算法）——近处树/路灯正确遮挡远处车流，远处车流不再覆盖近处景物。
+   *  景物中心同时减去相机自身曲率偏移（坐标系修正）：路面渲染的曲率累计以相机为起点归零，
+   *  curveOffsetAtZ 返回赛道绝对前缀和，不减相机偏移会在弯道上系统性漂移（实测最大 0.36 世界单位）。 */
+  private drawWorldObjects(
+    cameraZ: number,
+    opts: ProjectionOptions,
+    v: RenderView,
+    maxK: number,
+    night: boolean,
+  ): void {
     const count = spritesInRangeIndexed(
       v.spriteIndex,
       v.track,
@@ -520,41 +533,58 @@ export class Renderer {
       maxK * SEGMENT_LENGTH,
       this.spriteScratch, // 复用数组：返回匹配数量，数组内容在下一次调用前有效
     )
-    for (let i = count - 1; i >= 0; i--) {
-      const sprite = this.spriteScratch[i]
-      const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z)
-      const cx = centerX - this.camera.x
-      const bottom = project(opts, this.camera, {
-        x: cx + sprite.offset,
-        y: 0,
-        z: sprite.z,
-      })
-      if (!bottom) {
-        continue
+    const cars = projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera)
+    const camCurve = curveOffsetAtZ(v.track, v.curvePrefixSum, cameraZ)
+    // spriteScratch 近→远（索引 0 最近），cars 远→近（索引 0 最远）；双指针从远端向近端归并
+    let si = count - 1
+    let ti = 0
+    while (si >= 0 || ti < cars.length) {
+      const spriteZ = si >= 0 ? this.spriteScratch[si].z : -Infinity
+      const carZ = ti < cars.length ? cars[ti].car.z : -Infinity
+      if (spriteZ >= carZ) {
+        this.drawSpriteProjected(this.spriteScratch[si], opts, v, camCurve)
+        si--
+      } else {
+        drawSingleTraffic(this.ctx, cars[ti], night)
+        ti++
       }
-      const hpx = clampSpriteHeight(sprite.kind, sprite.height * bottom.scale * opts.height * 0.5)
-      switch (sprite.kind) {
-        case 'lamp':
-          drawLamp(this.ctx, bottom.x, bottom.y, hpx)
-          break
-        case 'cactus':
-          // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸
-          drawCactus(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.scale)
-          break
-        case 'palm':
-          // 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；rotation 随机化弯曲方向
-          drawPalm(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight, sprite.rotation)
-          break
-        case 'snowpile':
-          // 雪堆：圆顶 + 树冠覆雪（山岳冷色）
-          drawSnowpile(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
-          break
-        case 'tree':
-        default:
-          // M17：环境树色由 sprite 携带（createRoadsideSprites 按 environment 注入），缺省回退内置色
-          drawTree(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
-          break
-      }
+    }
+  }
+
+  /** 单个景物投影绘制：中心线取相机相对累计曲率（与路面同坐标系），投影失败（相机后方）跳过 */
+  private drawSpriteProjected(sprite: Sprite, opts: ProjectionOptions, v: RenderView, camCurve: number): void {
+    const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z) - camCurve
+    const cx = centerX - this.camera.x
+    const bottom = project(opts, this.camera, {
+      x: cx + sprite.offset,
+      y: 0,
+      z: sprite.z,
+    })
+    if (!bottom) {
+      return
+    }
+    const hpx = clampSpriteHeight(sprite.kind, sprite.height * bottom.scale * opts.height * 0.5)
+    switch (sprite.kind) {
+      case 'lamp':
+        drawLamp(this.ctx, bottom.x, bottom.y, hpx)
+        break
+      case 'cactus':
+        // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸
+        drawCactus(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.scale)
+        break
+      case 'palm':
+        // 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；rotation 随机化弯曲方向
+        drawPalm(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight, sprite.rotation)
+        break
+      case 'snowpile':
+        // 雪堆：圆顶 + 树冠覆雪（山岳冷色）
+        drawSnowpile(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+        break
+      case 'tree':
+      default:
+        // M17：环境树色由 sprite 携带（createRoadsideSprites 按 environment 注入），缺省回退内置色
+        drawTree(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+        break
     }
   }
 }

@@ -1,11 +1,49 @@
 /** 车流绘制模块（2026-08-05 从 Renderer 类提取）：车流车身/尾灯绘制与 night 车前灯光晕。
  *  纯函数（ctx/camera/traffic 显式传入），不依赖 Renderer 实例状态。 */
 import type { Camera3D, ProjectionOptions } from './projection'
-import { projectTraffic } from './traffic-render'
+import { projectTraffic, type TrafficProjection } from './traffic-render'
 import type { TrafficCar } from './traffic'
 
-/** 绘制车流（车身 + 车顶暗区 + 车窗反光 + 车轮 + 尾灯，远→近）；
+/** 绘制单辆已投影车流（车身 + 车顶暗区 + 车窗反光 + 车轮 + 尾灯）；
+ *  从 drawTraffic 拆出供 Renderer 与景物按 z 交错绘制（景深 z-order 修复，2026-08-05）。
  *  day 尾灯为单条灯带、night 为双灯 + 车前灯光晕（night fillRect 计数恒高于 day，供渲染断言区分） */
+export function drawSingleTraffic(ctx: CanvasRenderingContext2D, car: TrafficProjection, night: boolean): void {
+  const cx = car.bottom.x
+  const topY = car.top.y
+  const w = car.width
+  const h = car.height
+  // 车身
+  ctx.fillStyle = car.color
+  ctx.fillRect(cx - w / 2, topY, w, h)
+  // 车顶暗区（车窗上方，半透明黑压暗车顶层次）
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
+  ctx.fillRect(cx - w / 2, topY, w, h * 0.3)
+  // 车窗
+  ctx.fillStyle = '#1b2430'
+  ctx.fillRect(cx - w / 4, topY + h * 0.3, w / 2, h * 0.4)
+  // 车窗反光（后窗上部淡蓝斜光条）
+  ctx.fillStyle = 'rgba(140, 170, 200, 0.25)'
+  ctx.fillRect(cx - w / 4, topY + h * 0.32, w / 2, h * 0.07)
+  // 车轮（后视可见左右两轮，贴地部）
+  ctx.fillStyle = '#14171c'
+  ctx.fillRect(cx - w * 0.45, topY + h * 0.78, w * 0.18, h * 0.22)
+  ctx.fillRect(cx + w * 0.27, topY + h * 0.78, w * 0.18, h * 0.22)
+  if (night) {
+    // 红色尾灯：车身下部（车头朝画面上方，车尾在下）双灯——cx ± width*0.3、宽 width*0.2、
+    // 从 car.top.y + height*0.7 起高 height*0.25
+    ctx.fillStyle = '#ff3b30'
+    ctx.fillRect(cx - w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
+    ctx.fillRect(cx + w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
+    // car 为 TrafficProjection（含原始车数据字段 car.car），shiftDir 取自车数据
+    drawHeadlight(ctx, cx, topY, w, h, car.car.shiftDir)
+  } else {
+    // 白天尾灯灯带（单条细红带，比 night 双灯低调）
+    ctx.fillStyle = 'rgba(255, 90, 80, 0.8)'
+    ctx.fillRect(cx - w * 0.3, topY + h * 0.72, w * 0.6, h * 0.06)
+  }
+}
+
+/** 绘制车流（投影后逐辆 drawSingleTraffic，远→近）；保留为兼容入口（Renderer 已改走交错绘制） */
 export function drawTraffic(
   ctx: CanvasRenderingContext2D,
   camera: Camera3D,
@@ -15,39 +53,7 @@ export function drawTraffic(
   night: boolean,
 ): void {
   for (const car of projectTraffic(traffic, cameraZ, camera.x, opts, camera)) {
-    const cx = car.bottom.x
-    const topY = car.top.y
-    const w = car.width
-    const h = car.height
-    // 车身
-    ctx.fillStyle = car.color
-    ctx.fillRect(cx - w / 2, topY, w, h)
-    // 车顶暗区（车窗上方，半透明黑压暗车顶层次）
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'
-    ctx.fillRect(cx - w / 2, topY, w, h * 0.3)
-    // 车窗
-    ctx.fillStyle = '#1b2430'
-    ctx.fillRect(cx - w / 4, topY + h * 0.3, w / 2, h * 0.4)
-    // 车窗反光（后窗上部淡蓝斜光条）
-    ctx.fillStyle = 'rgba(140, 170, 200, 0.25)'
-    ctx.fillRect(cx - w / 4, topY + h * 0.32, w / 2, h * 0.07)
-    // 车轮（后视可见左右两轮，贴地部）
-    ctx.fillStyle = '#14171c'
-    ctx.fillRect(cx - w * 0.45, topY + h * 0.78, w * 0.18, h * 0.22)
-    ctx.fillRect(cx + w * 0.27, topY + h * 0.78, w * 0.18, h * 0.22)
-    if (night) {
-      // 红色尾灯：车身下部（车头朝画面上方，车尾在下）双灯——cx ± width*0.3、宽 width*0.2、
-      // 从 car.top.y + height*0.7 起高 height*0.25
-      ctx.fillStyle = '#ff3b30'
-      ctx.fillRect(cx - w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
-      ctx.fillRect(cx + w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
-      // car 为 TrafficProjection（含原始车数据字段 car.car），shiftDir 取自车数据
-      drawHeadlight(ctx, cx, topY, w, h, car.car.shiftDir)
-    } else {
-      // 白天尾灯灯带（单条细红带，比 night 双灯低调）
-      ctx.fillStyle = 'rgba(255, 90, 80, 0.8)'
-      ctx.fillRect(cx - w * 0.3, topY + h * 0.72, w * 0.6, h * 0.06)
-    }
+    drawSingleTraffic(ctx, car, night)
   }
 }
 

@@ -22,6 +22,9 @@ export interface Sprite {
 }
 
 const ROAD_SIDE_OFFSET = 1.4
+/** 路灯专用横向偏移（UX-10 修复 2026-08-05：1.4→1.8）——旧值在弯道路灯与路面边界相交，
+ * 视觉上「路灯长在路面上」；外移后灯杆稳定落在路外，树/仙人掌/棕榈/雪堆仍用 ROAD_SIDE_OFFSET */
+const LAMP_SIDE_OFFSET = 1.8
 /** 树木世界高度（约 4m，道路全宽 2 单位 ≈ 7m 的合理比例） */
 const TREE_HEIGHT = 1.2
 /** 路灯世界高度（约 2.8m） */
@@ -81,8 +84,10 @@ export function createRoadsideSprites(
     const height = kind === 'lamp' ? LAMP_HEIGHT : TREE_HEIGHT
     // 棕榈弯曲方向确定性随机（±1），其余景物无 rotation
     const rotation = kind === 'palm' ? (rand() < 0.5 ? -1 : 1) : undefined
-    sprites.push({ kind, z, offset: -ROAD_SIDE_OFFSET, height, treeColor, treeColorLight, rotation })
-    sprites.push({ kind, z, offset: ROAD_SIDE_OFFSET, height, treeColor, treeColorLight, rotation })
+    // UX-10：路灯用 LAMP_SIDE_OFFSET（1.8）外移至路外，其余景物保持 ROAD_SIDE_OFFSET（1.4）
+    const sideOffset = kind === 'lamp' ? LAMP_SIDE_OFFSET : ROAD_SIDE_OFFSET
+    sprites.push({ kind, z, offset: -sideOffset, height, treeColor, treeColorLight, rotation })
+    sprites.push({ kind, z, offset: sideOffset, height, treeColor, treeColorLight, rotation })
     // 沙漠小仙人掌：树位之间中点（z + spacing/2），高度减半、scale 0.5，左右各一
     if (insertSmallCactus && z + spacing / 2 < totalLength) {
       const smallZ = z + spacing / 2

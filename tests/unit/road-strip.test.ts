@@ -139,12 +139,12 @@ describe('renderRoadStripToCanvas', () => {
     const total = 2 * ROAD_HALF_WIDTH + 2 * EDGE_WIDTH
     const roadHalf = (WIDTH * ((2 * ROAD_HALF_WIDTH) / total)) / 2
     // 渐变带中央（第 4 带，factor=1.0）保持 roadColors 原色；边缘带按 shadeColor 变暗
-    // 段 0（偶）：路面渐变中至少存在原色 #4a4a4a（中央带 factor=1.0）+ 边缘带变暗
-    expect(rowHasColor(canvas, 0, '#4a4a4a')).toBe(true)
-    expect(rowHasColor(canvas, 0, shadeColor('#4a4a4a', 0.975))).toBe(true)
+    // 段 0（偶）：路面渐变中至少存在原色 #484848（中央带 factor=1.0）+ 边缘带变暗
+    expect(rowHasColor(canvas, 0, '#484848')).toBe(true)
+    expect(rowHasColor(canvas, 0, shadeColor('#484848', 0.975))).toBe(true)
     // 段 1（奇）：浅灰路面 + 白路缘
-    expect(rowHasColor(canvas, 4, '#3c3c3c')).toBe(true)
-    expect(rowHasColor(canvas, 4, shadeColor('#3c3c3c', 0.975))).toBe(true)
+    expect(rowHasColor(canvas, 4, '#404040')).toBe(true)
+    expect(rowHasColor(canvas, 4, shadeColor('#404040', 0.975))).toBe(true)
     expect(findRect(canvas, { y: 0, x: 0 })?.fillStyle).toBe('#d03030')
     expect(findRect(canvas, { y: 4, x: 0 })?.fillStyle).toBe('#e8e8e8')
     // 右路缘同样交替

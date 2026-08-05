@@ -3,9 +3,17 @@ import { Renderer, type BoostParticle, type RenderView } from '../../src/engine/
 import { SEGMENT_LENGTH } from '../../src/engine/track'
 import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
-import { createTraffic } from '../../src/engine/traffic'
+import { createTraffic, type TrafficCar } from '../../src/engine/traffic'
 import { buildRoadStrips } from '../../src/engine/road-strip'
-import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites } from '../../src/engine/sprites'
+import {
+  buildCurvePrefixSum,
+  buildSpriteIndex,
+  createRoadsideSprites,
+  curveOffsetAtZ,
+  type Sprite,
+} from '../../src/engine/sprites'
+import { project } from '../../src/engine/projection'
+import { TRAFFIC_COLORS } from '../../src/engine/traffic-render'
 import type { SmokeParticle } from '../../src/physics/drift'
 import {
   createMockCanvas,
@@ -638,6 +646,113 @@ describe('Renderer 状态切换', () => {
       expect(r._fillStyleCache.size).toBe(0)
       // 清空后仍可正常获取（重建缓存）
       expect(r.getFillStyle(5, 6, 7, 0.5)).toBe('rgba(5, 6, 7, 0.500)')
+    })
+  })
+
+  describe('景深 z-order 与景物坐标系（2026-08-05 修复）', () => {
+    /** 把第 n 次 fillRect 调用映射到 __order 全局序列索引（跨方法绘制顺序比较用） */
+    function globalFillRectIndex(order: string[], n: number): number {
+      let seen = -1
+      for (let i = 0; i < order.length; i++) {
+        if (order[i] === 'fillRect') {
+          seen++
+          if (seen === n) return i
+        }
+      }
+      return -1
+    }
+
+    it('近处树绘制在远处车流之后（近者遮挡远者，旧版整车流覆盖全景物）', () => {
+      const { canvas, renderer } = createHarness()
+      const track = createStraightTrack(130) // 26000 单位 > 默认视距 24000，避免环形回绕干扰
+      const sprites: Sprite[] = [{ kind: 'tree', z: 800, offset: 1.4, height: 1.2 }]
+      const traffic: TrafficCar[] = [{ z: 6000, offset: 0, speed: 2400, colorIndex: 0, shiftDir: 0 }]
+      const view: RenderView = {
+        track,
+        curvePrefixSum: buildCurvePrefixSum(track),
+        spriteIndex: buildSpriteIndex(sprites, SEGMENT_LENGTH),
+        traffic,
+      }
+      renderer.render(0, [], 0, view)
+      const fillRects = canvas.__ctx.__args.fillRect ?? []
+      // 车身主色（TRAFFIC_COLORS[0]）与树干色（#5a3a22）各自唯一，作为两类绘制物的标记
+      const carIdx = fillRects.findIndex((a) => a[4] === TRAFFIC_COLORS[0])
+      const trunkIdx = fillRects.findIndex((a) => a[4] === '#5a3a22')
+      expect(carIdx).toBeGreaterThanOrEqual(0)
+      expect(trunkIdx).toBeGreaterThanOrEqual(0)
+      const order = canvas.__ctx.__order
+      const carOrder = globalFillRectIndex(order, carIdx)
+      const trunkOrder = globalFillRectIndex(order, trunkIdx)
+      // 树（z=800，近）必须在车（z=6000，远）之后绘制，才能正确遮挡
+      expect(trunkOrder).toBeGreaterThan(carOrder)
+    })
+
+    it('弯道景物中心与路面同坐标系（减相机自身曲率偏移，防景物漂移入路面）', () => {
+      const { canvas, renderer } = createHarness()
+      const track = createTrackFromDef(TRACK_DEFS[2]) // s-curve（曲率大）
+      const prefix = buildCurvePrefixSum(track)
+      const totalLen = track.length * SEGMENT_LENGTH
+      const cameraZ = totalLen * 0.4 // 弯道中段：相机处绝对前缀曲率非零
+      const camCurve = curveOffsetAtZ(track, prefix, cameraZ)
+      expect(Math.abs(camCurve)).toBeGreaterThan(0.1) // 前提有效性：两候选可区分
+      const spriteZ = cameraZ + 2000
+      const sprite: Sprite = { kind: 'tree', z: spriteZ, offset: 1.4, height: 1.2 }
+      const view: RenderView = {
+        track,
+        curvePrefixSum: prefix,
+        spriteIndex: buildSpriteIndex([sprite], SEGMENT_LENGTH),
+        traffic: [],
+      }
+      renderer.render(cameraZ, [], 0, view)
+      // 期望投影：景物中心取相机相对累计曲率（与 renderRoadSurface 的 curveSum 同坐标系）
+      const opts = { width: 800, height: 600, horizon: 600 * 0.35, depth: 800 * 0.84 }
+      const camera = { x: 0, y: 1, z: cameraZ }
+      const relCenter = curveOffsetAtZ(track, prefix, spriteZ) - camCurve
+      const expected = project(opts, camera, { x: relCenter + 1.4, y: 0, z: spriteZ })
+      const wrongCandidate = project(opts, camera, {
+        x: curveOffsetAtZ(track, prefix, spriteZ) + 1.4,
+        y: 0,
+        z: spriteZ,
+      })
+      expect(expected).not.toBeNull()
+      expect(wrongCandidate).not.toBeNull()
+      // 两候选可区分（弯道偏移 > 5px），断言才有意义
+      expect(Math.abs(expected!.x - wrongCandidate!.x)).toBeGreaterThan(5)
+      // 实际绘制的树干中心应与相机相对候选吻合（亚像素级）
+      const trunk = (canvas.__ctx.__args.fillRect ?? []).find((a) => a[4] === '#5a3a22')
+      expect(trunk).toBeDefined()
+      const trunkCenterX = (trunk![0] as number) + (trunk![2] as number) / 2
+      expect(Math.abs(trunkCenterX - expected!.x)).toBeLessThan(1)
+    })
+  })
+
+  describe('距离大气透视（2026-08-05 道路平滑化）', () => {
+    it('渲染含地平线雾带：createLinearGradient 起点在地平线、覆盖地面顶部 42% 区域', () => {
+      const { canvas, renderer } = createHarness()
+      renderer.render(0)
+      const horizon = 600 * 0.35 // createHarness 800×600，horizon = height*0.35
+      const bandH = (600 - horizon) * 0.42
+      const grads = canvas.__ctx.__args.createLinearGradient ?? []
+      // 天空渐变（0,0→0,horizon）之外，应有一条雾带渐变（0,horizon→0,horizon+bandH）
+      const fogGrad = grads.find((g) => Math.abs((g[1] as number) - horizon) < 0.01)
+      expect(fogGrad).toBeDefined()
+      expect(fogGrad![0]).toBe(0)
+      expect(fogGrad![3]).toBeCloseTo(horizon + bandH, 0)
+      // 雾带以一次全宽 fillRect 覆盖（x=0、y=horizon、w=width、h=bandH）
+      const fogRect = (canvas.__ctx.__args.fillRect ?? []).find(
+        (r) => Math.abs((r[1] as number) - horizon) < 0.01 && Math.abs((r[3] as number) - bandH) < 1,
+      )
+      expect(fogRect).toBeDefined()
+      expect(fogRect![0]).toBe(0)
+      expect(fogRect![2]).toBe(800)
+    })
+
+    it('雾带渐变使用 hsla 天空雾色（三段 addColorStop：强→中→透明）', () => {
+      const { canvas, renderer } = createHarness()
+      renderer.render(0)
+      // createLinearGradient 每次新建渐变对象后紧跟 addColorStop；雾带 3 段 stop。
+      // 断言 addColorStop 总次数 ≥ 天空 2 段 + 雾带 3 段 = 5（无其它渐变时）
+      expect(canvas.__ctx.__calls.addColorStop ?? 0).toBeGreaterThanOrEqual(5)
     })
   })
 

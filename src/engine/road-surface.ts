@@ -198,8 +198,9 @@ function drawCachedSegment(
   if (segH <= 0) {
     return
   }
-  // 近处大段细分绘制以缓解单段拉伸伪影，远处合并为单次 drawImage
-  const bands = segH < 4 ? 1 : segH < 12 ? 2 : 4
+  // 近处大段细分绘制以缓解单段拉伸伪影，远处合并为单次 drawImage；
+  // 2026-08-05：极高段（>32px）提升至 8 bands，近景透视渐变更平滑
+  const bands = segH < 4 ? 1 : segH < 12 ? 2 : segH < 32 ? 4 : 8
   const wNear = cur.r2.x - cur.l2.x
   const wFar = next.r2.x - next.l2.x
   const cxNear = (cur.l2.x + cur.r2.x) * 0.5
@@ -255,7 +256,7 @@ function drawFallbackSegment(
 }
 
 /** 起终点线：黑白棋盘格横条（16 列 × 2 行，B7）。覆盖当前段整个路面宽度（l1↔r1）、
- *  沿 z 方向从近缘（cur）到远缘（next）1 个段长；全部由现有投影点线性插值得到，
+ *  沿 z 方向从近缘（cur）到远缘（next） 1 个段长；全部由现有投影点线性插值得到，
  *  帧内零对象分配。画在路面与中心虚线之后（覆盖其上）。 */
 function drawStartLine(ctx: CanvasRenderingContext2D, cur: Quad, next: Quad): void {
   // 三条横向边界（近缘 / 中缝 / 远缘）的 y 与左/右 x（插值现有投影点）
@@ -282,4 +283,34 @@ function drawStartLine(ctx: CanvasRenderingContext2D, cur: Quad, next: Quad): vo
     const xR2 = l2 + (r2 - l2) * t1
     fillQuadCoords(ctx, xLm, y1, xRm, y1, xR2, y2, xL2, y2, (i & 1) === 0 ? START_GRID_WHITE : START_GRID_BLACK)
   }
+}
+
+/** 距离大气透视（2026-08-05 道路平滑化）：地平线向下的一段垂直渐变雾霾层——
+ *  远端路面/景物/车流渐融入天空雾色，消除远端分段压缩形成的密集条纹（摩尔纹）
+ *  与"远端对比度与近处一致"的平板感，增强纵深与真实感。
+ *  仅覆盖地面顶部 fogBandRatio 区域（近处在下方，不受影响）。纯函数，帧内一次渐变填充。 */
+export function drawDistanceFog(
+  ctx: CanvasRenderingContext2D,
+  opts: ProjectionOptions,
+  skyBottom: string,
+  fogBandRatio = 0.42,
+): void {
+  const bandH = (opts.height - opts.horizon) * fogBandRatio
+  if (bandH <= 0) {
+    return
+  }
+  const g = ctx.createLinearGradient(0, opts.horizon, 0, opts.horizon + bandH)
+  g.addColorStop(0, hslWithAlpha(skyBottom, 0.55))
+  g.addColorStop(0.55, hslWithAlpha(skyBottom, 0.2))
+  g.addColorStop(1, hslWithAlpha(skyBottom, 0))
+  ctx.fillStyle = g
+  ctx.fillRect(0, opts.horizon, opts.width, bandH)
+}
+
+/** 'hsl(h, s%, l%)' → 'hsla(h, s%, l%, a)'；updateLighting 恒输出 hsl()，非 hsl 格式防御性原样返回 */
+function hslWithAlpha(hslColor: string, alpha: number): string {
+  if (!hslColor.startsWith('hsl(')) {
+    return hslColor
+  }
+  return `hsla(${hslColor.slice(4, -1)}, ${alpha})`
 }

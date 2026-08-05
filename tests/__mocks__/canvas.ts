@@ -23,6 +23,8 @@ export interface MockCanvasArgRecords {
 export interface MockCanvasRenderingContext2D extends CanvasRenderingContext2D {
   __calls: MockCanvasCallCounts
   __args: MockCanvasArgRecords
+  /** 全局调用顺序日志（方法名按调用时序追加，2026-08-05 补）：跨方法绘制顺序断言用（景深 z-order） */
+  __order: string[]
 }
 
 /** mock canvas：在 HTMLCanvasElement 基础上附加上下文引用 */
@@ -33,11 +35,13 @@ export interface MockCanvas extends HTMLCanvasElement {
 export function createMockCanvas(width = 800, height = 600): MockCanvas {
   const calls: MockCanvasCallCounts = {}
   const argRecords: MockCanvasArgRecords = {}
+  const order: string[] = []
   const record = (method: string, args: unknown[]): void => {
     calls[method] = (calls[method] ?? 0) + 1
     const list = argRecords[method] ?? []
     list.push(args)
     argRecords[method] = list
+    order.push(method)
   }
   const noop = (): void => undefined
 
@@ -56,6 +60,7 @@ export function createMockCanvas(width = 800, height = 600): MockCanvas {
   const ctx = {
     __calls: calls,
     __args: argRecords,
+    __order: order,
     get fillStyle(): string | CanvasGradient {
       return currentFillStyle
     },
@@ -80,6 +85,11 @@ export function createMockCanvas(width = 800, height = 600): MockCanvas {
     clip: (...args: unknown[]): void => record('clip', args),
     drawImage: (...args: unknown[]): void => record('drawImage', args),
     arc: (...args: unknown[]): void => record('arc', args),
+    // 圆角矩形路径（minimap roundRectPath 使用；2026-08-05 补）
+    arcTo: (...args: unknown[]): void => record('arcTo', args),
+    clearRect: (...args: unknown[]): void => record('clearRect', args),
+    lineJoin: 'miter',
+    lineCap: 'butt',
     rotate: (...args: unknown[]): void => record('rotate', args),
     createLinearGradient: (...args: unknown[]): { addColorStop: (offset: number, color: string) => void } => {
       record('createLinearGradient', args)

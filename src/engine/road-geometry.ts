@@ -8,7 +8,9 @@ export { EDGE_WIDTH, ROAD_HALF_WIDTH }
  */
 export const DRAW_DISTANCE = RENDER_DRAW_DISTANCE
 
-const ROAD_COLORS = ['#4a4a4a', '#3c3c3c']
+// 路面交替色（2026-08-05 平滑化）：原 #4a4a4a/#3c3c3c 亮度差 14 过强，远端压缩成密集条纹；
+// 收敛为 #484848/#404040（亮度差 8），保留速度感的分段节奏但显著柔和
+const ROAD_COLORS = ['#484848', '#404040']
 const SIDE_COLORS = ['#d03030', '#e8e8e8']
 
 export interface Quad {

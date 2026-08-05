@@ -30,8 +30,9 @@ const BODY_DARK_COLOR = '#9c1f18'
 const WINDOW_COLOR = '#1b2430'
 /** 车轮色 */
 const WHEEL_COLOR = '#14171c'
-/** 车头灯外层光晕 / 核心（参考 drawHeadlight 配色：rgba(255,235,180,0.35) + #ffe08a） */
-const HEADLIGHT_HALO = 'rgba(255, 235, 180, 0.35)'
+/** 车头灯外层光晕 / 核心（配色参考 drawHeadlight；UX-9 修复 2026-08-05：光晕 alpha 0.35→0.25，
+ * 半径倍率 1.6→1.25，防大团光晕笼罩车体影响辨识） */
+const HEADLIGHT_HALO = 'rgba(255, 235, 180, 0.25)'
 const HEADLIGHT_CORE = '#ffe08a'
 /** BOOST 车尾尾焰色 */
 const BOOST_FLAME_COLOR = 'rgba(255, 180, 80, 0.85)'
@@ -147,16 +148,16 @@ export function drawPlayerCar(
     ctx.fill()
     ctx.globalCompositeOperation = 'source-over'
 
-    // 车头双灯（车头朝画面上方，灯在车顶附近；外层光晕 ×1.6 + 核心）
+    // 车头双灯（车头朝画面上方，灯在车顶附近；外层光晕 ×1.25 + 核心；UX-9：光晕收敛防笼罩车体）
     const lampY = bottomY - carH * 0.94
     const lampDX = carW * 0.28
     const r = carW * 0.12
     ctx.fillStyle = HEADLIGHT_HALO
     ctx.beginPath()
-    ctx.arc(cx - lampDX, lampY, r * 1.6, 0, Math.PI * 2)
+    ctx.arc(cx - lampDX, lampY, r * 1.25, 0, Math.PI * 2)
     ctx.fill()
     ctx.beginPath()
-    ctx.arc(cx + lampDX, lampY, r * 1.6, 0, Math.PI * 2)
+    ctx.arc(cx + lampDX, lampY, r * 1.25, 0, Math.PI * 2)
     ctx.fill()
     ctx.fillStyle = HEADLIGHT_CORE
     ctx.beginPath()

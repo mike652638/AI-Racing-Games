@@ -13,11 +13,11 @@ const camera = { x: 0, y: 1, z: 0 }
 
 describe('roadColors 路面/路缘颜色交替', () => {
   it('偶数段返回深色路面', () => {
-    expect(roadColors(0).road).toBe('#4a4a4a')
+    expect(roadColors(0).road).toBe('#484848')
   })
 
   it('奇数段返回浅色路面', () => {
-    expect(roadColors(1).road).toBe('#3c3c3c')
+    expect(roadColors(1).road).toBe('#404040')
   })
 
   it('偶数段返回深红路缘', () => {
