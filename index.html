@@ -5,19 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <title>像素狂飙 - OutRun 伪 3D 街机赛车</title>
     <meta name="description" content="像素狂飙：网页版 OutRun 伪 3D 街机赛车游戏，9 条赛道、漂移连击、氮气加速、双人分屏与热座对战，无需安装即点即玩。" />
-    <!-- 微信分享卡片：OG 协议（微信/QQ 抓取用，og:image 需绝对 URL，部署后由 CI 注入正式域名） -->
+    <!-- 微信分享卡片：OG/Twitter 协议 + 微信专用 itemprop，og:image 必须为永久无鉴权绝对 URL（EdgeOne 预览链接会过期致回退占位图，故用 CloudBase 永久静态托管） -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="像素狂飙" />
     <meta property="og:title" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
     <meta property="og:description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
-    <meta property="og:image" content="https://early-english-learning-6irvhqpz.edgeone.cool/share-card.png" />
+    <meta property="og:image" content="https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/share-card-v2.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <!-- 微信专用：确保分享卡片使用大图（640×300 以上） -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:title" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
-    <meta property="twitter:description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
-    <meta property="twitter:image" content="https://early-english-learning-6irvhqpz.edgeone.cool/share-card.png" />
+    <meta property="og:url" content="https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
+    <meta name="twitter:description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
+    <meta name="twitter:image" content="https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/share-card-v2.png" />
+    <!-- 微信/QQ 专用：部分客户端优先读 itemprop；与 og 同步冗余声明以提升抓取命中率 -->
+    <meta itemprop="name" content="像素狂飙 - OutRun 伪 3D 街机赛车" />
+    <meta itemprop="description" content="9 条赛道 · 漂移连击 · 氮气加速 · 双人分屏，无需安装即点即玩！" />
+    <meta itemprop="image" content="https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/share-card-v2.png" />
     <!-- PWA：SVG 图标（favicon 与 manifest 通用） -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <!-- 样式并行加载：避免 FOUC（main.ts 中移除 import './style.css' 防止重复引入） -->
