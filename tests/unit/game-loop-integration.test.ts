@@ -635,7 +635,11 @@ describe('GameLoop 主循环集成冒烟测试', () => {
   it(
     'F2（F2）：分屏双人完赛后 #match-top 对局榜渲染（构造时占位）',
     () => {
-      const splitEnv = stubEnvironment(true)
+      // initialStorage={} 激活全局 localStorage 桩（CI run #3/#4 根因修复）：
+      // save.ts getStorage 需全局 localStorage 存在才启用存档；CI 的 Node 22 无全局
+      // localStorage（本机 Node 25 有）→ addMatchResult 静默降级 no-op → 对局榜恒占位。
+      // 空存储下构造时占位断言语义不变（loadMatchTop 返回 [] 仍渲染占位文案）。
+      const splitEnv = stubEnvironment(true, {})
       new GameLoop()
       // 构造时无对局记录 → 占位文本（stub getElementById 通配实现自动建 match-top，textContent 可写）
       expect(splitEnv.getElement('match-top').textContent).toContain('暂无对局记录')

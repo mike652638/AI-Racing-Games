@@ -70,10 +70,18 @@ const SIM_TIMEOUT_EPIC = 60_000 // 热座双 1400 帧全赛季、挑战 1298 帧
 
 **现象**：提交 `195ec2f` 推送后 CI run #3 在 Unit tests 步骤失败（typecheck / lint / **format check 均已转绿**，验证了 R1 修复在 CI 生效）。失败并非超时，而是 F2（分屏对局榜）断言失败：`expected false to be true`（game-loop-integration.test.ts:645，`match-top` 仍为占位文本）。
 
-**根因定位**：集成测试的帧驱动使用虚拟时钟（`now += 50; frame(now)`），但 `GameLoop` 的 `this.last = performance.now()`（构造器与 startGame 内，src/game/game-loop.ts:170/625）读取的是**真实墙钟**。首帧 dt = `min((now − last)/1000, 0.05)`，其中 `now` 为虚拟时间、`last` 为真实时间——当"构造 → 首帧驱动"的实际间隔 δ > 50ms（CI/负载机器常态）时，**首帧 dt 为负**，物理倒退一帧：车流位置与双人同步轨迹被扰动，"P1/P2 同帧完赛"失步 → 分屏完赛时 P2 未同步越线 → `addMatchResult` 未记录 → 对局榜断言失败。本机 δ 恒 < 50ms 故历史全绿；这也是超时 flaky 的深层根源（比赛帧数随 δ 漂移）。
+**根因定位（第一层，时序）**：集成测试的帧驱动使用虚拟时钟（`now += 50; frame(now)`），但 `GameLoop` 的 `this.last = performance.now()`（构造器与 startGame 内，src/game/game-loop.ts:170/625）读取的是**真实墙钟**。首帧 dt = `min((now − last)/1000, 0.05)`，其中 `now` 为虚拟时间、`last` 为真实时间——当"构造 → 首帧驱动"的实际间隔 δ > 50ms（CI/负载机器常态）时，**首帧 dt 为负**，物理倒退一帧，且整场比赛帧数随 δ 漂移（超时 flaky 的深层根源）。
 
 **修复（测试侧，src/ 仍零改动）**：`stubEnvironment` 中追加 `vi.stubGlobal('performance', { now: () => now })`——`GameLoop` 的 `last` 与帧驱动从此共用同一虚拟时钟，每帧 dt 恒为 0.05，整文件用例的物理推进与耗时均与机器负载**结构性无关**（不依赖阈值放宽）。同步更新 stub 文档注释与 driveFrames 注释。
 
-**复测**：typecheck / lint / format:check / npm test（707/707，34.4s，长程用例耗时与修复前几乎逐毫秒重合，印证 dt 轨迹未变）全绿；bot / build / scan 复测见提交记录。生产代码不受影响（浏览器 rAF 时间戳单调，负 dt 场景不存在）。
+**注意**：推送后 CI run #4 复现同一 F2 断言失败（行号平移至 654），证明虚拟时钟消除了真实的时序隐患，但**并非 F2 失败的直接原因**——直接原因见第八节。
 
-**经验沉淀**：①"本地绿 / CI 红"且失败点在时序相关断言时，优先审计测试基建里"虚拟驱动 + 真实时钟"的混用面；②SIM_TIMEOUT 档位仍是必要的防御性余量（CI 每帧计算耗时本身有波动），但确定性根因修复才是治本。
+## 八、补遗二：CI run #4 与 localStorage 环境差异根因（2026-08-05 夜）
+
+**现象**：run #4 中 typecheck / lint / format check 依旧全绿，Unit tests 仍是 F2 同一断言失败；而同文件同流程的"漂移竞速横幅"用例（不写存档）在 CI 通过——失败仅出现在**依赖存档写入**的用例上，且稳定复现、与负载无关。
+
+**根因（第二层，环境差异）**：`save.ts getStorage()` 采用双重检查（`typeof localStorage !== 'undefined'` + `window.localStorage`）才启用存档。**本机 Node v25.2.1 自带全局 localStorage（Node 23+ 默认提供），而 CI 的 Node 22 没有** → CI 上 `addMatchResult` 静默降级为 no-op → 对局榜恒为占位文本 → 断言失败。测试桩 `stubEnvironment` 本就为此设计了 `initialStorage` 尾参（传入时 `vi.stubGlobal('localStorage', fakeStorage)` 挂载全局），但 F2 未传。
+
+**修复**：F2 改为 `stubEnvironment(true, {})`——激活全局存储桩；空存储下构造时占位断言语义不变（`loadMatchTop` 返回 `[]` 仍渲染占位文案）。全文件排查确认其余存档依赖用例（H4、P3、G7 等）均已显式注入存储，仅 F2 遗漏。
+
+**复测与教训**：本地全绿后推送，CI run #5 结果见提交记录。教训沉淀：① 测试基建的"可选 stub"（如 initialStorage）在跨 Node 大版本环境下可能从"可选"变"必需"，环境能力探测类断言应在 CI 同版本 Node 下至少跑一次；② "本地绿 / CI 红"排查顺序：先对齐运行时版本差异（Node 大版本全局 API），再查时序/时钟混用；③ 虚拟时钟修复（第七节）仍然保留——它独立消除了超时 flaky 的时序根源，两层修复互补。
