@@ -171,6 +171,12 @@ export class GameLoop {
   private hasShownRacingTouchHint = false
   /** BOOST 未蓄能红闪反馈上一次触发时间（300ms 冷却，防止每帧重复） */
   private lastBoostDeniedAt = 0
+  /** 当前帧循环 rAF 句柄（S 修复 S3：destroy 时 cancelAnimationFrame） */
+  private rafId: number | null = null
+  /** 起步倒计时取消函数（S 修复 S4：重复 startGame/离开菜单时取消，防并行 interval 叠加） */
+  private countdownCancel: (() => void) | null = null
+  /** 已注册的清理函数（S 修复 S3：destroy() 统一移除事件监听/取消定时器） */
+  private readonly cleanups: Array<() => void> = []
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
@@ -281,7 +287,9 @@ export class GameLoop {
 
     this.installDebugSinks()
 
+    // S 修复 S3：全局监听经清理函数登记（destroy() 时移除）
     window.addEventListener('keydown', this.onKeyDown)
+    this.onCleanup(() => window.removeEventListener('keydown', this.onKeyDown))
     this.bindGlobalEvents()
     // Task D：排行榜刷新迁移至 top-refresh.ts 独立函数（无 this 依赖）
     refreshDriftTop()
@@ -323,6 +331,11 @@ export class GameLoop {
     this.bindPhaseButton(this.screenElements.pauseResume, () => this.applyPhase(togglePause(this.phase)))
   }
 
+  /** 登记清理函数（destroy() 时执行；绑定监听/定时器一律经此登记，S3） */
+  private onCleanup(fn: () => void): void {
+    this.cleanups.push(fn)
+  }
+
   /** 构建赛道选项元素（按 TRACK_DEFS 数量动态构建）：按钮文本 序号+名称+难度星级，点击等价键盘 1-9 */
   private buildTrackOptions($: (id: string) => HTMLElement): HTMLDivElement[] {
     const trackOptions = Array.from({ length: TRACK_DEFS.length }, (_, i) => $(`track-option-${i}`) as HTMLDivElement)
@@ -347,16 +360,23 @@ export class GameLoop {
       } else if (label) label.textContent = text
       else option.textContent = text
       // 菜单点击选赛道（触屏/鼠标均可）：等价于键盘 1-9；热座双人同步 P2 世界
-      option.addEventListener('click', () => {
+      const onClick = (): void => {
         if (this.phase !== PHASE_MENU) return
         this.selectP1Track(i)
-      })
+      }
+      option.addEventListener('click', onClick)
       // 键盘可访问性：聚焦按钮上 Enter/Space 等效点击（菜单阶段）
-      option.addEventListener('keydown', (e: KeyboardEvent) => {
+      const onKeyDown = (e: KeyboardEvent): void => {
         if ((e.code === 'Enter' || e.code === 'Space') && this.phase === PHASE_MENU) {
           e.preventDefault()
           this.selectP1Track(i)
         }
+      }
+      option.addEventListener('keydown', onKeyDown)
+      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+      this.onCleanup(() => {
+        option.removeEventListener('click', onClick)
+        option.removeEventListener('keydown', onKeyDown)
       })
     })
     // 低优①：中央信息区赛道缩略图（controlPoints 积分生成 SVG 轨迹，初始显示 0 号赛道）
@@ -401,16 +421,21 @@ export class GameLoop {
     // 加载中（loading 态）忽略重复点击，防双触发
     const startBtn = document.getElementById('start-btn')
     if (startBtn) {
-      startBtn.addEventListener('click', () => {
+      const onStartClick = (): void => {
         if (this.phase !== PHASE_MENU || startBtn.classList.contains('loading')) return
         this.setStartBtnLoading(startBtn, true)
         this.startGame()
         // 短暂加载态后恢复（进入 RACING 后面板已隐藏，恢复仅影响返回菜单时）
         window.setTimeout(() => this.setStartBtnLoading(startBtn, false), 600)
-      })
+      }
+      startBtn.addEventListener('click', onStartClick)
+      // S 修复 S3：监听经清理函数登记
+      this.onCleanup(() => startBtn.removeEventListener('click', onStartClick))
     }
     this.bindLeaderboardCards()
     window.addEventListener('resize', this.resize)
+    // S 修复 S3：resize 监听经清理函数登记
+    this.onCleanup(() => window.removeEventListener('resize', this.resize))
     this.resize()
   }
 
@@ -455,13 +480,20 @@ export class GameLoop {
       else if (target === 'best-summary') refreshBestSummary()
     }
     cards.forEach((card) => {
-      card.addEventListener('click', () => toggleCard(card))
-      card.addEventListener('keydown', (e: Event) => {
+      const onCardClick = (): void => toggleCard(card)
+      const onCardKeydown = (e: Event): void => {
         const ke = e as KeyboardEvent
         if (ke.code === 'Enter' || ke.code === 'Space') {
           e.preventDefault()
           toggleCard(card)
         }
+      }
+      card.addEventListener('click', onCardClick)
+      card.addEventListener('keydown', onCardKeydown)
+      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+      this.onCleanup(() => {
+        card.removeEventListener('click', onCardClick)
+        card.removeEventListener('keydown', onCardKeydown)
       })
     })
   }
@@ -513,11 +545,14 @@ export class GameLoop {
     if (!slider) {
       return
     }
-    slider.addEventListener('input', () => {
+    const onInput = (): void => {
       const v = setValue(clampAndSyncGain(Number(slider.value) / 100, gain()))
       persistVolume(volumeKey, v)
       this.syncVolumeLabel(slider, labelId)
-    })
+    }
+    slider.addEventListener('input', onInput)
+    // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+    this.onCleanup(() => slider.removeEventListener('input', onInput))
     // P2（P2）：初始同步一次（UI 层 span 初始文本可能为空，保证与 slider 当前值一致）
     this.syncVolumeLabel(slider, labelId)
   }
@@ -528,6 +563,8 @@ export class GameLoop {
       return
     }
     btn.addEventListener('click', action)
+    // S 修复 S3：监听经清理函数登记（destroy() 时移除）
+    this.onCleanup(() => btn.removeEventListener('click', action))
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用） */
@@ -546,7 +583,8 @@ export class GameLoop {
   private ensureLoop(): void {
     if (this.loopRunning) return
     this.loopRunning = true
-    requestAnimationFrame(this.frame)
+    // S 修复 S3：保存 rAF 句柄（destroy() 时 cancelAnimationFrame）
+    this.rafId = requestAnimationFrame(this.frame)
   }
 
   /** 静音车相关持续音（引擎/漂移胎声/胎噪；雨声可选）——离开 RACING 时调用，
@@ -700,12 +738,40 @@ export class GameLoop {
     if (newPhase === PHASE_MENU) {
       this.resetRace()
       this.driftRankP1 = 0
+      // S 修复 S4：返回菜单时取消未完成倒计时（防止残留 interval 在下一局继续叠加）
+      this.countdownCancel?.()
+      this.countdownCancel = null
       // 菜单阶段隐藏虚拟摇杆（右下角圆环）
       this.updateJoystickVisibility(false)
       refreshDriftTop()
       refreshBestSummary()
       refreshMatchTop()
     }
+  }
+
+  /**
+   * 销毁实例（S 修复 S3）：取消帧循环与倒计时定时器、移除全部已登记事件监听、
+   * 释放输入管理/摇杆/持续音效。用于测试隔离与热重载；重复调用幂等。
+   */
+  destroy(): void {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId)
+      this.rafId = null
+    }
+    this.loopRunning = false
+    this.countdownCancel?.()
+    this.countdownCancel = null
+    this.cleanups.forEach((fn) => {
+      try {
+        fn()
+      } catch {
+        // 单项清理失败不影响其余（测试 stub 元素可能缺少 removeEventListener）
+      }
+    })
+    this.cleanups.length = 0
+    this.input.destroy()
+    this.joystick.detach()
+    this.silenceDriveSounds(true)
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -960,26 +1026,32 @@ export class GameLoop {
       // M16：决策下沉 frame-pure 纯函数（frame-pure.test.ts 锁定 shouldRender 契约）
       // 2026-08-05：链断标记，回菜单/再开赛时 ensureLoop 重启（防画面冻结）
       this.loopRunning = false
+      this.rafId = null
       return
     }
 
-    // 玩家实时转向输入（-1..1）：collectSteerInputs 与 updateFrame 同源路由（mode 合并
-    // WASD+方向键/摇杆语义，2026-08-05 下沉纯函数），保证渲染倾斜与物理转向输入源一致——
-    // 直接取 getP1Input 会漏掉方向键（P2 映射）在单屏合并输入中的转向分量，导致物理左移但车辆不倾斜
+    // 玩家实时转向输入（-1..1）：优先复用更新段已路由的输入（S 修复 P4：消除帧内二次
+    // routeInputs——collectSteerInputs 与 updateFrame 同源，结果完全一致）；倒计时冻结窗口
+    // 提前返回未提供 steer 时回退 collectSteerInputs（保持渲染倾斜输入源可用）
     let steer1 = 0
     let steer2 = 0
     if (this.phase === PHASE_RACING) {
-      const steer = collectSteerInputs(
-        {
-          joystickActive: this.joystick.isActive(),
-          joystickInput: this.joystick.getInput(),
-          p1Input: this.input.getP1Input(),
-          p2Input: this.input.getP2Input(),
-        },
-        this.mode.splitMode,
-      )
-      steer1 = steer.steer1
-      steer2 = steer.steer2
+      if (ur.steer1 !== undefined && ur.steer2 !== undefined) {
+        steer1 = ur.steer1
+        steer2 = ur.steer2
+      } else {
+        const steer = collectSteerInputs(
+          {
+            joystickActive: this.joystick.isActive(),
+            joystickInput: this.joystick.getInput(),
+            p1Input: this.input.getP1Input(),
+            p2Input: this.input.getP2Input(),
+          },
+          this.mode.splitMode,
+        )
+        steer1 = steer.steer1
+        steer2 = steer.steer2
+      }
     }
 
     const rr = renderFrame(dt, {
@@ -1008,7 +1080,8 @@ export class GameLoop {
     if (this.phase === PHASE_RACING) {
       this.engineSound?.setSpeedRatio(this.race.player1.carState.speed / this.carConfig.maxSpeed)
     }
-    requestAnimationFrame(this.frame)
+    // S 修复 S3：保存 rAF 句柄（destroy() 时 cancelAnimationFrame）
+    this.rafId = requestAnimationFrame(this.frame)
   }
 
   /** 更新菜单背景色类（赛道主题：切换赛道时 .menu-bg 追加 track-xxx 类） */
@@ -1037,10 +1110,14 @@ export class GameLoop {
     }
   }
 
-  /** 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（3→2→1→GO；实现下沉 countdown.ts） */
+  /** 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（3→2→1→GO；实现下沉 countdown.ts）。
+   *  S 修复 S4：先取消上一次未完成倒计时（防重复 startGame 叠加并行 interval），句柄存入字段供 destroy 取消 */
   private startCountdown(): void {
     const overlay = document.getElementById('countdown-overlay')
-    if (overlay) runCountdown(overlay)
+    if (overlay) {
+      this.countdownCancel?.()
+      this.countdownCancel = runCountdown(overlay).cancel
+    }
   }
 
   /**

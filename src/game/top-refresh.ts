@@ -2,6 +2,7 @@ import { getTrackDef, TRACK_DEFS } from '../engine/tracks'
 import { formatTime } from '../ui/format'
 import { loadBestTimeFor, loadDriftTop, loadMatchTop } from '../ui/save'
 import { BEST_EMPTY_HINT, DRIFT_EMPTY_HINT, MATCH_EMPTY_HINT } from '../ui/copy'
+import { COMBO_MULTIPLIER_STEP } from '../shared/constants'
 
 /**
  * 菜单排行榜 DOM 刷新（Task D 拆分自 game-loop.ts）：
@@ -44,7 +45,11 @@ function syncClipped(el: HTMLElement): void {
   el.classList.toggle('clipped', el.scrollHeight > el.clientHeight + 2)
 }
 
-/** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：收起时取前 5 条，展开时全量 10 条 */
+/**
+ * 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：收起时取前 5 条，展开时全量 10 条。
+ * S 修复（trackId 校验）：未知 trackId（localStorage 被篡改/旧版本废弃赛道）不再原样回显
+ * 到 DOM，统一降级为占位文案「未知赛道」（消除自我攻击面：篡改值仅影响本机展示）。
+ */
 export function refreshDriftTop(): void {
   const el = document.getElementById('drift-top')
   if (!el) {
@@ -57,9 +62,9 @@ export function refreshDriftTop(): void {
       : top
           .map(
             (e, i) =>
-              `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? e.trackId}` +
-              // H4（H4）：最高连击档位 → ` · 连击 x倍率`（1 + combo*0.25）；旧条目无 combo 不追加
-              (e.combo ? ` · 连击 x${(1 + e.combo * 0.25).toFixed(2)}` : ''),
+              `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? '未知赛道'}` +
+              // H4（H4）：最高连击档位 → ` · 连击 x倍率`（1 + combo*COMBO_MULTIPLIER_STEP）；旧条目无 combo 不追加
+              (e.combo ? ` · 连击 x${(1 + e.combo * COMBO_MULTIPLIER_STEP).toFixed(2)}` : ''),
           )
           .join('\n')
   syncScrollable(el)
@@ -115,7 +120,7 @@ export function refreshMatchTop(): void {
       : top
           .map(
             (e, i) =>
-              `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
+              `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? '未知赛道'}`,
           )
           .join('\n')
   syncScrollable(el)

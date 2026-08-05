@@ -74,10 +74,13 @@ export class JoystickUI {
     this.container = document.body
   }
 
+  /** 已绑定监听（detach 时移除；S 修复 S3：GameLoop.destroy 调用，防止监听泄漏） */
+  private detachFns: Array<() => void> = []
+
   attach(canvas: HTMLCanvasElement): void {
     this.container.appendChild(this.base)
 
-    canvas.addEventListener('pointerdown', (e) => {
+    const onPointerDown = (e: PointerEvent): void => {
       if (e.pointerType !== 'touch') return
       this.activeId = e.pointerId
       this.startX = e.clientX
@@ -88,9 +91,8 @@ export class JoystickUI {
       this.base.style.display = 'block'
       this.base.classList.add('active')
       canvas.setPointerCapture(e.pointerId)
-    })
-
-    canvas.addEventListener('pointermove', (e) => {
+    }
+    const onPointerMove = (e: PointerEvent): void => {
       if (e.pointerType !== 'touch' || e.pointerId !== this.activeId) return
       const dx = e.clientX - this.startX
       const dy = e.clientY - this.startY
@@ -98,9 +100,8 @@ export class JoystickUI {
       const clampedDx = Math.max(-RADIUS, Math.min(RADIUS, dx))
       const clampedDy = Math.max(-RADIUS, Math.min(RADIUS, dy))
       this.knob.style.transform = `translate(calc(-50% + ${clampedDx}px), calc(-50% + ${clampedDy}px))`
-    })
-
-    const endTouch = (e: PointerEvent) => {
+    }
+    const endTouch = (e: PointerEvent): void => {
       if (e.pointerType !== 'touch' || e.pointerId !== this.activeId) return
       this.activeId = null
       this.input = { steer: 0, throttle: 0, brake: false }
@@ -113,8 +114,33 @@ export class JoystickUI {
         this.base.style.display = 'none'
       }
     }
+
+    canvas.addEventListener('pointerdown', onPointerDown)
+    canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerup', endTouch)
     canvas.addEventListener('pointercancel', endTouch)
+    this.detachFns.push(() => {
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerup', endTouch)
+      canvas.removeEventListener('pointercancel', endTouch)
+      if (typeof this.base.remove === 'function') {
+        this.base.remove()
+      }
+    })
+  }
+
+  /** 解除绑定并移除摇杆 DOM（S 修复 S3：GameLoop.destroy 调用，测试 stub 元素安全跳过） */
+  detach(): void {
+    this.detachFns.forEach((fn) => {
+      try {
+        fn()
+      } catch {
+        // 单项清理失败不影响其余
+      }
+    })
+    this.detachFns = []
+    this.reset()
   }
 
   getInput(): JoystickInput {

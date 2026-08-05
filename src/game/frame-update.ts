@@ -5,7 +5,7 @@ import type { CarConfig, CarInput } from '../physics/car'
 import type { RainSound, BoostSound, CollisionSound, DriftSound, TireSound } from '../audio/engine'
 import { updateCollisions } from './collision'
 import { flashSeedFromSpeedRatio, updateCollisionFlash, type CollisionFlashState } from './collision-feedback'
-import { CHALLENGE_SECONDS } from './constants'
+import { BOOST_PARTICLE_LIFETIME, CHALLENGE_SECONDS } from './constants'
 import { updateBoostCharge } from './frame-pure'
 import type { ModeStrategy } from './mode-strategy'
 import { PHASE_RACING, type Phase } from './phase'
@@ -83,6 +83,13 @@ export interface FrameUpdateResult {
   challengeScore: HTMLDivElement | null
   /** BOOST 条 HUD 元素（可能惰性获取后非 null，写回缓存） */
   boostBar: HTMLDivElement | null
+  /**
+   * 本帧已路由的 P1 转向输入（-1..1，S 修复 P4：渲染段直接复用更新段的输入路由结果，
+   * 避免帧内二次 routeInputs——倒计时冻结窗口提前返回时不提供，调用方回退 collectSteerInputs）。
+   */
+  steer1?: number
+  /** 本帧已路由的 P2 转向输入（-1..1；分屏取 P2 实际输入，非分屏恒 0） */
+  steer2?: number
 }
 
 /**
@@ -186,6 +193,10 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   // P9：分屏暂停标题标注数据源——最近活跃玩家（P1 优先：双人同时活跃归 P1，
   // 仅 P2 有输入才标 P2；触屏摇杆输入走 input1 分支自然归 P1）
   const lastActivePlayer = mode.updateActivePlayer(input1, input2, ctx.lastActivePlayer)
+  // S 修复 P4：把本帧已路由的转向输入带回结果，渲染段直接复用（消除帧内二次 routeInputs）
+  // ——非分屏 input2 恒为零输入，steer2 即 0，与 collectSteerInputs 语义一致。
+  const steer1 = input1.steer
+  const steer2 = input2.steer
 
   // G4（G4）：BOOST 蓄力/消耗——漂移激活蓄力、按键（Space/Enter）且 charge>0 时消耗并激活；
   // 并入 boost 字段后传给 updatePlayerFrame（触屏 input.boost 恒 false 不受影响）
@@ -223,7 +234,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   }
   for (let i = ctx.boostParticles.length - 1; i >= 0; i--) {
     ctx.boostParticles[i].t += dt
-    if (ctx.boostParticles[i].t > 0.6) {
+    if (ctx.boostParticles[i].t > BOOST_PARTICLE_LIFETIME) {
       ctx.boostParticles.splice(i, 1)
     }
   }
@@ -297,6 +308,8 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
       boostBar: ctx.boostBar,
+      steer1,
+      steer2,
     }
   }
 
@@ -310,5 +323,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     challengeTimer: ctx.challengeTimer,
     challengeScore: ctx.challengeScore,
     boostBar: ctx.boostBar,
+    steer1,
+    steer2,
   }
 }
