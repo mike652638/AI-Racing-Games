@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test'
  * 4. 热座 P2 回合 HUD 数据源切换（P0-2 修复，标签 + 时间不再冻结）
  * 5. 移动端横屏：开始按钮在视口内、标题不叠影（P1-2）
  * 6. 倒计时覆盖层可见/数字合法/计时不提前启动 + 标准 1280×720 布局边界（2026-08-05 新增）
+ * 7. 玩法链路：BOOST 漂移蓄能（charge 增长）+ 碰撞反馈（碰撞后 HUD 计数显示）（2026-08-05 新增）
  */
 
 /** 读取菜单关键元素的 bounding box（光晕/卡片/标题/副标题/开始按钮） */
@@ -214,5 +215,49 @@ test.describe('热座模式 HUD', () => {
     await page.waitForTimeout(3_500)
     const tag = await page.locator('#hud-player-tag').textContent()
     expect(tag).toBe('P1 驾驶中')
+  })
+})
+
+test.describe('玩法链路（2026-08-05 新增）', () => {
+  /** 启动游戏：空格开始 → 等倒计时结束（3×800ms + 500ms）→ 返回当前阶段 */
+  async function startGame(page: Page) {
+    await page.goto('/')
+    await page.keyboard.press(' ')
+    await page.waitForTimeout(3_500)
+  }
+
+  test('BOOST 蓄能：高速急转触发漂移后 boostCharge 增长', async ({ page }) => {
+    await startGame(page)
+    // 全油门加速至高速（> 0.5×maxSpeed=3000 漂移速度阈值；acceleration 2400/s，2.5s 已近满速 6000）
+    await page.keyboard.down('w')
+    await page.waitForTimeout(2_500)
+    // 持续左转向：DRIFT_STEER_THRESHOLD=0.7 → charge 累积 0.25s 激活漂移 →
+    // 漂移激活窗口（0.985^n 衰减至 0.5×maxSpeed ≈ 0.76s）内 BOOST 蓄能 0.3/s → charge 约 0.23
+    await page.keyboard.down('a')
+    await page.waitForTimeout(1_500)
+    const charge = await page.evaluate(
+      () => (window as { __gameDebug?: { boostCharge: number } }).__gameDebug?.boostCharge ?? -1,
+    )
+    await page.keyboard.up('a')
+    await page.keyboard.up('w')
+    expect(charge, `漂移激活后 boostCharge 应 > 0（实测 ${charge}）`).toBeGreaterThan(0)
+  })
+
+  test('碰撞反馈：高速追击车流触发碰撞后 HUD 碰撞计数显示', async ({ page }) => {
+    await startGame(page)
+    // 全油门追击前方车流：最近车流在出生安全窗口边缘（z≈1600），玩家满速 6000 相对车流 2400
+    // 相对速度 2600+/s，车流在 AVOID_Z_DIST=350 避让窗口内仅约 0.13s 变道（AVOID_STEP 0.8/s
+    // 移动 ~0.1，offset 仍在碰撞容差 0.55 内）→ 必撞；碰撞后 #hud-collision 由 frame-update 点亮
+    await page.keyboard.down('w')
+    await page.waitForTimeout(8_000)
+    const s = await page.evaluate(() => {
+      const d = (window as { __gameDebug?: { collisions: number; collisionFlash: number } }).__gameDebug
+      const el = document.getElementById('hud-collision')
+      return { collisions: d?.collisions ?? -1, hidden: el?.hidden ?? null, text: el?.textContent ?? null }
+    })
+    await page.keyboard.up('w')
+    expect(s.collisions, `全油门 8s 应发生至少 1 次碰撞（实测 ${s.collisions}）`).toBeGreaterThanOrEqual(1)
+    expect(s.hidden, '碰撞后 #hud-collision 应可见').toBe(false)
+    expect(s.text).toContain('碰撞')
   })
 })
