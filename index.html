@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <!-- 缓存策略（2026-08-05）：强制浏览器每次导航重新校验 HTML，配合 vite-plugin-pwa 不预缓存 HTML
+     （globPatterns 剔除 html）的策略，确保部署后普通刷新即拿到新版，避免依赖 Ctrl+F5 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <!-- 可见版本号：view-source 即可确认拿到的是哪次部署 -->
+    <meta name="app-version" content="2026-08-05-v3-portrait-cache-fix" />
     <title>像素狂飙 - OutRun 伪 3D 街机赛车</title>
     <meta name="description" content="像素狂飙：网页版 OutRun 伪 3D 街机赛车游戏，9 条赛道、漂移连击、氮气加速、双人分屏与热座对战，无需安装即点即玩。" />
     <!-- 微信分享卡片：OG/Twitter 协议 + 微信专用 itemprop，og:image 必须为永久无鉴权绝对 URL（EdgeOne 预览链接会过期致回退占位图，故用 CloudBase 永久静态托管） -->

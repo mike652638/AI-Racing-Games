@@ -43,8 +43,11 @@ export default defineConfig({
       workbox: {
         // 默认预缓存策略即可；Canvas 即时绘制 + WebAudio 合成音频均无外部请求，
         // 无需额外 runtimeCaching 路由
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        navigateFallback: 'index.html', // 单页应用回退
+        // 修复（2026-08-05）：剔除 html——index.html 不预缓存，每次导航从 CDN 实时拉取，
+        // 避免 SW 缓存旧版 HTML 导致普通刷新仍见旧页（Ctrl+F5 强制刷新绕过 SW 才能拿到新版）。
+        // 代价：失去离线壳；本应用需联网，可接受。
+        globPatterns: ['**/*.{js,css,svg,png,ico,woff2}'],
+        navigateFallback: 'index.html', // 单页应用回退（HTML 不在预缓存，由 network/runtime cache 提供）
       },
     }),
   ],
