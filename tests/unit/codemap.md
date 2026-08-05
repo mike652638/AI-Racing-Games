@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 47 个 `.test.ts` 文件（681 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
+Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 47 个 `.test.ts` 文件（685 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
 
 ## Design
 
@@ -27,7 +27,7 @@ Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态�
 
 ## Integration
 
-- **测试目标**：`src/engine`（projection、road-geometry、road-surface、track、tracks、traffic、traffic-render、sprites、scenery、terrain-draw、smoke-render、lighting、player-car、environment、renderer）、`src/physics`（car、drift、input）、`src/ai`（bot、simulate）、`src/ui`（format、gamestate、save、joystick、hud、copy）、`src/audio`（engine、music）、`src/game`（state、constants、phase、player-state、track-context、track-manager、track-preview、game-loop，M15 起含 mode-strategy / finish-accounting / frame-update / frame-render 四模块，M16 起含 collision-feedback）下所有模块。
+- **测试目标**：`src/engine`（projection、road-geometry、road-surface、track、tracks、traffic、traffic-render、sprites、scenery、terrain-draw、smoke-render、lighting、player-car、environment、renderer）、`src/physics`（car、drift、input）、`src/ai`（bot、simulate）、`src/ui`（format、save、joystick、hud、copy；原 gamestate 兼容层已移除，阶段断言直接测 shared）、`src/shared`（constants、phase、phase-logic、lap）、`src/audio`（engine、music）、`src/game`（state、constants、phase、player-state、track-context、track-manager、track-preview、game-loop，M15 起含 mode-strategy / finish-accounting / frame-update / frame-render 四模块，M16 起含 collision-feedback，2026-08-05 起 mode-strategy 另含 collectSteerInputs）下所有模块。
 - **依赖**：`vitest`（运行器）、`tsx`（间接用于 bot 脚本）、`tests/__mocks__/canvas.ts`（Canvas 测试替身）、`tests/helpers/`（track/sprites 测试辅助）、`src/` 各被测模块。
 - **被调用方**：`package.json` 的 `test` 脚本；`tests/codemap.md` 的详细文件表。
 
@@ -52,7 +52,7 @@ Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态�
 | `frame-update-audio.test.ts`     | **M15**：验证帧驱动音频接线——漂移激活/未激活/分屏 P2/雨天 wet 触发、胎噪逐帧调制、非比赛阶段静音、null/undefined 安全 no-op                                                                                                                                                                                                                                                                 |
 | `game-loop.test.ts`              | 验证 `updatePlayerFrame` 完整链路（加速/漂移/圈速记录/P1-P2 互不影响）与菜单预览相机推进/回绕，M12 wet 雨天透传与 `updateBoostCharge` 蓄能/消耗                                                                                                                                                                                                                                             |
 | `game-loop-integration.test.ts`  | GameLoop 集成冒烟：stub 全局 DOM/rAF/AudioContext 驱动真实主循环，验证阶段流转、分屏/热座模式、9 赛道选择、暂停菜单（音量/重开/触屏）、M12 挑战模式计时、分轨音量与视觉缺陷回归（「分屏双人完赛」用例 testTimeout 15000ms；M15 起 8 处长模拟用例统一放宽超时——6 处 15000ms、2 处 30000ms）                                                                                                  |
-| `gamestate.test.ts`              | 验证 `nextPhase`/`togglePause`（旧 ui/gamestate 接口）：菜单/比赛/结算流转与暂停切换                                                                                                                                                                                                                                                                                                        |
+| `gamestate.test.ts`              | 验证 `nextPhase`/`togglePause`/`PHASE_*`（2026-08-05 起直接自 `src/shared/phase` 与 `shared/phase-logic` 真源导入，原 ui/gamestate 兼容层已删除）：菜单/比赛/结算流转与暂停切换                                                                                                                                                                                                                                                                                                        |
 | `hud.test.ts`                    | 验证 `updateHud`：菜单/比赛可见性、分屏布局、双玩家独立圈数、P2 BEST 显隐、热座玩家标签、M10 漂移连击 COMBO 显示、M11 得分 MAX 标记、M12 挑战模式倒计时兼容（元素缺省不抛错）                                                                                                                                                                                                               |
 | `input.test.ts`                  | 验证双人键盘输入映射（WASD/方向键、互不干扰、左右抵消），M12 boost 键映射                                                                                                                                                                                                                                                                                                                   |
 | `joystick.test.ts`               | 验证 `offsetToInput` 虚拟摇杆：死区、方向映射、幅值钳制、对角合成，M11 `reset()` 清空内部状态                                                                                                                                                                                                                                                                                               |

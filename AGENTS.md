@@ -28,10 +28,10 @@ src/
   game/         # 游戏核心（20 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
   shared/       # 独立共享层（2026-08-05 解环 game↔ui）：常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源，engine/physics/ui 直接导入
   ai/           # bot 决策器（bot）、圈速模拟器（simulate）
-  ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）、游戏状态（gamestate）
+  ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）（阶段常量/类型直接导入 shared/phase；原 gamestate 兼容层 2026-08-05 已删除）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（44 文件 639 用例）
+  unit/         # Vitest 单测（47 文件 685 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
@@ -67,6 +67,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 17. **M16**：运行时实测修复（天空条纹、热座 P2 渲染/RAF 链、菜单光晕、移动端适配、操作提示与 README 同源 copy.ts、HUD 对比度）、碰撞反馈增强（屏幕红闪 vignette + HUD 碰撞计数 + 双层碰撞音 + 横向弹开防贴车）、道路视觉优化（路面 9 带渐变 + 颗粒噪点 + shadeColor）、帧循环调度纯函数化 shouldScheduleNextFrame、Playwright 视觉回归（`npm run test:e2e`，桌面/移动横屏双 project + CI e2e job）（✅ typecheck + lint + 600→628 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 13 通过）
 18. **M17**：环境差异化——TrackDef.environment 字段 + environment.ts 环境配置（9 种环境天空/草地/远山/景物色板）、差异化景物形状（SpriteKind 扩展 cactus/palm/snowpile + rotation 随机化 + 沙漠小仙人掌）、地形扩展（沙漠沙丘/海岸海面波浪/峡谷岩壁锯齿顶线）、远山缓存按环境懒重建（✅ typecheck + lint + 639 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 13 通过）
 19. **M18**：UI/UX 深度打磨——可访问性（榜单卡片键盘展开 tabindex/role/aria-expanded + :focus-visible 全覆盖 + ARIA 补全 + prefers-reduced-motion 降级）、颜色令牌化（--color-p1/--color-p2/--color-danger/--color-accent 语义变量替换硬编码 + 死代码清理 + .score-pop 激活）、屏幕切换过渡（暂停/菜单/结算淡入淡出）、反馈增强（碰撞车身边框闪白 collideFlash + HUD 碰撞计数 + BOOST 未蓄能红闪反馈 + 漂移得分回弹动画）、环境渲染细节（MAX_SPRITE_SCALE 近距缩放上限 + canyon 红棕/alpine 冷白车灯 headlightColor + 路缘立体感分隔线/高光条 + 沙漠沙丘 sin 变形/仙人掌明暗/海面波浪漂移）、文案增强（FINISH_DRIFT_HINT/MATCH_EMPTY_HINT/STATS_EMPTY_HINT/RACING_TOUCH_HINT 进 copy.ts 同源）、移动端 RACING 触屏引导浮层（✅ typecheck + lint + 681 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 22 通过）
+20. **M19**：潜在改进点收尾——debug 钩子生产剥离（`installDebugSinks` 入口 DEV 门控，19 个状态 getter 闭包生产构建死码消除，dist 实测无 `__gameDebug`）、输入采集去重（`collectSteerInputs(ctx, splitMode)` 纯函数下沉 mode-strategy，与 updateFrame 内 `mode.getInputs` 路由完全同源）、ui/gamestate 纯 re-export 死层删除（hud/screens 直接导入 `shared/phase`）+ tests 导入统一到 shared 真源、e2e 玩法链路扩展（BOOST 漂移蓄能 charge 增长 + 碰撞反馈 HUD 计数显示，双 project）、bot violations ≤ 3 容差与集成长用例 testTimeout 保留为刻意的防御性折衷（实测 0 违规、收紧会降低 CI 鲁棒性）（✅ typecheck + lint + 685 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 26 通过）
 
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
@@ -79,7 +80,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，44 文件 639 用例），失败即修复
+- `/test`：`npm test`（vitest run，47 文件 685 用例），失败即修复
 - `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）
