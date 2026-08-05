@@ -72,6 +72,18 @@ export interface SelectTrackArgs {
 }
 
 /**
+ * 渲染用转向输入采集（纯函数，2026-08-05 抽取）：GameLoop.frame 渲染段在 updateFrame 之外
+ * 需再次路由输入取 steer（渲染倾斜数据源），此函数下沉与 updateFrame 同源的 mode.getInputs
+ * 合并语义——merge 当且仅当非分屏（SINGLE/HOTSEAT/CHALLENGE 均合并双键盘、SPLIT 独立），
+ * 与各策略实例 getInputs 的路由完全一致，消除两处重复实现。
+ * 分屏时 steer2 取 P2 输入；非分屏 P2 输入被合并进 input1，steer2 恒 0。
+ */
+export function collectSteerInputs(ctx: InputRoutingContext, splitMode: boolean): { steer1: number; steer2: number } {
+  const { input1, input2 } = routeInputs(ctx, !splitMode)
+  return { steer1: input1.steer, steer2: splitMode ? input2.steer : 0 }
+}
+
+/**
  * 输入路由公共实现：merge 为 true（单屏/热座/挑战）时合并双键盘为 input1 且 input2 零输入；
  * merge 为 false（分屏）时 input1 = P1、input2 = P2（保持独立）。摇杆 active 时优先取摇杆输入。
  */

@@ -29,7 +29,7 @@ import { refreshBestSummary, refreshDriftTop, refreshMatchTop } from './top-refr
 import { accountFinish } from './finish-accounting'
 import { updateFrame } from './frame-update'
 import { renderFrame } from './frame-render'
-import { createModeStrategy, type ModeStrategy } from './mode-strategy'
+import { collectSteerInputs, createModeStrategy, type ModeStrategy } from './mode-strategy'
 import {
   clampAndSyncGain,
   loadMusicVolumeFromStorage,
@@ -354,8 +354,12 @@ export class GameLoop {
     return trackOptions
   }
 
-  /** 安装调试钩子（window.__gameDebug 运行时状态读取器，自动化验证脚本消费） */
+  /** 安装调试钩子（window.__gameDebug 运行时状态读取器，自动化验证脚本消费）。
+   *  生产剥离（2026-08-05）：非 DEV 环境直接返回，避免创建 19 个状态 getter 闭包——
+   *  连同 installDebugHook 内部的 DEV no-op，整个 __gameDebug 安装链路被死码消除；
+   *  vitest（mode=test，DEV=true）与 dev 服务器保持安装，测试断言不受影响。 */
   private installDebugSinks(): void {
+    if (!import.meta.env.DEV) return
     installDebugHook({
       audioState: () => this.engineSound?.state ?? null,
       musicState: () => this.music?.state ?? 'stopped',
@@ -946,20 +950,23 @@ export class GameLoop {
       return
     }
 
-    // 玩家实时转向输入（-1..1）：复用 updateFrame 同款输入路由（mode.getInputs 合并
-    // WASD+方向键/摇杆），保证渲染倾斜与物理转向输入源一致——直接取 getP1Input 会漏掉
-    // 方向键（P2 映射）在单屏合并输入中的转向分量，导致物理左移但车辆不倾斜
+    // 玩家实时转向输入（-1..1）：collectSteerInputs 与 updateFrame 同源路由（mode 合并
+    // WASD+方向键/摇杆语义，2026-08-05 下沉纯函数），保证渲染倾斜与物理转向输入源一致——
+    // 直接取 getP1Input 会漏掉方向键（P2 映射）在单屏合并输入中的转向分量，导致物理左移但车辆不倾斜
     let steer1 = 0
     let steer2 = 0
     if (this.phase === PHASE_RACING) {
-      const { input1, input2 } = this.mode.getInputs({
-        joystickActive: this.joystick.isActive(),
-        joystickInput: this.joystick.getInput(),
-        p1Input: this.input.getP1Input(),
-        p2Input: this.input.getP2Input(),
-      })
-      steer1 = input1.steer
-      steer2 = this.mode.splitMode ? input2.steer : 0
+      const steer = collectSteerInputs(
+        {
+          joystickActive: this.joystick.isActive(),
+          joystickInput: this.joystick.getInput(),
+          p1Input: this.input.getP1Input(),
+          p2Input: this.input.getP2Input(),
+        },
+        this.mode.splitMode,
+      )
+      steer1 = steer.steer1
+      steer2 = steer.steer2
     }
 
     const rr = renderFrame(dt, {

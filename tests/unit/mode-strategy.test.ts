@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import {
+  collectSteerInputs,
   createModeStrategy,
   type InputRoutingContext,
   type ModeStrategy,
@@ -326,6 +327,41 @@ describe('afterSelectP1Track 选赛道同步', () => {
       expect(race.tracks[1]).toBe(tracks1Before)
       expect(preview[1]).toBe(200)
     }
+  })
+})
+
+describe('collectSteerInputs 渲染转向采集（2026-08-05 新增）', () => {
+  test('非分屏（splitMode=false）：合并双键盘到 steer1，steer2 恒 0', () => {
+    // routingCtx：P1 直行（steer 0）、P2 右转（steer 1）→ 合并后 steer1 = 0+1 = 1
+    const steer = collectSteerInputs(routingCtx(), false)
+    expect(steer.steer1).toBe(1)
+    expect(steer.steer2).toBe(0)
+  })
+
+  test('分屏（splitMode=true）：steer1/steer2 各自独立取 P1/P2 转向', () => {
+    const steer = collectSteerInputs(routingCtx(), true)
+    expect(steer.steer1).toBe(0) // P1 直行
+    expect(steer.steer2).toBe(1) // P2 右转
+  })
+
+  test('摇杆 active 优先：非分屏 steer1 取摇杆转向、steer2 恒 0', () => {
+    const joystickInput: CarInput = { throttle: 0, brake: false, steer: -1 }
+    const steer = collectSteerInputs(routingCtx({ joystickActive: true, joystickInput }), false)
+    expect(steer.steer1).toBe(-1)
+    expect(steer.steer2).toBe(0)
+  })
+
+  test('与各模式实例 getInputs 的路由语义一致（合并/独立对齐 splitMode）', () => {
+    const single = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false })
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    const hotseat = createModeStrategy({ splitMode: false, hotseatMode: true, challengeMode: false })
+    const ctx = routingCtx()
+    // 非分屏模式（SINGLE/HOTSEAT）合并：getInputs input1.steer === collectSteerInputs.steer1
+    expect(single.getInputs(ctx).input1.steer).toBe(collectSteerInputs(ctx, false).steer1)
+    expect(hotseat.getInputs(ctx).input1.steer).toBe(collectSteerInputs(ctx, false).steer1)
+    // 分屏独立：getInputs input1/input2.steer 分别对应 collectSteerInputs steer1/steer2
+    expect(split.getInputs(ctx).input1.steer).toBe(collectSteerInputs(ctx, true).steer1)
+    expect(split.getInputs(ctx).input2.steer).toBe(collectSteerInputs(ctx, true).steer2)
   })
 })
 
