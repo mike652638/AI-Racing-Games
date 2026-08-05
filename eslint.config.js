@@ -17,8 +17,8 @@ export default tseslint.config(
     },
   },
   {
-    // bot CLI 脚本依赖 console.log 输出跑圈报告，属合理用法，豁免
-    files: ['tests/**/*.ts'],
+    // bot CLI 脚本与视觉采集脚本（rt4-capture.mjs）依赖 console.log 输出报告/进度，属合理用法，豁免
+    files: ['tests/**/*.ts', 'tests/**/*.mjs'],
     rules: {
       'no-console': 'off',
     },

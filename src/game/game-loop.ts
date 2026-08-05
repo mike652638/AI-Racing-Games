@@ -13,8 +13,7 @@ import type { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, Ti
 import type { MusicPlayer } from '../audio/music'
 import { runCountdown } from './countdown'
 import { collectHudElements, collectScreenElements } from './dom-setup'
-import { buildTrackPreviewSvg } from './track-preview'
-import { getEnvironmentPreviewColor } from '../engine/environment'
+import { applyTrackPreview, updateMenuBackground } from './menu-preview'
 import { createInputManager } from './input'
 import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic } from './track-context'
@@ -25,6 +24,10 @@ import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } fr
 import { nextPhase, togglePause } from './phase-logic'
 import { CHALLENGE_SECONDS, RACE_COUNTDOWN_SECONDS } from './constants'
 import { refreshBestSummary, refreshDriftTop, refreshMatchTop } from './top-refresh'
+// rt4 批次：DOM 交互工具模块（监听清理经 onCleanup 契约登记）
+import { bindLeaderboardCards } from './leaderboard-cards'
+import { bindPortraitMode } from './portrait-mode'
+import { transitionScreenOut } from './screen-transition'
 // Task E（Task E）：frame 更新/渲染段、模式策略与结算记账下沉至独立纯函数模块
 import { accountFinish } from './finish-accounting'
 import { updateFrame } from './frame-update'
@@ -79,9 +82,6 @@ const MODIFIER_KEYS = [
 
 /** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
 const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
-
-/** C+E 竖屏兼容（2026-08-05）：「竖屏继续」的会话记忆键——刷新后不再重弹旋转遮罩 */
-const PORTRAIT_MODE_KEY = 'portrait-mode-ok'
 
 /** 赛道难度星级文案（下标即难度；纯星级，title/aria-label 各自加"难度："前缀，2026-08-05 D-2 修复重复前缀） */
 const DIFFICULTY_HINT: Record<number, string> = {
@@ -281,7 +281,7 @@ export class GameLoop {
     this.bestTime2 = loadBestTimeFor(1, this.trackManager.getTrackId(1))
 
     // 赛道主题背景色（初始赛道 0）
-    this.updateTrackBackground(0)
+    updateMenuBackground(0)
 
     // M-9（菜单审计）：#touch-hint 文案改由 copy.ts 同源填充（原 index.html 硬编码已与
     // RACING_TOUCH_HINT 漂移且无测试保护）；元素缺失时安全跳过
@@ -291,7 +291,7 @@ export class GameLoop {
     this.installDebugSinks()
 
     // C+E 竖屏兼容（2026-08-05）：「竖屏继续 / 横屏体验」按钮与 portrait-mode 状态
-    this.bindPortraitMode()
+    bindPortraitMode((fn) => this.onCleanup(fn))
 
     // S 修复 S3：全局监听经清理函数登记（destroy() 时移除）
     window.addEventListener('keydown', this.onKeyDown)
@@ -355,8 +355,17 @@ export class GameLoop {
       if (nameEl && starsEl) {
         nameEl.textContent = def.name
         // M-4（菜单审计）：星级拆分 filled/empty 双 span——空星 ☆ 降不透明度（CSS .stars-empty），
-        // 难度一眼可辨；diff-N 色相编码与 aria-label 保持不变
-        starsEl.innerHTML = `<span class="stars-filled">${'★'.repeat(def.difficulty)}</span><span class="stars-empty">${'☆'.repeat(3 - def.difficulty)}</span>`
+        // 难度一眼可辨；diff-N 色相编码与 aria-label 保持不变。
+        // innerHTML 收敛（2026-08-05 rt4 批次）：静态星级串改 DOM API 构建，零 HTML 注入面
+        starsEl.textContent = ''
+        const filled = document.createElement('span')
+        filled.className = 'stars-filled'
+        filled.textContent = '★'.repeat(def.difficulty)
+        const empty = document.createElement('span')
+        empty.className = 'stars-empty'
+        empty.textContent = '☆'.repeat(3 - def.difficulty)
+        starsEl.appendChild(filled)
+        starsEl.appendChild(empty)
         // 星级颜色编码（diff-1 绿 / diff-2 金 / diff-3 粉红）+ 难度 title 提示
         starsEl.className = `track-stars diff-${def.difficulty}`
         starsEl.title = `难度：${DIFFICULTY_HINT[def.difficulty]}`
@@ -386,7 +395,7 @@ export class GameLoop {
       })
     })
     // 低优①：中央信息区赛道缩略图（controlPoints 积分生成 SVG 轨迹，初始显示 0 号赛道）
-    this.refreshTrackPreview(0)
+    applyTrackPreview(0)
     return trackOptions
   }
 
@@ -438,55 +447,14 @@ export class GameLoop {
       // S 修复 S3：监听经清理函数登记
       this.onCleanup(() => startBtn.removeEventListener('click', onStartClick))
     }
-    this.bindLeaderboardCards()
+    bindLeaderboardCards(
+      { driftTop: refreshDriftTop, matchTop: refreshMatchTop, bestSummary: refreshBestSummary },
+      (fn) => this.onCleanup(fn),
+    )
     window.addEventListener('resize', this.resize)
     // S 修复 S3：resize 监听经清理函数登记
     this.onCleanup(() => window.removeEventListener('resize', this.resize))
     this.resize()
-  }
-
-  /** C+E 竖屏兼容（2026-08-05）：竖屏不再强制横屏。
-   * 「竖屏继续」→ 激活 body.portrait-mode（菜单紧凑布局 + HUD 竖屏适配）并会话记忆，
-   * 「横屏体验」→ 仅关闭遮罩等待用户手动旋转。测试/无 DOM 环境防御式跳过。 */
-  private bindPortraitMode(): void {
-    const hint = document.getElementById('rotate-hint')
-    // 测试 mock 环境无该元素：跳过（不影响既有行为）
-    if (!hint || !document.body.classList || typeof document.body.classList.toggle !== 'function') return
-
-    const setPortraitMode = (on: boolean): void => {
-      document.body.classList.toggle('portrait-mode', on)
-      hint.hidden = true
-      try {
-        if (on) window.sessionStorage.setItem(PORTRAIT_MODE_KEY, '1')
-        else window.sessionStorage.removeItem(PORTRAIT_MODE_KEY)
-      } catch {
-        /* sessionStorage 不可用（隐私模式/测试环境）时静默降级：仅本次会话生效 */
-      }
-    }
-
-    const playPortrait = document.getElementById('rotate-play-portrait')
-    const playLandscape = document.getElementById('rotate-play-landscape')
-    if (playPortrait && typeof playPortrait.addEventListener === 'function') {
-      const onClick = (): void => setPortraitMode(true)
-      playPortrait.addEventListener('click', onClick)
-      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-      this.onCleanup(() => playPortrait.removeEventListener('click', onClick))
-    }
-    if (playLandscape && typeof playLandscape.addEventListener === 'function') {
-      const onClick = (): void => setPortraitMode(false)
-      playLandscape.addEventListener('click', onClick)
-      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-      this.onCleanup(() => playLandscape.removeEventListener('click', onClick))
-    }
-
-    // 会话内已选择过竖屏：直接应用 portrait-mode 并隐藏遮罩，避免竖屏重进页面时遮罩闪出
-    let remembered = false
-    try {
-      remembered = window.sessionStorage.getItem(PORTRAIT_MODE_KEY) === '1'
-    } catch {
-      /* 忽略 */
-    }
-    if (remembered) setPortraitMode(true)
   }
 
   /** 开始按钮加载态：禁用点击 + 文案切换（dataset 缺失元素安全跳过） */
@@ -500,64 +468,6 @@ export class GameLoop {
     } else {
       const original = typeof btn.dataset === 'object' && btn.dataset !== null ? btn.dataset.originalText : null
       btn.textContent = original ?? '开始游戏'
-    }
-  }
-
-  /** 绑定统计卡片展开交互（点击/Enter/Space 切换 前5条 / 全部10条，展开态由 .expanded + aria-expanded 标记；
-   *  UX-5 修复 2026-08-05：互斥展开——展开一个时自动收起其他，防三面板同展把开始按钮顶出视口） */
-  private bindLeaderboardCards(): void {
-    const cards = document.querySelectorAll?.('.lb-card-clickable') ?? []
-    const updateAria = (c: Element) => {
-      if (typeof c.setAttribute === 'function') {
-        c.setAttribute('aria-expanded', String(c.classList.contains('expanded')))
-      }
-    }
-    const toggleCard = (card: Element) => {
-      const willExpand = !card.classList.contains('expanded')
-      if (willExpand) {
-        cards.forEach((other) => {
-          if (other !== card) {
-            other.classList.remove('expanded')
-            updateAria(other)
-          }
-        })
-      }
-      card.classList.toggle('expanded')
-      updateAria(card)
-      const target = card.getAttribute?.('data-target')
-      if (target === 'drift-top') refreshDriftTop()
-      else if (target === 'match-top') refreshMatchTop()
-      else if (target === 'best-summary') refreshBestSummary()
-    }
-    cards.forEach((card) => {
-      const onCardClick = (): void => toggleCard(card)
-      const onCardKeydown = (e: Event): void => {
-        const ke = e as KeyboardEvent
-        if (ke.code === 'Enter' || ke.code === 'Space') {
-          e.preventDefault()
-          toggleCard(card)
-        }
-      }
-      card.addEventListener('click', onCardClick)
-      card.addEventListener('keydown', onCardKeydown)
-      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-      this.onCleanup(() => {
-        card.removeEventListener('click', onCardClick)
-        card.removeEventListener('keydown', onCardKeydown)
-      })
-    })
-  }
-
-  /** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过；积分/SVG 下沉 track-preview.ts）；
-   *  轨迹主题色随赛道环境区分（2026-08-05 菜单优化，getEnvironmentPreviewColor） */
-  private refreshTrackPreview(trackIndex: number): void {
-    const preview = document.getElementById('track-preview')
-    if (!preview) return
-    const def = TRACK_DEFS[trackIndex]
-    if (!def) return
-    const svg = buildTrackPreviewSvg(def, 200, 64, 8, getEnvironmentPreviewColor(def.environment))
-    if (svg !== null) {
-      preview.innerHTML = svg
     }
   }
 
@@ -649,36 +559,6 @@ export class GameLoop {
     }
   }
 
-  /**
-   * 屏幕退场过渡：为目标 DOM 元素加 .leaving 触发 CSS 淡出（150ms），
-   * 动画结束后才隐藏并移除类；若元素已离开/已隐藏或处于测试 mock 环境则幂等跳过/立即隐藏。
-   */
-  private transitionScreenOut(screen: HTMLElement | undefined): void {
-    if (!screen || screen.hidden) return
-    // 测试 mock 元素无 classList/addEventListener/contains：直接隐藏，避免崩溃
-    if (
-      !screen.classList ||
-      typeof screen.classList.contains !== 'function' ||
-      typeof screen.addEventListener !== 'function'
-    ) {
-      screen.hidden = true
-      return
-    }
-    if (screen.classList.contains('leaving')) return
-    screen.classList.add('leaving')
-    const cleanup = () => {
-      screen.removeEventListener('transitionend', cleanup)
-      screen.classList.remove('leaving')
-      screen.hidden = true
-    }
-    screen.addEventListener('transitionend', cleanup)
-    const timer = globalThis.setTimeout(cleanup, 250)
-    // Node 测试环境：unref 定时器，避免测试进程为等待 250ms 清理而保留大量 DOM 引用
-    if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
-      ;(timer as { unref: () => void }).unref()
-    }
-  }
-
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
@@ -738,13 +618,13 @@ export class GameLoop {
     }
     // M18：屏幕切换过渡——菜单/暂停/结算退场淡出 150ms，不阻塞游戏循环
     if (newPhase === PHASE_RACING) {
-      this.transitionScreenOut(this.screenElements.startScreen)
+      transitionScreenOut(this.screenElements.startScreen)
     }
     if (newPhase === PHASE_MENU) {
-      this.transitionScreenOut(this.screenElements.finishScreen)
+      transitionScreenOut(this.screenElements.finishScreen)
     }
     if (newPhase !== PHASE_PAUSED) {
-      this.transitionScreenOut(this.screenElements.pauseScreen)
+      transitionScreenOut(this.screenElements.pauseScreen)
     }
     // U-3（2026-08-05 审计修复）：触屏驾驶引导浮层改由倒计时归零（GO）后触发——
     // 原实现在 applyPhase(RACING) 即显示，2s 淡出早于倒计时 GO（≈2.9s）导致引导失效；
@@ -972,8 +852,8 @@ export class GameLoop {
     this.previewCameraZ[playerIndex] = initialPreviewCameraZ(trackIndex, this.race.tracks[playerIndex].lapLength)
     // 低优①：P1 选赛道时同步刷新中央缩略图（分屏 P2 选赛道不覆盖 P1 预览）
     if (playerIndex === 0) {
-      this.refreshTrackPreview(trackIndex)
-      this.updateTrackBackground(trackIndex)
+      applyTrackPreview(trackIndex)
+      updateMenuBackground(trackIndex)
     }
     // Task A 缓存激活：赛道切换后重建道路段离屏缓存（race.tracks 引用已更新，
     // 传新 TrackContext 的预计算字段使 viewFor 的 track 与 renderer.cachedTrack 同引用）
@@ -1132,18 +1012,6 @@ export class GameLoop {
     }
     // S 修复 S3：保存 rAF 句柄（destroy() 时 cancelAnimationFrame）
     this.rafId = requestAnimationFrame(this.frame)
-  }
-
-  /** 更新菜单背景色类（赛道主题：切换赛道时 .menu-bg 追加 track-xxx 类） */
-  private updateTrackBackground(trackIndex: number): void {
-    const menuBg =
-      typeof document.querySelector === 'function' ? (document.querySelector('.menu-bg') as HTMLElement | null) : null
-    if (!menuBg) return
-    const def = TRACK_DEFS[trackIndex]
-    if (!def) return
-    // 移除所有 track-* 类，再添加当前赛道类
-    menuBg.className = 'menu-bg'
-    menuBg.classList.add(`track-${def.id}`)
   }
 
   /** 控制虚拟摇杆显隐：菜单阶段隐藏（防右下角圆环残留），比赛阶段显示 */

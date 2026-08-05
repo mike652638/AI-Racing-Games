@@ -14,7 +14,14 @@ export function runCountdown(overlay: HTMLElement): { cancel: () => void } {
   }
   const hintsEl = overlay.querySelector('.countdown-hints') as HTMLElement | null
   if (hintsEl) {
-    hintsEl.innerHTML = COUNTDOWN_HINTS.map((hint) => `<p>${hint}</p>`).join('')
+    // innerHTML 收敛（2026-08-05 rt4 批次）：COUNTDOWN_HINTS 为 copy.ts 内部静态文案，
+    // 改 DOM API 构建 <p> 列表，保持零 HTML 注入面（语义与原 innerHTML 逐字节一致）
+    hintsEl.textContent = ''
+    COUNTDOWN_HINTS.forEach((hint) => {
+      const p = document.createElement('p')
+      p.textContent = hint
+      hintsEl.appendChild(p)
+    })
   }
   overlay.hidden = false
   let count = 3
