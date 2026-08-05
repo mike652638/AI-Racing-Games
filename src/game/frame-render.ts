@@ -1,4 +1,4 @@
-import type { BoostParticle, Renderer } from '../engine/renderer'
+import type { BoostParticle, Renderer, RenderOptions } from '../engine/renderer'
 import type { CarConfig } from '../physics/car'
 import { advancePreviewCameraZ, viewFor } from './frame-pure'
 import { PHASE_MENU, PHASE_RACING, type Phase } from './phase'
@@ -50,6 +50,18 @@ export interface FrameRenderResult {
 }
 
 /**
+ * 倒计时冻结窗口渲染降级（F-1 配套，2026-08-05）：该窗口内画面静止且被倒计时覆盖层遮挡，
+ * 缩短视距并跳过粒子特效层——降低每帧绘制/录制开销（真实浏览器亦省帧成本），
+ * GO 后 countdownRemaining 归零自动恢复全量渲染（玩家车保留可见）。
+ */
+const COUNTDOWN_RENDER_OPTS: RenderOptions = {
+  drawDistance: 60,
+  skipSmoke: true,
+  skipBoostParticles: true,
+  skipRain: true,
+}
+
+/**
  * 每帧渲染段（纯函数）：语义与旧 GameLoop.frame 渲染块逐行一致——
  * 菜单阶段推进双预览相机并渲染预览（分屏左右两区域 + 分隔线 / 单屏全幅），
  * 比赛/暂停阶段按分屏双世界渲染（renderRegion×2 + drawDivider）或单屏渲染；
@@ -65,6 +77,8 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
   const p1SpeedRatio = race.player1.carState.speed / maxSpeed
   const p2SpeedRatio = race.player2.carState.speed / maxSpeed
   const boosting = ctx.boostActive
+  // F-1：倒计时冻结窗口内比赛渲染走降级参数（菜单预览分支不受影响）
+  const countdownOpts = race.countdownRemaining > 0 ? COUNTDOWN_RENDER_OPTS : undefined
 
   if (ctx.phase === PHASE_MENU) {
     // 双预览相机按各自世界圈长推进（分屏时 P1/P2 预览独立滚动）
@@ -89,6 +103,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       race.player1.driftState.smoke,
       race.player1.raceTime,
       viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
+      countdownOpts,
     )
     renderer.setCameraX(race.player2.carState.position)
     renderer.renderRegion(
@@ -98,6 +113,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       race.player2.driftState.smoke,
       race.player2.raceTime,
       viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2, ctx.collisionFlash, 2),
+      countdownOpts,
     )
     // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
     // 分隔线覆盖交界处的路缘石斜边交错/三角形重叠（标准分屏做法）
@@ -115,6 +131,7 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       activePlayer.driftState.smoke,
       activePlayer.raceTime,
       viewFor(activeTrack, ctx.boostParticles, activeSpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
+      countdownOpts,
     )
   }
 
