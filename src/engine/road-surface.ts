@@ -5,14 +5,10 @@ import { project, type Camera3D, type Projected, type ProjectionOptions } from '
 import { SEGMENT_LENGTH, type Segment } from './track'
 import { projectSegmentQuad, roadColors, shouldDrawCenterLine, type Quad } from './road-geometry'
 import { shadeColor, type RoadStrip } from './road-strip'
+import { WET_HIGHLIGHT_COLOR, WET_HIGHLIGHT_MAX_K, WET_OVERLAY_COLOR } from '../shared/constants'
 
 /** stripForSegment 的"无映射"哨兵（Uint16Array 默认值 0 可能被误判为 strip 0，故用 0xFFFF） */
 export const NO_STRIP = 0xffff
-
-/** B7 雨天湿滑路面：整段暗色压暗叠加色 + 近处中心高光反光条（路面宽 35% 的半宽系数 0.175） */
-const WET_OVERLAY_COLOR = 'rgba(10, 15, 30, 0.15)'
-const WET_HIGHLIGHT_COLOR = 'rgba(180, 200, 230, 0.08)'
-const WET_HIGHLIGHT_MAX_K = 30
 
 /** B7 起终点线：赛道起点段（wrappedIndex === 0）近处（k < 40）绘制 16 列 × 2 行黑白棋盘格横条 */
 const START_GRID_COLS = 16

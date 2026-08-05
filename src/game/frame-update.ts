@@ -1,5 +1,5 @@
 import { updateTraffic } from '../engine/traffic'
-import { WEATHER_CYCLE_SECONDS } from '../engine/lighting'
+import { weatherPhaseAt } from '../engine/lighting'
 import type { BoostParticle } from '../engine/renderer'
 import type { CarConfig, CarInput } from '../physics/car'
 import type { RainSound, BoostSound, CollisionSound, DriftSound, TireSound } from '../audio/engine'
@@ -139,7 +139,8 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   }
 
   // F4（F4）：雨段环境音——按 P1 raceTime 判定三态（0 晴 / 1 阴 / 2 雨，各 45s 循环）
-  const raining = Math.floor(race.player1.raceTime / WEATHER_CYCLE_SECONDS) % 3 === 2
+  // R6 收敛：phase 判定走 lighting.weatherPhaseAt 单一真源（与 renderer 天气/雨滴同公式）
+  const raining = weatherPhaseAt(race.player1.raceTime) === 2
   if (raining) ctx.rainSound?.start()
   else ctx.rainSound?.stop()
   // G3（G3）：雨天物理——与雨声同公式同源（raceTime 三态 phase 2）；热座/分屏 P2 世界统一同一 wet 值

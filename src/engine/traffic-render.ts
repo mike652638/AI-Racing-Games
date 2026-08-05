@@ -24,6 +24,11 @@ export interface TrafficProjection {
   color: string
 }
 
+/** 可见车流排序复用缓冲（审计 R5 性能加固）：每帧 filter+sort 会分配临时数组，
+ *  改用模块级缓冲原地过滤+排序，消除帧内一次数组分配；函数返回的 result 仍为新数组，
+ *  调用方（renderer 双指针归并）在帧内立即消费，复用安全 */
+const _seenScratch: TrafficCar[] = []
+
 /** 计算可见车流投影（过滤后方/超距车辆，远→近排序），纯函数 */
 export function projectTraffic(
   traffic: TrafficCar[],
@@ -33,10 +38,16 @@ export function projectTraffic(
   camera: Camera3D,
 ): TrafficProjection[] {
   const farZ = cameraZ + DRAW_DISTANCE * SEGMENT_LENGTH
-  const seen = traffic.filter((car) => car.z > cameraZ && car.z <= farZ).sort((a, b) => b.z - a.z)
+  _seenScratch.length = 0
+  for (const car of traffic) {
+    if (car.z > cameraZ && car.z <= farZ) {
+      _seenScratch.push(car)
+    }
+  }
+  _seenScratch.sort((a, b) => b.z - a.z)
 
   const result: TrafficProjection[] = []
-  for (const car of seen) {
+  for (const car of _seenScratch) {
     const cx = car.offset - cameraX
     const bottom = project(opts, camera, { x: cx, y: 0, z: car.z })
     if (!bottom) {

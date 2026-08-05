@@ -78,3 +78,20 @@ export const SMOKE_LIFETIME = 0.6
 export const BOOST_PARTICLE_LIFETIME = 0.6
 /** 每级漂移连击的得分倍率步进（S 修复：drift 得分/hud COMBO 文案/top-refresh 榜单倍率共用同一真源） */
 export const COMBO_MULTIPLIER_STEP = 0.25
+
+// —— 视觉调参（R5/R6 收敛，2026-08-05：绘制模块的视觉常量集中于此，调参只改一处）——
+
+/** 雨滴数量（renderer 确定性生成，渲染时按 timeSec 下落） */
+export const RAIN_DROPS = 80
+/** 雨丝倾斜角（度，固定 15° 风向感；renderer 预计算 sin/cos 供离屏预渲染复用） */
+export const RAIN_TILT_DEG = 15
+/** 仙人掌明暗：远处明暗分档的投影 scale 阈值（scale 小于该值视为远处，两档明暗） */
+export const CACTUS_SHADE_SCALE_THRESHOLD = 0.35
+/** 仙人掌明暗：远处明暗亮度因子（shadeColor ×0.8 ≈ 变暗 20%，偏冷降饱和） */
+export const CACTUS_SHADE_FACTOR = 0.8
+/** 雨天湿滑路面：整段暗色压暗叠加色 */
+export const WET_OVERLAY_COLOR = 'rgba(10, 15, 30, 0.15)'
+/** 雨天湿滑路面：近处中心高光反光条颜色 */
+export const WET_HIGHLIGHT_COLOR = 'rgba(180, 200, 230, 0.08)'
+/** 雨天湿滑路面：高光反光条作用的最大段数（近处 k < 该值） */
+export const WET_HIGHLIGHT_MAX_K = 30

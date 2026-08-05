@@ -18,6 +18,13 @@ import {
   OFF_ROAD_PUSHBACK,
   RACE_COUNTDOWN_SECONDS,
   RACE_START_GRACE,
+  RAIN_DROPS,
+  RAIN_TILT_DEG,
+  CACTUS_SHADE_SCALE_THRESHOLD,
+  CACTUS_SHADE_FACTOR,
+  WET_OVERLAY_COLOR,
+  WET_HIGHLIGHT_COLOR,
+  WET_HIGHLIGHT_MAX_K,
   RENDER_DEPTH_RATIO,
   RENDER_DRAW_DISTANCE,
   RENDER_HORIZON_RATIO,
@@ -81,5 +88,15 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
     expect(SMOKE_LIFETIME).toBe(0.6)
     expect(BOOST_PARTICLE_LIFETIME).toBe(0.6)
     expect(COMBO_MULTIPLIER_STEP).toBe(0.25)
+  })
+
+  it('视觉调参常量值与约定一致（R5/R6 收敛：绘制模块常量集中到共享真源）', () => {
+    expect(RAIN_DROPS).toBe(80)
+    expect(RAIN_TILT_DEG).toBe(15)
+    expect(CACTUS_SHADE_SCALE_THRESHOLD).toBe(0.35)
+    expect(CACTUS_SHADE_FACTOR).toBe(0.8)
+    expect(WET_OVERLAY_COLOR).toBe('rgba(10, 15, 30, 0.15)')
+    expect(WET_HIGHLIGHT_COLOR).toBe('rgba(180, 200, 230, 0.08)')
+    expect(WET_HIGHLIGHT_MAX_K).toBe(30)
   })
 })

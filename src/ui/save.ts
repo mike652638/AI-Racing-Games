@@ -16,6 +16,13 @@ export const MATCH_TOP_KEY = 'outrun-pseudo3d-match-top'
 /** 对局记录最大条目数 */
 export const MATCH_TOP_MAX = 10
 
+/**
+ * 复合 JSON 存档格式版本（2026-08-05 版本化加固，审计 R3）：
+ * 写入方统一以 { v, data } 信封持久化；读取方经 parseVersioned 迁移——
+ * 旧裸格式（v0，无 v 字段）自动按当前 schema 解析，未来字段演进只需升版本并补充迁移分支。
+ */
+export const SAVE_VERSION = 1
+
 /** 分屏漂移对局记录条目：胜者、双方漂移得分与赛道 */
 export interface MatchEntry {
   winner: 'P1' | 'P2'
@@ -78,6 +85,55 @@ function getStorage(): Storage | null {
     // localStorage 被禁用（隐私模式等）
   }
   return null
+}
+
+/** 版本化 JSON 存档信封：v 为 SAVE_VERSION 版本号，data 为业务数据（旧裸格式无 v 字段 = v0） */
+interface VersionedPayload<T> {
+  v: number
+  data: T
+}
+
+/**
+ * 解析版本化 JSON 存档（审计 R3 版本化加固）：
+ * 1) 无存档/storage 不可用/JSON 损坏 → null（调用方回退默认）；
+ * 2) 新版信封 { v, data } → 直接取 data；
+ * 3) 旧版裸格式（v0）→ 原样传入（迁移函数内按当前 schema 兼容解析）。
+ * migrate 负责字段校验与未来版本迁移（升 SAVE_VERSION 后在此补分支）。
+ */
+function parseVersioned<T>(storage: Storage | null, key: string, migrate: (raw: unknown) => T | null): T | null {
+  if (!storage) {
+    return null
+  }
+  const raw = storage.getItem(key)
+  if (raw === null) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      typeof (parsed as VersionedPayload<unknown>).v === 'number' &&
+      'data' in (parsed as Record<string, unknown>)
+    ) {
+      // 新版信封：按 data 解析（v 版本号暂未分叉，统一走 migrate；未来补 per-version 迁移）
+      return migrate((parsed as VersionedPayload<unknown>).data)
+    }
+    // 旧版裸格式（v0）：原样解析
+    return migrate(parsed)
+  } catch {
+    // JSON 损坏回退 null（调用方回退默认）
+    return null
+  }
+}
+
+/** 写入版本化 JSON 存档（统一 v0 → 当前版本信封） */
+function writeVersioned<T>(storage: Storage | null, key: string, data: T): void {
+  if (!storage) {
+    return
+  }
+  storage.setItem(key, JSON.stringify({ v: SAVE_VERSION, data } satisfies VersionedPayload<T>))
 }
 
 /** 指定玩家指定赛道最佳圈速（秒），无存档返回 null */
@@ -175,35 +231,31 @@ export function winsKeyFor(mode: 'hotseat' | 'split'): string {
   return WIN_STATS_PREFIX + mode
 }
 
+/** WinStats 迁移解析：字段校验通过返回副本，否则 null（调用方回退默认）。兼容旧裸格式与新版信封 data */
+function migrateWins(raw: unknown): WinStats | null {
+  const parsed = raw as Partial<WinStats>
+  if (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    typeof parsed.p1 === 'number' &&
+    typeof parsed.p2 === 'number' &&
+    typeof parsed.streak === 'number' &&
+    (parsed.streakPlayer === 'P1' || parsed.streakPlayer === 'P2' || parsed.streakPlayer === null)
+  ) {
+    return {
+      p1: parsed.p1,
+      p2: parsed.p2,
+      streak: parsed.streak,
+      streakPlayer: parsed.streakPlayer,
+    }
+  }
+  return null
+}
+
 /** 读取指定模式的胜场统计；无存档/JSON 损坏/storage 不可用时回退默认（{p1:0,p2:0,streak:0,streakPlayer:null}） */
 export function loadWins(mode: 'hotseat' | 'split', storage: Storage | null = getStorage()): WinStats {
   const fallback: WinStats = { p1: 0, p2: 0, streak: 0, streakPlayer: null }
-  if (!storage) {
-    return fallback
-  }
-  const raw = storage.getItem(winsKeyFor(mode))
-  if (raw === null) {
-    return fallback
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<WinStats>
-    if (
-      typeof parsed.p1 === 'number' &&
-      typeof parsed.p2 === 'number' &&
-      typeof parsed.streak === 'number' &&
-      (parsed.streakPlayer === 'P1' || parsed.streakPlayer === 'P2' || parsed.streakPlayer === null)
-    ) {
-      return {
-        p1: parsed.p1,
-        p2: parsed.p2,
-        streak: parsed.streak,
-        streakPlayer: parsed.streakPlayer,
-      }
-    }
-  } catch {
-    // JSON 损坏回退默认
-  }
-  return fallback
+  return parseVersioned(storage, winsKeyFor(mode), migrateWins) ?? fallback
 }
 
 /** 记录一局胜场：读旧 → 对应玩家胜场 +1 → 连胜（同玩家 +1，换玩家归 1）→ 写回 → 返回新统计。
@@ -220,40 +272,30 @@ export function recordWin(
     streak: winner === old.streakPlayer ? old.streak + 1 : 1,
     streakPlayer: winner,
   }
-  if (storage) {
-    storage.setItem(winsKeyFor(mode), JSON.stringify(next))
-  }
+  writeVersioned(storage, winsKeyFor(mode), next)
   return next
+}
+
+/** DriftEntry 迁移解析：非数组/条目校验失败回退 []；成功按 score 降序返回。兼容旧裸数组与新版信封 data */
+function migrateDriftTop(raw: unknown): DriftEntry[] | null {
+  if (!Array.isArray(raw)) {
+    return null
+  }
+  const entries = raw.filter(
+    (e): e is DriftEntry =>
+      e !== null &&
+      typeof e === 'object' &&
+      (e.player === 'P1' || e.player === 'P2') &&
+      typeof e.trackId === 'string' &&
+      typeof e.score === 'number' &&
+      typeof e.time === 'number',
+  )
+  return entries.sort((a, b) => b.score - a.score)
 }
 
 /** 读取漂移 TOP10：JSON 损坏/storage 不可用/非数组回退 []；解析成功按 score 降序返回 */
 export function loadDriftTop(storage: Storage | null = getStorage()): DriftEntry[] {
-  if (!storage) {
-    return []
-  }
-  const raw = storage.getItem(DRIFT_TOP_KEY)
-  if (raw === null) {
-    return []
-  }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-    const entries = parsed.filter(
-      (e): e is DriftEntry =>
-        e !== null &&
-        typeof e === 'object' &&
-        (e.player === 'P1' || e.player === 'P2') &&
-        typeof e.trackId === 'string' &&
-        typeof e.score === 'number' &&
-        typeof e.time === 'number',
-    )
-    return entries.sort((a, b) => b.score - a.score)
-  } catch {
-    // JSON 损坏回退空数组
-    return []
-  }
+  return parseVersioned(storage, DRIFT_TOP_KEY, migrateDriftTop) ?? []
 }
 
 /** 插入一条漂移得分：读旧 → 追加 → score 降序（Array#sort 稳定，同分保持插入序）→ 截断 TOP_MAX → 写回。
@@ -266,41 +308,31 @@ export function addDriftScore(
   top.push(entry)
   top.sort((a, b) => b.score - a.score)
   const truncated = top.slice(0, DRIFT_TOP_MAX)
-  if (storage) {
-    storage.setItem(DRIFT_TOP_KEY, JSON.stringify(truncated))
-  }
+  writeVersioned(storage, DRIFT_TOP_KEY, truncated)
   return { top: truncated, entered: truncated.includes(entry) }
+}
+
+/** MatchEntry 迁移解析：非数组/条目校验失败回退 []；逐条校验（winner ∈ {P1,P2}、score 有限数、trackId 字符串），保持存储顺序。兼容旧裸数组与新版信封 data */
+function migrateMatchTop(raw: unknown): MatchEntry[] | null {
+  if (!Array.isArray(raw)) {
+    return null
+  }
+  return raw.filter(
+    (e): e is MatchEntry =>
+      e !== null &&
+      typeof e === 'object' &&
+      (e.winner === 'P1' || e.winner === 'P2') &&
+      typeof e.p1Score === 'number' &&
+      Number.isFinite(e.p1Score) &&
+      typeof e.p2Score === 'number' &&
+      Number.isFinite(e.p2Score) &&
+      typeof e.trackId === 'string',
+  )
 }
 
 /** 读取分屏漂移对局记录：JSON 损坏/storage 不可用/非数组回退 []；逐条校验（winner ∈ {P1,P2}、score 有限数、trackId 字符串），保持存储顺序 */
 export function loadMatchTop(storage: Storage | null = getStorage()): MatchEntry[] {
-  if (!storage) {
-    return []
-  }
-  const raw = storage.getItem(MATCH_TOP_KEY)
-  if (raw === null) {
-    return []
-  }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-    return parsed.filter(
-      (e): e is MatchEntry =>
-        e !== null &&
-        typeof e === 'object' &&
-        (e.winner === 'P1' || e.winner === 'P2') &&
-        typeof e.p1Score === 'number' &&
-        Number.isFinite(e.p1Score) &&
-        typeof e.p2Score === 'number' &&
-        Number.isFinite(e.p2Score) &&
-        typeof e.trackId === 'string',
-    )
-  } catch {
-    // JSON 损坏回退空数组
-    return []
-  }
+  return parseVersioned(storage, MATCH_TOP_KEY, migrateMatchTop) ?? []
 }
 
 /** 插入一局对局记录（最近 10 局语义）：新局插入数组头部（unshift）→ 截断 MATCH_TOP_MAX → 写回。
@@ -312,8 +344,6 @@ export function addMatchResult(
   const top = loadMatchTop(storage)
   top.unshift(entry)
   const truncated = top.slice(0, MATCH_TOP_MAX)
-  if (storage) {
-    storage.setItem(MATCH_TOP_KEY, JSON.stringify(truncated))
-  }
+  writeVersioned(storage, MATCH_TOP_KEY, truncated)
   return { top: truncated, entered: truncated.includes(entry) }
 }

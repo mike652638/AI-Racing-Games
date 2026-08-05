@@ -19,6 +19,7 @@ import {
   addMatchResult,
   loadMatchTop,
   MATCH_TOP_KEY,
+  SAVE_VERSION,
   type MatchEntry,
 } from '../../src/ui/save'
 
@@ -344,5 +345,69 @@ describe('对局记录（MatchEntry API）', () => {
     const r = addMatchResult(entry('P1', 10, 5), null)
     expect(r.top).toHaveLength(1)
     expect(r.entered).toBe(true)
+  })
+})
+
+describe('版本化存档（R3：v 信封写入 + 旧裸格式兼容 + 迁移）', () => {
+  it('写入采用 { v, data } 信封（SAVE_VERSION）且可读回', () => {
+    const s = fakeStorage()
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 123, time: 30.5, combo: 2 }, s)
+    const raw = JSON.parse(s.getItem(DRIFT_TOP_KEY)!)
+    expect(raw.v).toBe(SAVE_VERSION)
+    expect(raw.data).toEqual([{ player: 'P1', trackId: 'classic', score: 123, time: 30.5, combo: 2 }])
+    expect(loadDriftTop(s)).toEqual([{ player: 'P1', trackId: 'classic', score: 123, time: 30.5, combo: 2 }])
+
+    const r = addMatchResult({ winner: 'P1', p1Score: 120, p2Score: 80, trackId: 'highway' }, s)
+    const mraw = JSON.parse(s.getItem(MATCH_TOP_KEY)!)
+    expect(mraw.v).toBe(SAVE_VERSION)
+    expect(loadMatchTop(s)).toEqual([{ winner: 'P1', p1Score: 120, p2Score: 80, trackId: 'highway' }])
+    expect(r.entered).toBe(true)
+
+    recordWin('hotseat', 'P2', s)
+    const wraw = JSON.parse(s.getItem(winsKeyFor('hotseat'))!)
+    expect(wraw.v).toBe(SAVE_VERSION)
+    expect(loadWins('hotseat', s)).toEqual({ p1: 0, p2: 1, streak: 1, streakPlayer: 'P2' })
+  })
+
+  it('旧裸格式（v0）读取兼容：漂移榜/对局榜/胜场均自动解析', () => {
+    const s = fakeStorage()
+    s.setItem(
+      DRIFT_TOP_KEY,
+      JSON.stringify([
+        { player: 'P1', trackId: 'classic', score: 100, time: 50 },
+        { player: 'P2', trackId: 'highway', score: 300, time: 40, combo: 3 },
+      ]),
+    )
+    expect(loadDriftTop(s)).toEqual([
+      { player: 'P2', trackId: 'highway', score: 300, time: 40, combo: 3 },
+      { player: 'P1', trackId: 'classic', score: 100, time: 50 },
+    ])
+
+    s.setItem(MATCH_TOP_KEY, JSON.stringify([{ winner: 'P1', p1Score: 120, p2Score: 80, trackId: 'classic' }]))
+    expect(loadMatchTop(s)).toEqual([{ winner: 'P1', p1Score: 120, p2Score: 80, trackId: 'classic' }])
+
+    s.setItem(winsKeyFor('hotseat'), JSON.stringify({ p1: 3, p2: 1, streak: 2, streakPlayer: 'P1' }))
+    expect(loadWins('hotseat', s)).toEqual({ p1: 3, p2: 1, streak: 2, streakPlayer: 'P1' })
+  })
+
+  it('旧裸格式与新版信封混合读取均安全（新写覆盖旧存档不丢数据）', () => {
+    const s = fakeStorage()
+    // 旧裸格式漂移榜
+    s.setItem(DRIFT_TOP_KEY, JSON.stringify([{ player: 'P1', trackId: 'classic', score: 500, time: 30 }]))
+    // 在新版读写路径上追加一条 → 写回信封，旧条目保留
+    addDriftScore({ player: 'P2', trackId: 'highway', score: 600, time: 40 }, s)
+    const raw = JSON.parse(s.getItem(DRIFT_TOP_KEY)!)
+    expect(raw.v).toBe(SAVE_VERSION)
+    expect(loadDriftTop(s).map((e) => e.score)).toEqual([600, 500])
+  })
+
+  it('信封内 data 非法时回退默认（不崩溃）', () => {
+    const s = fakeStorage()
+    s.setItem(DRIFT_TOP_KEY, JSON.stringify({ v: SAVE_VERSION, data: 'not-an-array' }))
+    expect(loadDriftTop(s)).toEqual([])
+    s.setItem(MATCH_TOP_KEY, JSON.stringify({ v: SAVE_VERSION, data: null }))
+    expect(loadMatchTop(s)).toEqual([])
+    s.setItem(winsKeyFor('split'), JSON.stringify({ v: SAVE_VERSION, data: { p1: 'x' } }))
+    expect(loadWins('split', s)).toEqual({ p1: 0, p2: 0, streak: 0, streakPlayer: null })
   })
 })

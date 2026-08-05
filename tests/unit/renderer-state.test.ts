@@ -660,16 +660,20 @@ describe('Renderer 状态切换', () => {
       expect(r._fillStyleCache.size).toBe(2)
     })
 
-    it('缓存超过 1024 项时清空（防内存泄漏）', () => {
+    it('缓存超过 1024 项时分段清空（移除最早一半，保留热数据；R5 性能加固）', () => {
       const { renderer } = createHarness()
       const r = expose(renderer)
       // 固定 r/g/b、alpha 步进 0.001：i=0..1024 生成 1025 个互异归一化键，
-      // 第 1025 次插入触发 size > 1024 → clear
+      // 第 1025 次插入触发 size > 1024 → 移除最早一半（Map 插入序），保留最近 513 项
       for (let i = 0; i < 1025; i++) {
         r.getFillStyle(5, 6, 7, i / 1000)
       }
-      expect(r._fillStyleCache.size).toBe(0)
-      // 清空后仍可正常获取（重建缓存）
+      expect(r._fillStyleCache.size).toBe(513)
+      // 保留的是最近插入的一半（Map 插入序，最早的 512 个键被移除）：
+      // 最近的键仍命中同一字符串实例（缓存热数据保留）
+      expect(r.getFillStyle(5, 6, 7, 1.024)).toBe('rgba(5, 6, 7, 1.024)')
+      expect(r._fillStyleCache.size).toBe(513)
+      // 缓存清理后仍可正常获取（重建缓存）
       expect(r.getFillStyle(5, 6, 7, 0.5)).toBe('rgba(5, 6, 7, 0.500)')
     })
   })

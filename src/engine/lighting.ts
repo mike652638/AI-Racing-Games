@@ -16,6 +16,15 @@ const CYCLE_SECONDS = 120
 /** 天气循环周期（秒）：晴天 45 秒 → 阴天 45 秒交替（overcast = 累计秒数 / 45 取整为奇数） */
 export const WEATHER_CYCLE_SECONDS = 45
 
+/** 天气三态：0 晴 / 1 阴 / 2 雨 */
+export type WeatherPhase = 0 | 1 | 2
+
+/** 天气循环 phase（审计 R6 重复逻辑收敛——单一真源）：按累计秒数算三态 0/1/2，各 45s 循环。
+ *  renderer（渲染天气/雨滴）与 frame-update（雨声/雨天物理）共用同一公式，避免两处独立实现漂移 */
+export function weatherPhaseAt(timeSec: number): WeatherPhase {
+  return (Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3) as WeatherPhase
+}
+
 function hsl(h: number, s: number, l: number): string {
   return `hsl(${h}, ${s}%, ${l}%)`
 }

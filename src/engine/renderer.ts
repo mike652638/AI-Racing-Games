@@ -1,4 +1,12 @@
-import { BOOST_PARTICLE_LIFETIME, RENDER_DEPTH_RATIO, RENDER_HORIZON_RATIO } from '../shared/constants'
+import {
+  BOOST_PARTICLE_LIFETIME,
+  CACTUS_SHADE_FACTOR,
+  CACTUS_SHADE_SCALE_THRESHOLD,
+  RAIN_DROPS,
+  RAIN_TILT_DEG,
+  RENDER_DEPTH_RATIO,
+  RENDER_HORIZON_RATIO,
+} from '../shared/constants'
 import { clampSpriteScale, project, type Projected, type ProjectionOptions } from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
@@ -13,7 +21,7 @@ import {
 import { drawPlayerCar } from './player-car'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
-import { updateLighting, WEATHER_CYCLE_SECONDS, type LightingEnvironment } from './lighting'
+import { updateLighting, weatherPhaseAt, type LightingEnvironment } from './lighting'
 import { mulberry32 } from './scenery'
 import { getEnvironmentProfile } from './environment'
 import { DRAW_DISTANCE } from './road-geometry'
@@ -92,16 +100,8 @@ interface MountainLayer {
 const P2_BODY_COLOR = '#2563eb'
 const P2_BODY_DARK_COLOR = '#1e40af'
 
-/** 雨滴数量（确定性生成，渲染时按 timeSec 下落） */
-const RAIN_DROPS = 80
-
-/** M18 仙人掌明暗：远处明暗分档的投影 scale 阈值（scale 小于该值视为远处，两档明暗） */
-const CACTUS_SHADE_SCALE_THRESHOLD = 0.35
-/** M18 仙人掌明暗：远处明暗亮度因子（shadeColor ×0.8 ≈ 变暗 20%，偏冷降饱和） */
-const CACTUS_SHADE_FACTOR = 0.8
-
-/** 雨丝倾斜角（B7 天气交互化）：固定 15° 风向感（弧度），预计算 sin/cos 供离屏预渲染复用 */
-const RAIN_TILT = (15 * Math.PI) / 180
+/** 雨丝倾斜角（B7 天气交互化）：角度常量收敛至 shared（RAIN_TILT_DEG），此处预计算 sin/cos 供离屏预渲染复用 */
+const RAIN_TILT = (RAIN_TILT_DEG * Math.PI) / 180
 const RAIN_TILT_SIN = Math.sin(RAIN_TILT)
 const RAIN_TILT_COS = Math.cos(RAIN_TILT)
 
@@ -400,7 +400,8 @@ export class Renderer {
       this.mountainsNight = this.buildMountains(this.opts.width, env.mountainFarNight, env.mountainNearNight)
     }
     // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
-    const phase = Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3
+    // R6 收敛：phase 判定走 lighting.weatherPhaseAt 单一真源（与 frame-update 雨声/雨天物理同公式）
+    const phase = weatherPhaseAt(timeSec)
     const overcast = phase === 1
     const raining = phase === 2
     // 夜晚模式（赛道级）：view.night 缺省 false；夜晚锁定色板 + 深色远山 + 车灯
@@ -494,7 +495,9 @@ export class Renderer {
 
   /** 获取 rgba fillStyle 字符串：按 (r,g,b,a) 归一化键缓存。
    *  a 内部先 toFixed(3) 归一化：既与原模板字符串 `rgba(...)` 的渲染输出逐字节一致，
-   *  又让连续浮点 alpha（每帧每粒子都不同）落入有限键空间，缓存才能真正命中。 */
+   *  又让连续浮点 alpha（每帧每粒子都不同）落入有限键空间，缓存才能真正命中。
+   *  上限触及时分段清空（移除最早一半插入项，保留最近热数据）替代整体 clear()，
+   *  避免清理后下一帧所有粒子被迫重建字符串（审计 R5 性能加固）。 */
   private getFillStyle(r: number, g: number, b: number, a: number): string {
     const aStr = a.toFixed(3)
     const key = `${r},${g},${b},${aStr}`
@@ -502,9 +505,13 @@ export class Renderer {
     if (!style) {
       style = `rgba(${r}, ${g}, ${b}, ${aStr})`
       this._fillStyleCache.set(key, style)
-      // 防止内存泄漏：限制缓存大小
+      // 防止内存泄漏 + 降低重建抖动：超过上限时移除最早一半（Map 保持插入序）
       if (this._fillStyleCache.size > 1024) {
-        this._fillStyleCache.clear()
+        const keys = [...this._fillStyleCache.keys()]
+        const dropCount = keys.length >> 1
+        for (let i = 0; i < dropCount; i++) {
+          this._fillStyleCache.delete(keys[i])
+        }
       }
     }
     return style

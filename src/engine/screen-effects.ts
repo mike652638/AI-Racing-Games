@@ -29,18 +29,32 @@ export function drawSpeedLines(ctx: CanvasRenderingContext2D, opts: ProjectionOp
   ctx.stroke()
 }
 
+/** 径向 vignette 工厂（R6 重复逻辑收敛）：BOOST 金色 / 碰撞红色共用——屏幕四角暗角
+ *  （内圈透明 → 外圈指定色 alpha）。参数：内圈半径比例（相对短边）与外圈颜色 RGB + alpha。 */
+function drawVignette(
+  ctx: CanvasRenderingContext2D,
+  opts: ProjectionOptions,
+  r1Ratio: number,
+  r: number,
+  g: number,
+  b: number,
+  alpha: number,
+): void {
+  const cx = opts.width * 0.5
+  const cy = opts.height * 0.5
+  const r1 = Math.min(opts.width, opts.height) * r1Ratio
+  const r2 = Math.max(opts.width, opts.height) * 0.85
+  const grad = ctx.createRadialGradient(cx, cy, r1, cx, cy, r2)
+  grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`)
+  grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${alpha})`)
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, opts.width, opts.height)
+}
+
 /** M8：BOOST 金色 vignette——激活时屏幕四角径向渐变暗角，alpha 0.4 */
 export function drawBoostVignette(ctx: CanvasRenderingContext2D, opts: ProjectionOptions, boosting: boolean): void {
   if (!boosting) return
-  const cx = opts.width * 0.5
-  const cy = opts.height * 0.5
-  const r1 = Math.min(opts.width, opts.height) * 0.25
-  const r2 = Math.max(opts.width, opts.height) * 0.85
-  const grad = ctx.createRadialGradient(cx, cy, r1, cx, cy, r2)
-  grad.addColorStop(0, 'rgba(255, 180, 80, 0)')
-  grad.addColorStop(1, 'rgba(255, 180, 80, 0.4)')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, opts.width, opts.height)
+  drawVignette(ctx, opts, 0.25, 255, 180, 80, 0.4)
 }
 
 /** M16：碰撞红色 vignette——碰撞后 0.35s 屏幕边缘红色暗角，强度随 flash 衰减（0-1），
@@ -51,13 +65,5 @@ export function drawCollisionVignette(
   flash: number | undefined,
 ): void {
   if (!flash || flash <= 0) return
-  const cx = opts.width * 0.5
-  const cy = opts.height * 0.5
-  const r1 = Math.min(opts.width, opts.height) * 0.35
-  const r2 = Math.max(opts.width, opts.height) * 0.85
-  const grad = ctx.createRadialGradient(cx, cy, r1, cx, cy, r2)
-  grad.addColorStop(0, 'rgba(255, 40, 40, 0)')
-  grad.addColorStop(1, `rgba(255, 40, 40, ${0.45 * flash})`)
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, opts.width, opts.height)
+  drawVignette(ctx, opts, 0.35, 255, 40, 40, 0.45 * flash)
 }
