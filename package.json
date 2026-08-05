@@ -12,6 +12,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "bot": "tsx tests/bot/run-bot.ts",
+    "bench": "node --expose-gc --import tsx tests/bench/perf-bench.ts",
+    "bench:reuse": "node --expose-gc --import tsx tests/bench/perf-bench.ts --reuse",
+    "scan": "node --import tsx tests/bench/security-scan.ts",
     "format": "prettier --write src tests",
     "format:check": "prettier --check src tests",
     "prepare": "husky"
