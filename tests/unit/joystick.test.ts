@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { JoystickUI, offsetToInput } from '../../src/ui/joystick'
+import { detectTouchPrimaryInput, JoystickUI, offsetToInput } from '../../src/ui/joystick'
 
 describe('offsetToInput', () => {
   const R = 60
@@ -88,5 +88,40 @@ describe('JoystickUI', () => {
     joystick.reset()
     expect(joystick.isActive()).toBe(false)
     expect(joystick.getInput()).toEqual({ steer: 0, throttle: 0, brake: false })
+  })
+})
+
+describe('detectTouchPrimaryInput 触屏判定（U-1，2026-08-05 审计）', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** stub navigator/window 的触屏能力与主输入方式媒体查询 */
+  function stubEnv(touchPoints: number, mediaMatches: boolean): void {
+    vi.stubGlobal('navigator', { maxTouchPoints: touchPoints })
+    vi.stubGlobal('window', {
+      matchMedia: (q: string) => ({ matches: mediaMatches, media: q }),
+    })
+  }
+
+  it('触屏能力 + 主输入触屏（hover:none 命中）→ true', () => {
+    stubEnv(5, true)
+    expect(detectTouchPrimaryInput()).toBe(true)
+  })
+
+  it('触屏能力但主输入键鼠（hover:hover + pointer:fine）→ false（带触屏的 Windows 笔记本不再常驻摇杆）', () => {
+    stubEnv(10, false)
+    expect(detectTouchPrimaryInput()).toBe(false)
+  })
+
+  it('无触屏能力 → false（即便媒体查询命中）', () => {
+    stubEnv(0, true)
+    expect(detectTouchPrimaryInput()).toBe(false)
+  })
+
+  it('matchMedia 不可用 → 回退能力判定保持旧行为', () => {
+    vi.stubGlobal('navigator', { maxTouchPoints: 3 })
+    vi.stubGlobal('window', {})
+    expect(detectTouchPrimaryInput()).toBe(true)
   })
 })

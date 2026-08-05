@@ -163,6 +163,22 @@ describe('createRoadsideSprites 环境景物（M17）', () => {
     expect(palms.some((s) => s.rotation === 1)).toBe(true)
   })
 
+  it('V-2 coast 海侧不生成景物：全部 offset ≤ 0，其余环境左右成对（防棕榈叠压海面）', () => {
+    const coastDef = TRACK_DEFS.find((d) => d.id === 'coast')!
+    const coastCtx = createTrackContext(coastDef)
+    expect(coastCtx.sprites.length).toBeGreaterThan(0)
+    expect(coastCtx.sprites.every((s) => s.offset <= 0)).toBe(true)
+    // 对照：非海岸环境（forest）仍左右成对（存在正 offset 景物）
+    const forestDef = TRACK_DEFS.find((d) => d.id === 'forest')!
+    const forestCtx = createTrackContext(forestDef)
+    expect(forestCtx.sprites.some((s) => s.offset > 0)).toBe(true)
+    expect(forestCtx.sprites.some((s) => s.offset < 0)).toBe(true)
+    // 配置层：仅 coast 置 skipRightSprites
+    expect(getEnvironmentProfile('coast').skipRightSprites).toBe(true)
+    expect(getEnvironmentProfile('plains').skipRightSprites).toBeUndefined()
+    expect(getEnvironmentProfile('desert').skipRightSprites).toBeUndefined()
+  })
+
   it('M17 沙漠小仙人掌：desert 在树位之间插入 scale 0.5 的小仙人掌（数量 ≈ 大仙人掌 + 小仙人掌成对）', () => {
     const desertDef = TRACK_DEFS.find((d) => d.id === 'desert')!
     const ctx = createTrackContext(desertDef)

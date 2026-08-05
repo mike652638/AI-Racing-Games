@@ -669,8 +669,15 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // finish-hint 显示胜负（用可预测帧数驱动时 P1/P2 用时接近，三选一断言）
     expect(hotEnv.getElement('finish-hint').hidden).toBe(false)
     expect(['P1 更快！', 'P2 更快！', '平手！']).toContain(hotEnv.getElement('finish-hint').textContent)
-    // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）
-    expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
+    // P1（P1）：热座 round 2 结算 finish-wins 与 finish-hint 并存可见（非平手分胜负）；
+    // F-1 后双回合计时均为纯驾驶时间（倒计时不再计入），确定性驱动下可能平手——
+    // 平手不记胜场（finish-wins 隐藏），分胜负时记录并可见
+    const hotseatHint = hotEnv.getElement('finish-hint').textContent
+    if (hotseatHint === '平手！') {
+      expect(hotEnv.getElement('finish-wins').hidden).toBe(true)
+    } else {
+      expect(hotEnv.getElement('finish-wins').hidden).toBe(false)
+    }
   }, 15000)
 
   it('热座模式：P1 回合 P2 世界车流静止、P2 回合车流推进', () => {
@@ -896,8 +903,9 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     // 首帧挑战剩余时间 60s（raceTime 0）
     const first = chEnv.debugValue('challengeTimeLeft')
     expect(first).toBe(60)
-    // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见
-    chEnv.driveFrames(2)
+    // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见。
+    // F-1 后前 2.4s 为倒计时冻结窗口（帧更新段跳过），需驱动 50 帧（2.5s）跨过 GO 后再断言
+    chEnv.driveFrames(50)
     expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
     expect(chEnv.getElement('challenge-score').hidden).toBe(false)
     // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
