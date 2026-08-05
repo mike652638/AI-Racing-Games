@@ -40,6 +40,14 @@ export interface HudElements {
   boostBar?: HTMLDivElement
 }
 
+/** 脏值比对写文本（R9：HUD 每帧刷新但多数帧文本不变——速度/圈数/计时只在变化时才
+ *  写 DOM textContent，避免 60fps 同值重复赋值；省字符串比较+写操作，mocked 元素兼容） */
+function setText(el: HTMLElement, text: string): void {
+  if (el.textContent !== text) {
+    el.textContent = text
+  }
+}
+
 /** 每帧刷新 HUD 文本：P1 速度/圈数/计时/最佳，分屏时附加 P2，以及漂移指示。
  *  圈数按各自赛道世界计算：P1 用 tracks[0]（圈长/总圈数），P2 用 tracks[1]。
  *  hotseatPlayer（第 9 尾参）：热座当前回合玩家；null 表示非热座（行为与旧 8 参完全一致）。 */
@@ -92,15 +100,15 @@ export function updateHud(
   const hotseatP2 = hotseatPlayer === 2
   const primary = hotseatP2 ? race.player2 : race.player1
   const primaryTrack = hotseatP2 ? tracks[1] : tracks[0]
-  elements.hudSpeed.textContent = formatSpeed(primary.carState.speed, carConfig.maxSpeed)
-  elements.hudLap.textContent = formatLap(lapFromZ(primary.cameraZ, primaryTrack.lapLength), primaryTrack.totalLaps)
-  elements.hudTime.textContent = formatTime(primary.raceTime)
+  setText(elements.hudSpeed, formatSpeed(primary.carState.speed, carConfig.maxSpeed))
+  setText(elements.hudLap, formatLap(lapFromZ(primary.cameraZ, primaryTrack.lapLength), primaryTrack.totalLaps))
+  setText(elements.hudTime, formatTime(primary.raceTime))
 
   // P0 修复（热座 P2）：主 HUD BEST 在 P2 回合显示 P2 的存档（bestTime2）
   const primaryBest = hotseatP2 ? bestTime2 : bestTime
   elements.hudBest.hidden = primaryBest === null
   if (primaryBest !== null) {
-    elements.hudBest.textContent = `BEST ${formatTime(primaryBest)}`
+    setText(elements.hudBest, `BEST ${formatTime(primaryBest)}`)
   }
 
   // P2 元素显隐由 updateHud 统一处理：非分屏隐藏、分屏显示
@@ -110,11 +118,11 @@ export function updateHud(
   elements.hudTime2.hidden = !splitMode
   if (elements.hudBest2) elements.hudBest2.hidden = !splitMode || bestTime2 === null
   if (splitMode) {
-    elements.hudSpeed2.textContent = formatSpeed(race.player2.carState.speed, carConfig.maxSpeed)
-    elements.hudLap2.textContent = formatLap(lapFromZ(race.player2.cameraZ, tracks[1].lapLength), tracks[1].totalLaps)
-    elements.hudTime2.textContent = formatTime(race.player2.raceTime)
+    setText(elements.hudSpeed2, formatSpeed(race.player2.carState.speed, carConfig.maxSpeed))
+    setText(elements.hudLap2, formatLap(lapFromZ(race.player2.cameraZ, tracks[1].lapLength), tracks[1].totalLaps))
+    setText(elements.hudTime2, formatTime(race.player2.raceTime))
     if (elements.hudBest2 && bestTime2 !== null) {
-      elements.hudBest2.textContent = `BEST ${formatTime(bestTime2)}`
+      setText(elements.hudBest2, `BEST ${formatTime(bestTime2)}`)
     }
   }
 
@@ -122,7 +130,7 @@ export function updateHud(
   if (elements.hudPlayerTag) {
     elements.hudPlayerTag.hidden = hotseatPlayer === null
     if (hotseatPlayer !== null) {
-      elements.hudPlayerTag.textContent = hotseatPlayer === 1 ? 'P1 驾驶中' : 'P2 驾驶中'
+      setText(elements.hudPlayerTag, hotseatPlayer === 1 ? 'P1 驾驶中' : 'P2 驾驶中')
       elements.hudPlayerTag.classList.toggle('p1', hotseatPlayer === 1)
       elements.hudPlayerTag.classList.toggle('p2', hotseatPlayer === 2)
     }
@@ -148,7 +156,7 @@ export function updateHud(
         ;(timer as { unref: () => void }).unref()
       }
     }
-    elements.driftScoreValue.textContent = nextScoreText
+    setText(elements.driftScoreValue, nextScoreText)
   }
 
   // 漂移连击倍率：active 且 combo≥1 时显示 COMBO x(1+combo*COMBO_MULTIPLIER_STEP)，否则隐藏
@@ -158,7 +166,7 @@ export function updateHud(
     elements.driftCombo.hidden = !(driftPlayer.driftState.active && combo >= 1)
     if (!elements.driftCombo.hidden) {
       const mult = 1 + combo * COMBO_MULTIPLIER_STEP
-      elements.driftCombo.textContent = `COMBO x${mult.toFixed(2)}`
+      setText(elements.driftCombo, `COMBO x${mult.toFixed(2)}`)
     }
   }
 
@@ -166,7 +174,7 @@ export function updateHud(
   if (elements.hudCollision) {
     elements.hudCollision.hidden = race.collisionCount === 0
     if (race.collisionCount > 0) {
-      elements.hudCollision.textContent = `碰撞 ×${race.collisionCount}`
+      setText(elements.hudCollision, `碰撞 ×${race.collisionCount}`)
     }
   }
 
@@ -175,7 +183,7 @@ export function updateHud(
   if (elements.hudBestP2) {
     elements.hudBestP2.hidden = splitMode || hotseatP2 || bestTime2 === null
     if (bestTime2 !== null && !elements.hudBestP2.hidden) {
-      elements.hudBestP2.textContent = `P2 BEST ${formatTime(bestTime2)}`
+      setText(elements.hudBestP2, `P2 BEST ${formatTime(bestTime2)}`)
     }
   }
 }

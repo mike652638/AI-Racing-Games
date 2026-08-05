@@ -157,7 +157,11 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     if (ctx.challengeTimer) {
       ctx.challengeTimer.hidden = false
       const left = Math.max(0, CHALLENGE_SECONDS - race.player1.raceTime)
-      ctx.challengeTimer.textContent = `剩余 ${left.toFixed(1)}s`
+      // R9：脏值比对——剩余秒数文本只在小数变化时写 DOM（10 帧一写，省中间帧分配）
+      const leftText = `剩余 ${left.toFixed(1)}s`
+      if (ctx.challengeTimer.textContent !== leftText) {
+        ctx.challengeTimer.textContent = leftText
+      }
       // m17：剩余 10 秒内触发紧急闪烁动画
       ctx.challengeTimer.classList.toggle('urgent', left <= 10)
     }
@@ -165,7 +169,10 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.challengeScore ??= document.getElementById('challenge-score') as HTMLDivElement | null
     if (ctx.challengeScore) {
       ctx.challengeScore.hidden = false
-      ctx.challengeScore.textContent = `得分 ${Math.round(race.player1.driftState.score)}`
+      const scoreText = `得分 ${Math.round(race.player1.driftState.score)}`
+      if (ctx.challengeScore.textContent !== scoreText) {
+        ctx.challengeScore.textContent = scoreText
+      }
     }
   }
 
@@ -216,7 +223,13 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   if (ctx.boostBar) {
     ctx.boostBar.hidden = false
     const fill = ctx.boostBar.querySelector<HTMLDivElement>('.boost-fill')
-    if (fill) fill.style.width = `${Math.round(race.player1.boostCharge * 200)}px`
+    if (fill) {
+      // R9：脏值比对——BOOST 条宽度只在数值变化时写 style（蓄能缓慢，多数帧宽度不变）
+      const widthPx = `${Math.round(race.player1.boostCharge * 200)}px`
+      if (fill.style.width !== widthPx) {
+        fill.style.width = widthPx
+      }
+    }
   }
 
   // H2（H2）：BOOST 音效与尾焰粒子——任一玩家 boost 激活且上一帧未激活时触发音效（边沿检测）；

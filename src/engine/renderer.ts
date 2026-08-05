@@ -177,6 +177,12 @@ export class Renderer {
   private stripForSegment = new Uint16Array(0)
   /** 最近一次 setTrack 传入的道路段列表（renderRoadSurface 缓存路径的 strip 数据源） */
   private roadStrips: RoadStrip[] = []
+  /** 最近一次 roadStrip 离屏缓存构建的视口宽度（R5 内存治理：setViewport 宽度未变时跳过重建，
+   *  避免 resize 事件抖动重复构建全部 strip 纹理——每条赛道 50 段上限 × 宽约 1280px，重建即全量分配） */
+  private roadStripCacheWidth = 0
+  /** 最近一次构建缓存的 strips 引用（R5：仅同一 strips + 同宽度才跳过重建；
+   *  换赛道时 strips 引用不同，即使宽度相同也必须重建，否则旧纹理残留导致缓存污染） */
+  private cachedStripsRef: RoadStrip[] | null = null
   /** spritesInRangeIndexed 的复用输出数组（Task 5：每帧清空重填，避免帧内新建数组） */
   private spriteScratch: Sprite[] = []
   /** fillStyle 字符串缓存（Task B7）：key = 归一化后的 rgba 分量，命中复用同一字符串，
@@ -301,8 +307,18 @@ export class Renderer {
   }
 
   /** 预热道路段离屏缓存：按 TrackContext.roadStrips 将全部曲率段预渲染为离屏 canvas
-   *  （每段 1 行纹理，宽 = 视口宽），同时构建段索引 → strip 索引映射（帧内 O(1) 查询）。 */
+   *  （每段 1 行纹理，宽 = 视口宽），同时构建段索引 → strip 索引映射（帧内 O(1) 查询）。
+   *  R5 内存治理：宽度未变（resize 抖动/重复 setViewport）且缓存非空时跳过全量重建——
+   *  纹理内容仅取决于赛道段数据与宽度，宽度相同则旧纹理可直接复用；换赛道时
+   *  setTrack 已更新 this.track/stripForSegment，且 strips 引用不同，需重建（见 setTrack 分支）。 */
   private buildRoadStripCache(strips: RoadStrip[], width: number): void {
+    // R5 内存治理：同一赛道 strips 引用 + 宽度未变 → 旧纹理直接复用（resize 抖动/重复 setViewport 跳过全量重建）；
+    // 换赛道时 strips 引用不同 → 即使宽度相同也重建，防止旧赛道纹理残留（缓存污染）
+    if (strips === this.cachedStripsRef && this.roadStripCacheWidth === width) {
+      return
+    }
+    this.cachedStripsRef = strips
+    this.roadStripCacheWidth = width
     this.roadStripCache.clear()
     this.stripForSegment = new Uint16Array(this.track.length)
     this.stripForSegment.fill(NO_STRIP)
