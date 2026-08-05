@@ -132,6 +132,8 @@ interface Environment {
  * - document：getElementById 按 id 返回元素替身（'game' 返回 canvas mock）
  * - requestAnimationFrame：记录回调；GameLoop 构造时唯一注册的 rAF 回调即 frame，
  *   测试据此驱动帧循环（MusicPlayer.tick 等其它回调不驱动）
+ * - performance：now() 桩化为虚拟时钟（与 driveFrames 的 `now += 50` 同源），
+ *   dt 恒为 0.05，用例耗时与物理推进均与机器负载无关（2026-08-05 CI 根因修复）
  * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
  */
 function stubEnvironment(search: string | boolean = '', initialStorage?: Record<string, string>): Environment {
@@ -141,6 +143,13 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   const rafCallbacks: FrameRequestCallback[] = []
   let gameCanvas: MockCanvas | null = null
   let now = performance.now()
+  // 虚拟时钟（2026-08-05 CI 根因修复）：performance.now() 全局桩化为本文件的虚拟时钟——
+  // GameLoop 的 `last = performance.now()`（构造/startGame）与 frame 的 dt=(now-last)/1000
+  // 从此与 driveFrames 的 `now += 50` 同源，每帧 dt 恒为 0.05，物理推进完全确定性。
+  // 修复前 last 取真实墙钟：构造→首帧间隔 >50ms 时（CI/负载机器常态）首帧 dt 为负，
+  // 物理倒退一帧致「双人同帧完赛」失步（CI run #3 F2 对局榜断言失败根因），
+  // 且整场比赛耗时随机漂移（超时 flaky 的深层根源）。
+  vi.stubGlobal('performance', { now: (): number => now })
 
   // localStorage stub：仅当 initialStorage 传入时挂载（save.ts getStorage 双重检查：
   // 全局 typeof localStorage + window.localStorage，两者都必须提供才会启用存储）
@@ -244,7 +253,7 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   const fireKey = (code: string, shiftKey = false): void => {
     for (const cb of listeners.get('keydown') ?? []) cb({ code, shiftKey })
   }
-  /** 驱动 GameLoop 帧回调：固定 50ms/帧（dt=0.05），与真实帧节奏一致 */
+  /** 驱动 GameLoop 帧回调：固定 50ms/帧（dt 恒 0.05，虚拟时钟保证与机器负载无关） */
   const driveFrames = (count: number): void => {
     const frame = rafCallbacks[0] as FrameRequestCallback
     for (let i = 0; i < count; i++) {

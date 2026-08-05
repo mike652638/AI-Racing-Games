@@ -65,4 +65,15 @@ const SIM_TIMEOUT_EPIC = 60_000 // 热座双 1400 帧全赛季、挑战 1298 帧
 ## 六、遗留观察
 
 - 本机两个 vite dev server（5173 自 11:02、5174 自 12:00）常驻，e2e 复用 5173（`reuseExistingServer` 本地策略）；不影响测试有效性，建议空闲时手动关闭。
-- CI（GitHub Actions）在本批修复前的推送大概率为红（format:check 步骤）；本批合入后应恢复全绿，可在下次推送后确认。
+
+## 七、补遗：CI run #3 暴露的深层根因与虚拟时钟修复（2026-08-05 晚）
+
+**现象**：提交 `195ec2f` 推送后 CI run #3 在 Unit tests 步骤失败（typecheck / lint / **format check 均已转绿**，验证了 R1 修复在 CI 生效）。失败并非超时，而是 F2（分屏对局榜）断言失败：`expected false to be true`（game-loop-integration.test.ts:645，`match-top` 仍为占位文本）。
+
+**根因定位**：集成测试的帧驱动使用虚拟时钟（`now += 50; frame(now)`），但 `GameLoop` 的 `this.last = performance.now()`（构造器与 startGame 内，src/game/game-loop.ts:170/625）读取的是**真实墙钟**。首帧 dt = `min((now − last)/1000, 0.05)`，其中 `now` 为虚拟时间、`last` 为真实时间——当"构造 → 首帧驱动"的实际间隔 δ > 50ms（CI/负载机器常态）时，**首帧 dt 为负**，物理倒退一帧：车流位置与双人同步轨迹被扰动，"P1/P2 同帧完赛"失步 → 分屏完赛时 P2 未同步越线 → `addMatchResult` 未记录 → 对局榜断言失败。本机 δ 恒 < 50ms 故历史全绿；这也是超时 flaky 的深层根源（比赛帧数随 δ 漂移）。
+
+**修复（测试侧，src/ 仍零改动）**：`stubEnvironment` 中追加 `vi.stubGlobal('performance', { now: () => now })`——`GameLoop` 的 `last` 与帧驱动从此共用同一虚拟时钟，每帧 dt 恒为 0.05，整文件用例的物理推进与耗时均与机器负载**结构性无关**（不依赖阈值放宽）。同步更新 stub 文档注释与 driveFrames 注释。
+
+**复测**：typecheck / lint / format:check / npm test（707/707，34.4s，长程用例耗时与修复前几乎逐毫秒重合，印证 dt 轨迹未变）全绿；bot / build / scan 复测见提交记录。生产代码不受影响（浏览器 rAF 时间戳单调，负 dt 场景不存在）。
+
+**经验沉淀**：①"本地绿 / CI 红"且失败点在时序相关断言时，优先审计测试基建里"虚拟驱动 + 真实时钟"的混用面；②SIM_TIMEOUT 档位仍是必要的防御性余量（CI 每帧计算耗时本身有波动），但确定性根因修复才是治本。
