@@ -37,6 +37,16 @@ describe('copy.ts UI 文案常量', () => {
     expect(BEST_EMPTY_HINT.length).toBeGreaterThan(0)
     expect(DRIFT_EMPTY_HINT.length).toBeGreaterThan(0)
   })
+
+  it('M-9（菜单审计）：#touch-hint 不再硬编码文案，运行时由 RACING_TOUCH_HINT 同源填充', () => {
+    const html = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8')
+    expect(html).toContain('id="touch-hint"')
+    // 硬编码旧文案（与 RACING_TOUCH_HINT 已漂移）不得再出现在 HTML
+    expect(html).not.toContain('虚拟摇杆控制方向与油门')
+    // 同源常量包含关键控件词，保证填充后语义完整
+    expect(RACING_TOUCH_HINT).toContain('虚拟摇杆')
+    expect(RACING_TOUCH_HINT).toContain('暂停')
+  })
 })
 
 describe('操作提示与 README「操作说明」同源（防文案漂移）', () => {
