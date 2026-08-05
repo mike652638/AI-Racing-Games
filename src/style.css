@@ -408,7 +408,7 @@ canvas {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
-/* 榜单卡片内容区（#drift-top/#best-summary/#match-top 共享） */
+/* 榜单卡片内容区（#drift-top/#best-summary/#match-top 共享；M-8 合并旧两段重复规则） */
 .lb-card-body {
   margin: 0;
   /* 2026-08-05 LB-3：等宽数字 + 左对齐——排名号与时间数字纵向对齐整齐；
@@ -424,25 +424,34 @@ canvas {
   white-space: pre-line;
   padding: 0 4px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-
-/* LB-5：所有状态限高——面板内部滚动，避免多榜单数据密度高时把"开始游戏"按钮挤出视口；
- *  1280×720 视口下开始按钮 y≈650，榜单卡片顶 y≈480，留给面板总高度约 170px；
- *  减去 lb-card-head (~26px) 与 padding (~12px)，剩约 132px；取 120px（6 行左右 @ 14px 行高）
- *  确保按钮始终可见；移动端媒体查询另设更小值 */
-.lb-card-body {
+  /* M-3（菜单审计）：限高 + max-height 过渡提供展开反馈；默认 overflow:hidden
+   *  消除嵌套滚动陷阱（滚轮悬停卡片不再被捕获），仅条目多时由 JS 加 .scrollable 开启内滚 */
   max-height: 120px;
-  overflow-y: auto;
-  /* LB-3：滚动时首选项贴合滚动条样式 */
+  overflow: hidden;
+  transition: max-height 0.25s ease;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
 }
 
-/* LB-5：展开态上限放宽到 135px——展开后用户期望看到更多内容，但仍保证开始按钮可见
- *  1280×720 视口下开始按钮高 52px + marginTop 10px ≈ 62px，展开后面板顶 y=480 + 头 26px + 内容 135px + padding 12px = 653px，
- *  留 17px 给按钮，比非展开态更紧但仍可用 */
+/* M-3：条目数 >8 时由 top-refresh 加 .scrollable，才允许面板内部滚动 */
+/* LB-Z2（榜单专项审计）：内滚仅限展开态——旧规则 .scrollable 全局开 overflow-y:auto，
+ *  但卡片被互斥收起后 refresh 不重跑，.scrollable 残留使收起态（max-height 120px）
+ *  也能卡片内滚，重新引入嵌套滚动陷阱；收起态恒为 overflow:hidden */
+.lb-card-clickable.expanded .lb-card-body.scrollable {
+  overflow-y: auto;
+}
+
+/* LB-Z3（榜单专项审计）：收起态内容被 max-height 硬裁切（实测 5 条×2 行=196px 仅显 120px，
+ *  第 4 条拦腰截断无提示）——JS 按 scrollHeight>clientHeight 加 .clipped，底部渐隐提示更多内容 */
+.lb-card-body.clipped {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+/* LB-5 + M-3：展开态上限放宽到 210px（原 135px 与折叠态仅差 15px，展开感知弱），
+ *  配合 max-height 过渡与箭头旋转形成明确展开反馈；开始按钮由 sticky 保底可见（M-1） */
 .lb-card-clickable.expanded .lb-card-body {
-  max-height: 135px;
+  max-height: 210px;
 }
 
 /* 菜单/结算/暂停面板基础样式 */
@@ -876,6 +885,12 @@ canvas {
   color: var(--menu-pink);
 }
 
+/* M-4（菜单审计）：空星 ☆ 与实星 ★ 拆分 span（buildTrackOptions 结构化输出），
+ *  空星降低不透明度，难度一眼可辨；diff-N 色相编码保持不变 */
+.track-stars .stars-empty {
+  opacity: 0.32;
+}
+
 .track-option:hover .track-num,
 .track-option.selected .track-num,
 .track-option.selected-p2 .track-num {
@@ -910,12 +925,12 @@ canvas {
 }
 
 .track-option:hover {
-  background: rgba(var(--color-accent-rgb), 0.25);
+  /* M-7（菜单审计）：hover 降权——去掉上浮与大光晕（与 selected 视觉语言重叠），
+   * 仅保留边框提亮 + 浅背景 + ::before 扫光；「上浮+脉冲」专属留给选中态 */
+  background: rgba(var(--color-accent-rgb), 0.12);
   border-color: rgba(var(--color-accent-rgb), 0.8);
   color: #fff;
   opacity: 1;
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(var(--color-accent-rgb), 0.25);
 }
 
 .track-option:active {
@@ -1050,13 +1065,15 @@ canvas {
 }
 
 /* 赛道缩略图预览（中央信息区）：由 controlPoints 积分生成的 SVG 轨迹；
-   2026-08-05 菜单优化：放大更醒目、轨迹主题色随环境区分（内联 stroke/fill/color），光晕用 currentColor 同色 */
+   2026-08-05 菜单优化：放大更醒目、轨迹主题色随环境区分（内联 stroke/fill/color），光晕用 currentColor 同色；
+   M-10（菜单审计）：赛道名并入预览行（SVG 左 + 名称右，单行 flex），省 ~24px 垂直空间 */
 .track-preview-wrap {
   margin: 6px auto 0;
   height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 14px;
 }
 
 #track-preview {
@@ -1179,6 +1196,12 @@ canvas {
 }
 
 .lb-card-head {
+  /* M-8（菜单审计）：改 flex 布局替代旧 ::after float:right，窄宽下不再挤压换行；
+   * 展开标签改为真实 span（.lb-card-toggle），支持箭头旋转过渡（M-3） */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: clamp(10px, 2.2vw, 12px);
   font-weight: 700;
   letter-spacing: 2px;
@@ -1194,21 +1217,47 @@ canvas {
   cursor: pointer;
 }
 
-.lb-card-clickable .lb-card-head::after {
-  content: '展开 ▾';
-  float: right;
+/* M-3/M-8（菜单审计）：展开标签改真实 span（原 ::after 伪元素 + float）——
+ * 青色小字 + 箭头 ▾，展开态箭头旋转 180° 替代「展开/收起」文本硬切，动画连贯 */
+.lb-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--menu-cyan);
   opacity: 0.9;
-  margin-left: 6px;
   text-shadow: 0 0 8px rgba(0, 217, 255, 0.35);
   transition: opacity 0.15s ease;
+  white-space: nowrap;
 }
 
-.lb-card-clickable:hover .lb-card-head::after {
+.lb-card-clickable:hover .lb-card-toggle {
   opacity: 1;
+}
+
+/* 展开/收起文案双 span 切换（不依赖 content 硬切，保留文本可译性） */
+.lb-card-toggle .lb-collapse-text {
+  display: none;
+}
+
+.lb-card-clickable.expanded .lb-card-toggle .lb-expand-text {
+  display: none;
+}
+
+.lb-card-clickable.expanded .lb-card-toggle .lb-collapse-text {
+  display: inline;
+}
+
+/* 箭头旋转过渡（展开态 ▾ 转 180° 指上） */
+.lb-card-toggle .lb-arrow {
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.lb-card-clickable.expanded .lb-card-toggle .lb-arrow {
+  transform: rotate(180deg);
 }
 
 .lb-card-clickable.expanded {
@@ -1216,10 +1265,6 @@ canvas {
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.5),
     0 0 18px rgba(0, 217, 255, 0.28);
-}
-
-.lb-card-clickable.expanded .lb-card-head::after {
-  content: '收起 ▴';
 }
 
 /* 展开态：内容区衬底加深，强化「已展开」的层次反馈（结构：head + 内容 div） */
@@ -1278,6 +1323,13 @@ canvas {
   padding: 10px 36px;
   font-size: clamp(15px, 3.8vw, 20px);
   flex-shrink: 0; /* 2026-08-05 P1-2：开始按钮不随内容超高被压缩变形 */
+  /* M-1（菜单审计）：内容超出视口时主 CTA sticky 保底可见（.menu-content 为滚动容器），
+   * 内容不超高时保持自然位置无视觉变化；保留 .btn-primary 原背景，backdrop 模糊防滚动内容穿透混杂 */
+  position: sticky;
+  bottom: 8px;
+  z-index: 5;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 #start-btn::before {
@@ -1934,6 +1986,77 @@ canvas {
   }
 }
 
+/* M-1（菜单审计）：低高度桌面分级压缩——≤700px 压缩标题/网格/预览/榜单的垂直占位，
+ *  使 1366×768 笔记本（可用高度 ≈600–650px）首屏容纳全部内容；≤620px 进一步隐藏
+ *  副标题与预览缩略图；配合 #start-btn sticky 保底（下方），主 CTA 始终可见 */
+@media (max-height: 700px) {
+  .title-wrap {
+    margin-bottom: 4px;
+  }
+
+  .title-sub {
+    margin: -6px 0 2px;
+  }
+
+  #track-select {
+    margin: 4px auto 2px;
+    gap: 10px;
+  }
+
+  .track-preview-wrap {
+    height: 44px;
+    margin-top: 2px;
+  }
+
+  #track-name {
+    margin: 2px 0 0;
+  }
+
+  .leaderboard-cards {
+    margin-top: 4px;
+  }
+
+  .lb-card {
+    padding: 4px 8px;
+  }
+
+  #start-btn {
+    margin-top: 6px;
+  }
+
+  #start-screen .hint,
+  #menu-hint-touch {
+    margin-top: 8px;
+  }
+}
+
+/* M-1 第二档：≤620px 隐藏副标题与预览缩略图（与横屏移动低高度策略一致） */
+@media (max-height: 620px) {
+  .title-sub {
+    display: none;
+  }
+
+  .track-preview-wrap {
+    display: none;
+  }
+}
+
+/* M-6（菜单审计）：宽屏 ≥1600px 放宽内容列宽，减少两侧大面积留白
+ *  （1920×1080 实测网格仅 584px 宽悬浮于空背景） */
+@media (min-width: 1600px) {
+  #track-select {
+    max-width: 660px;
+  }
+
+  .leaderboard-cards {
+    max-width: 860px;
+  }
+
+  .lb-card {
+    max-width: 260px;
+  }
+}
+
 /* 横屏手机（高度受限）：压缩标题与屏幕间距 */
 @media (max-height: 480px) {
   /* P1 修复：标题由 .title-main（div）渲染，必须覆盖 --title-fs 变量本身（原规则只命中 h1 无效） */
@@ -1997,6 +2120,9 @@ canvas {
 
   .lb-card-head {
     font-size: clamp(10px, 2vw, 12px);
+    /* M-2（菜单审计）：横屏触屏设备卡片头触控目标抬高至 44px（原实测仅 23px，
+     *  远低于触控目标建议；body 在低高度已隐藏，head 即唯一可点区） */
+    min-height: 44px;
   }
 
   #start-btn {
@@ -2036,9 +2162,30 @@ canvas {
 
   /* 低高度：赛道名与榜单占位文案隐藏，只保留可点击头部，避免把开始按钮挤出 375px */
   #track-name,
-  #p2-track-name,
+  #p2-track-name {
+    display: none;
+  }
+
+  /* LB-Z1（榜单专项审计）：旧版 .lb-card-body 在 ≤480px 恒 display:none——
+   *  点击展开后 toggle 切「收起 ▾」/aria-expanded=true 但内容不可见，交互契约违背
+   *  （menu-probe 实测移动端 body 高度恒 0）。改为：收起态仍隐藏省空间，
+   *  展开态恢复可见并限高内滚；内容推高的开始按钮由 sticky 保底可见 */
   .lb-card-body {
     display: none;
+  }
+
+  .lb-card-clickable.expanded .lb-card-body {
+    display: block;
+    max-height: 88px;
+    overflow-y: auto;
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  .lb-card-clickable.expanded .lb-card-head {
+    margin-bottom: 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   }
 
   .lb-card {
@@ -2121,16 +2268,19 @@ canvas {
     linear-gradient(180deg, #041818 0%, #0b3030 50%, #124848 100%);
 }
 .menu-bg.track-canyon .menu-gradient {
+  /* M-5（菜单审计）：拉大与 desert 的色相差——原 #482810 红棕与 #483010 金棕观感近似，
+   *  改红黑峡谷调 + 更红的底部光斑，两主题截图并排可即时区分 */
   background:
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 100, 50, 0.35) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 200, 50, 0.15) 0%, transparent 55%),
-    linear-gradient(180deg, #1a0800 0%, #301808 50%, #482810 100%);
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 60, 40, 0.38) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 140, 50, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #200808 0%, #3a1210 50%, #551a12 100%);
 }
 .menu-bg.track-desert .menu-gradient {
+  /* M-5：desert 保持金黄调但底部提亮，与 canyon 红黑调形成明度+色相双重差异 */
   background:
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.38) 0%, transparent 60%),
     radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 50, 0.15) 0%, transparent 55%),
-    linear-gradient(180deg, #1a1200 0%, #302008 50%, #483010 100%);
+    linear-gradient(180deg, #201600 0%, #3c2a08 50%, #543c14 100%);
 }
 .menu-bg.track-forest .menu-gradient {
   background:

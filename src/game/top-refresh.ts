@@ -21,6 +21,29 @@ function isCardExpanded(el: HTMLElement): boolean {
   return card.classList.contains('expanded')
 }
 
+/**
+ * M-3（菜单审计）：按行数同步 .scrollable 类——条目 >8 行才允许卡片内滚，
+ * 其余情况 CSS overflow:hidden 消除嵌套滚动陷阱（滚轮悬停卡片不再被捕获）。
+ * 内滚仅在展开态生效（LB-Z2：CSS 限定 .expanded .scrollable，收起态残留类不再可滚）。
+ * 测试 stub 元素无 classList.toggle 时安全跳过。
+ */
+function syncScrollable(el: HTMLElement): void {
+  if (typeof el.classList?.toggle !== 'function') return
+  const lines = el.textContent ? el.textContent.split('\n').length : 0
+  el.classList.toggle('scrollable', lines > 8)
+}
+
+/**
+ * LB-Z3（榜单专项审计）：内容被 max-height 裁切时加 .clipped（CSS 底部渐隐提示）——
+ * 实测收起态 5 条×2 行=196px 仅显 120px，第 4 条拦腰截断无提示误导用户以为只有 3 条。
+ * 布局属性在测试 stub（无真实布局，scrollHeight=undefined）上安全回退不加类。
+ */
+function syncClipped(el: HTMLElement): void {
+  if (typeof el.classList?.toggle !== 'function') return
+  if (typeof el.scrollHeight !== 'number' || typeof el.clientHeight !== 'number') return
+  el.classList.toggle('clipped', el.scrollHeight > el.clientHeight + 2)
+}
+
 /** 刷新菜单漂移 TOP10 榜单（#drift-top，菜单静态元素）：收起时取前 5 条，展开时全量 10 条 */
 export function refreshDriftTop(): void {
   const el = document.getElementById('drift-top')
@@ -39,6 +62,8 @@ export function refreshDriftTop(): void {
               (e.combo ? ` · 连击 x${(1 + e.combo * 0.25).toFixed(2)}` : ''),
           )
           .join('\n')
+  syncScrollable(el)
+  syncClipped(el)
 }
 
 /**
@@ -69,6 +94,8 @@ export function refreshBestSummary(): void {
   })
   const visible = isCardExpanded(el) ? lines : lines.slice(0, 5)
   el.textContent = visible.length > 0 ? visible.join('\n') : `暂无最佳成绩\n${BEST_EMPTY_HINT}`
+  syncScrollable(el)
+  syncClipped(el)
 }
 
 /**
@@ -91,4 +118,6 @@ export function refreshMatchTop(): void {
               `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? e.trackId}`,
           )
           .join('\n')
+  syncScrollable(el)
+  syncClipped(el)
 }

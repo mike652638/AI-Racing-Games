@@ -85,83 +85,94 @@
             <span class="track-num" aria-hidden="true">1</span>
             <span class="track-label">
               <span class="track-name">经典赛道</span>
-              <span class="track-stars">★☆☆</span>
+              <span class="track-stars diff-1"><span class="stars-filled">★</span><span class="stars-empty">☆☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-1" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 2：高速公路">
             <span class="track-num" aria-hidden="true">2</span>
             <span class="track-label">
               <span class="track-name">高速公路</span>
-              <span class="track-stars">★☆☆</span>
+              <span class="track-stars diff-2"><span class="stars-filled">★★</span><span class="stars-empty">☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-2" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 3：S 弯挑战">
             <span class="track-num" aria-hidden="true">3</span>
             <span class="track-label">
               <span class="track-name">S 弯挑战</span>
-              <span class="track-stars">★★☆</span>
+              <span class="track-stars diff-2"><span class="stars-filled">★★</span><span class="stars-empty">☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-3" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 4：环岛巡回">
             <span class="track-num" aria-hidden="true">4</span>
             <span class="track-label">
               <span class="track-name">环岛巡回</span>
-              <span class="track-stars">★★☆</span>
+              <span class="track-stars diff-2"><span class="stars-filled">★★</span><span class="stars-empty">☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-4" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 5：峡谷疾驰">
             <span class="track-num" aria-hidden="true">5</span>
             <span class="track-label">
               <span class="track-name">峡谷疾驰</span>
-              <span class="track-stars">★★☆</span>
+              <span class="track-stars diff-3"><span class="stars-filled">★★★</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-5" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 6：沙漠疾驰">
             <span class="track-num" aria-hidden="true">6</span>
             <span class="track-label">
               <span class="track-name">沙漠疾驰</span>
-              <span class="track-stars">★☆☆</span>
+              <span class="track-stars diff-1"><span class="stars-filled">★</span><span class="stars-empty">☆☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-6" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 7：森林穿梭">
             <span class="track-num" aria-hidden="true">7</span>
             <span class="track-label">
               <span class="track-name">森林穿梭</span>
-              <span class="track-stars">★★☆</span>
+              <span class="track-stars diff-2"><span class="stars-filled">★★</span><span class="stars-empty">☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-7" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 8：海岸公路">
             <span class="track-num" aria-hidden="true">8</span>
             <span class="track-label">
               <span class="track-name">海岸公路</span>
-              <span class="track-stars">★★☆</span>
+              <span class="track-stars diff-2"><span class="stars-filled">★★</span><span class="stars-empty">☆</span></span>
             </span>
           </div>
           <div class="track-option" id="track-option-8" tabindex="0" role="button" aria-pressed="false" aria-label="选择赛道 9：山岳险道">
             <span class="track-num" aria-hidden="true">9</span>
             <span class="track-label">
               <span class="track-name">山岳险道</span>
-              <span class="track-stars">★★★</span>
+              <span class="track-stars diff-3"><span class="stars-filled">★★★</span></span>
             </span>
           </div>
         </div>
+        <!-- M-10（菜单审计）：赛道名并入预览行（SVG 左 + 名称右，单行 flex），省 ~24px 垂直空间 -->
         <div class="track-preview-wrap">
           <svg id="track-preview" viewBox="0 0 200 64" aria-hidden="true"></svg>
+          <p id="track-name">经典赛道</p>
+          <p id="p2-track-name" hidden>经典赛道</p>
         </div>
-        <p id="track-name">经典赛道</p>
-        <p id="p2-track-name" hidden>经典赛道</p>
-        <p id="touch-hint">触屏：右下角虚拟摇杆控制方向与油门，左下角暂停按钮</p>
+        <!-- M-9：文案由 copy.ts 的 RACING_TOUCH_HINT 同源填充（GameLoop 构造时写入） -->
+        <p id="touch-hint"></p>
         <div class="leaderboard-cards">
           <div class="lb-card lb-card-clickable" data-target="best-summary" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">赛道最佳</div>
+            <div class="lb-card-head">
+              <span class="lb-card-title">赛道最佳</span>
+              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
+            </div>
             <div class="lb-card-body" id="best-summary">暂无最佳成绩</div>
           </div>
           <div class="lb-card lb-card-clickable" data-target="drift-top" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">漂移榜单</div>
+            <div class="lb-card-head">
+              <span class="lb-card-title">漂移榜单</span>
+              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
+            </div>
             <div class="lb-card-body" id="drift-top">暂无漂移记录</div>
           </div>
           <div class="lb-card lb-card-clickable" data-target="match-top" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">对局战绩</div>
+            <div class="lb-card-head">
+              <span class="lb-card-title">对局战绩</span>
+              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
+            </div>
             <div class="lb-card-body" id="match-top">暂无对局记录</div>
           </div>
         </div>

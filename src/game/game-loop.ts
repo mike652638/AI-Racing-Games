@@ -274,6 +274,11 @@ export class GameLoop {
     // 赛道主题背景色（初始赛道 0）
     this.updateTrackBackground(0)
 
+    // M-9（菜单审计）：#touch-hint 文案改由 copy.ts 同源填充（原 index.html 硬编码已与
+    // RACING_TOUCH_HINT 漂移且无测试保护）；元素缺失时安全跳过
+    const touchHint = $('touch-hint')
+    if (touchHint) touchHint.textContent = RACING_TOUCH_HINT
+
     this.installDebugSinks()
 
     window.addEventListener('keydown', this.onKeyDown)
@@ -330,7 +335,9 @@ export class GameLoop {
       const text = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
       if (nameEl && starsEl) {
         nameEl.textContent = def.name
-        starsEl.textContent = '★'.repeat(def.difficulty) + '☆'.repeat(3 - def.difficulty)
+        // M-4（菜单审计）：星级拆分 filled/empty 双 span——空星 ☆ 降不透明度（CSS .stars-empty），
+        // 难度一眼可辨；diff-N 色相编码与 aria-label 保持不变
+        starsEl.innerHTML = `<span class="stars-filled">${'★'.repeat(def.difficulty)}</span><span class="stars-empty">${'☆'.repeat(3 - def.difficulty)}</span>`
         // 星级颜色编码（diff-1 绿 / diff-2 金 / diff-3 粉红）+ 难度 title 提示
         starsEl.className = `track-stars diff-${def.difficulty}`
         starsEl.title = `难度：${DIFFICULTY_HINT[def.difficulty]}`
