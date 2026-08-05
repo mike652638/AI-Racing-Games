@@ -6,10 +6,12 @@ import { addDriftScore, addMatchResult, recordWin } from '../../src/ui/save'
 import type { TrackManager } from '../../src/game/track-manager'
 
 // 记账写入全部替换为 vi.fn（真实实现会写 localStorage）：断言"是否调用/调用参数"，
-// 不触碰存储副作用；recordWin 返回固定统计供 winStats 透传断言
+// 不触碰存储副作用；recordWin 返回固定统计供 winStats 透传断言；
+// addDriftScore 默认返回本条入榜首位（F-3 起 accountFinish 消费返回的 { top, entered }）
 vi.mock('../../src/ui/save', () => ({
   recordWin: vi.fn(() => ({ p1: 1, p2: 0, streak: 1, streakPlayer: 'P1' })),
-  addDriftScore: vi.fn(),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addDriftScore: vi.fn((entry: any) => ({ top: [entry], entered: true })),
   addMatchResult: vi.fn(),
 }))
 
@@ -256,5 +258,35 @@ describe('record=true：按模式记账', () => {
     call(makeRace({ p1CameraZ: 4000, p2CameraZ: 4000, p1Score: 10, p2Score: 50 }), SINGLE, { record: true })
     expect(mockedAddDriftScore).toHaveBeenCalledTimes(1)
     expect(mockedAddDriftScore).toHaveBeenCalledWith(expect.objectContaining({ player: 'P1' }))
+  })
+})
+
+describe('F-3 driftRankP1 漂移榜名次（2026-08-05 审计）', () => {
+  test('record=true 且入榜：名次 = addDriftScore 返回 top 中本条引用位置 + 1', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockedAddDriftScore.mockImplementationOnce((entry: any) => ({ top: [{}, entry, {}], entered: true }))
+    const r = call(makeRace({ p1CameraZ: 4000, p1Score: 100 }), SINGLE, { record: true })
+    expect(r.driftRankP1).toBe(2)
+  })
+
+  test('record=true 但被挤出 TOP10（entered=false）：名次 0（结算面板显示「未进 TOP10」）', () => {
+    mockedAddDriftScore.mockImplementationOnce(() => ({ top: [], entered: false }))
+    const r = call(makeRace({ p1CameraZ: 4000, p1Score: 1 }), SINGLE, { record: true })
+    expect(r.driftRankP1).toBe(0)
+  })
+
+  test('record=false 或零分：未记账名次恒 0', () => {
+    expect(call(makeRace({ p1CameraZ: 4000, p1Score: 100 }), SINGLE, { record: false }).driftRankP1).toBe(0)
+    expect(call(makeRace({ p1CameraZ: 4000, p1Score: 0 }), SINGLE, { record: true }).driftRankP1).toBe(0)
+  })
+
+  test('同分早条已在榜：名次按本条引用位置而非分数匹配（旧 findIndex 同分高估回归锚点）', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockedAddDriftScore.mockImplementationOnce((entry: any) => ({
+      top: [{ score: 100, player: 'P2' }, entry],
+      entered: true,
+    }))
+    const r = call(makeRace({ p1CameraZ: 4000, p1Score: 100 }), SINGLE, { record: true })
+    expect(r.driftRankP1).toBe(2)
   })
 })
