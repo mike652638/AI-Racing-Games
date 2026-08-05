@@ -53,3 +53,14 @@ export function createAudioRig(ctx: AudioContext, volume: number, musicVolume: n
     tireSound: new TireSound(ctx, sfxGain),
   }
 }
+
+/** R8：释放持续音节点（GameLoop.destroy 调用，防页面销毁后音频上下文/振荡器占用）。
+ *  引擎声与胎噪为构造即 start 的持续源，需显式 destroy；雨声/漂移声 stop 即停源；
+ *  音乐 stop 停 RAF；一次调用后实例不再复用（惰性创建，下次 startGame 重建新 rig）。 */
+export function destroyAudioRig(rig: AudioRig): void {
+  rig.engineSound.destroy()
+  rig.tireSound.destroy()
+  rig.rainSound.stop()
+  rig.driftSound.stop()
+  rig.music.stop()
+}

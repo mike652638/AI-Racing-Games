@@ -78,6 +78,8 @@ export class JoystickUI {
   private detachFns: Array<() => void> = []
 
   attach(canvas: HTMLCanvasElement): void {
+    // R7 幂等加固：重复 attach（未 detach 时）先清理旧监听/DOM，避免叠加 appendChild 与监听
+    if (this.detachFns.length > 0) this.detach()
     this.container.appendChild(this.base)
 
     const onPointerDown = (e: PointerEvent): void => {

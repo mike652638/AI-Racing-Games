@@ -8,7 +8,7 @@ import { Minimap } from '../ui/minimap'
 import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime, loadBestTimeFor } from '../ui/save'
 import { RACING_TOUCH_HINT } from '../ui/copy'
-import { createAudioRig } from './audio-rig'
+import { createAudioRig, destroyAudioRig, type AudioRig } from './audio-rig'
 import type { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
 import type { MusicPlayer } from '../audio/music'
 import { runCountdown } from './countdown'
@@ -142,6 +142,8 @@ export class GameLoop {
   private driftSound: DriftSound | null = null
   /** 轻量胎噪（M15：音频惰性创建时实例化，常驻极低音量，随车速/转向/湿滑调制） */
   private tireSound: TireSound | null = null
+  /** 音频装备束引用（R8：destroy 时 destroyAudioRig 释放持续音节点，防上下文占用） */
+  private audioRig: AudioRig | null = null
   /** 上一帧 boost 是否激活（边沿检测：本帧激活且上帧未激活 → boostSound.play()） */
   private boostActive = false
   /** BOOST 尾焰粒子（H2：P1 激活期间每帧至多 1 粒，存活 0.6s；经 viewFor 传入 renderer 投影） */
@@ -702,6 +704,15 @@ export class GameLoop {
     this.input.destroy()
     this.joystick.detach()
     this.silenceDriveSounds(true)
+    // R8：释放持续音节点（引擎/胎噪构造即 start，页面销毁时须 stop 防上下文占用）
+    if (this.audioRig) {
+      try {
+        destroyAudioRig(this.audioRig)
+      } catch {
+        // 单项清理失败不影响其余（测试 stub 节点可能缺少 disconnect）
+      }
+      this.audioRig = null
+    }
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
@@ -795,6 +806,7 @@ export class GameLoop {
     if (!this.engineSound) {
       // 音频装备下沉 audio-rig.ts（2026-08-05）：masterGain 总控 + musicGain/sfxGain 分轨 + 全部音效一次性装配
       const rig = createAudioRig(new AudioContext(), this.volume, this.musicVolume, this.sfxVolume)
+      this.audioRig = rig
       this.masterGain = rig.masterGain
       this.musicGain = rig.musicGain
       this.sfxGain = rig.sfxGain

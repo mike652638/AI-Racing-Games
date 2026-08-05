@@ -62,6 +62,21 @@ export class EngineSound {
   stop(): void {
     this.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05)
   }
+
+  /** R8：显式释放节点（构造即 start 的振荡器，页面销毁时须 stop 防音频上下文占用）。
+   *  幂等；stop() 仅静音不释放，destroy() 停止振荡器并断开节点图 */
+  destroy(): void {
+    this.oscs.forEach((osc) => {
+      try {
+        osc.stop()
+      } catch {
+        // 已停止的振荡器再 stop 抛错，忽略
+      }
+      if (typeof osc.disconnect === 'function') osc.disconnect()
+    })
+    if (typeof this.filter.disconnect === 'function') this.filter.disconnect()
+    if (typeof this.gain.disconnect === 'function') this.gain.disconnect()
+  }
 }
 
 /** 雨声环境音：2 秒白噪声循环 buffer → bandpass 800Hz → gain 0.05 → output（WebAudio 合成） */
@@ -380,5 +395,18 @@ export class TireSound {
   /** 随车速比/转向/湿滑调制胎噪电平：setTargetAtTime 平滑到 computeTireSoundParams 目标（封顶 TIRE_GAIN_MAX） */
   setLevel(speedRatio: number, steerAbs: number, wet = false): void {
     this.gain.gain.setTargetAtTime(computeTireSoundParams(speedRatio, steerAbs, wet), this.ctx.currentTime, 0.05)
+  }
+
+  /** R8：显式释放节点（构造即 start 的循环源，页面销毁时须 stop 防音频上下文占用）。
+   *  幂等；无 stop 方法（常驻低音量），destroy() 停止源并断开节点图 */
+  destroy(): void {
+    try {
+      this.source.stop()
+    } catch {
+      // 已停止的源再 stop 抛错，忽略
+    }
+    if (typeof this.source.disconnect === 'function') this.source.disconnect()
+    if (typeof this.filter.disconnect === 'function') this.filter.disconnect()
+    if (typeof this.gain.disconnect === 'function') this.gain.disconnect()
   }
 }

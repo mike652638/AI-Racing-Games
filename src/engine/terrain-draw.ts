@@ -1,6 +1,6 @@
 /** 地形装饰模块（2026-08-05 从 Renderer 类提取）：沙漠沙丘 / 海岸海面 / 峡谷岩壁。
  *  纯函数（ctx/opts/environment/night/time 显式传入），不依赖 Renderer 实例状态。 */
-import { getEnvironmentProfile } from './environment'
+import { getEnvironmentProfile, type Environment } from './environment'
 import type { ProjectionOptions } from './projection'
 
 /** M18 沙丘变形：每座沙丘折线逼近的固定步数（帧内零新建数组） */
@@ -25,11 +25,12 @@ const WAVE_DRIFT_AMP = 0.02
 export function drawTerrain(
   ctx: CanvasRenderingContext2D,
   opts: ProjectionOptions,
-  environment: string,
+  environment: Environment,
   night: boolean,
   time = 0,
 ): void {
-  const profile = getEnvironmentProfile(environment as Parameters<typeof getEnvironmentProfile>[0])
+  // R10：参数类型直接收敛为 Environment（getEnvironmentProfile 收窄到 union，未知环境由函数内回退 plains）
+  const profile = getEnvironmentProfile(environment)
   const terrain = profile.terrain
   if (!terrain) return
   const w = opts.width
