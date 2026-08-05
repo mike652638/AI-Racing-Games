@@ -31,8 +31,13 @@
     <meta itemprop="image" content="https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/share-card-v2.png" />
     <!-- PWA：SVG 图标（favicon 与 manifest 通用） -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <!-- 样式并行加载：避免 FOUC（main.ts 中移除 import './style.css' 防止重复引入） -->
-    <link rel="stylesheet" href="/src/style.css" />
+    <!-- 样式并行加载：避免 FOUC（main.ts 中移除 import './style.css' 防止重复引入）。
+         2026-08-05 按屏幕维度拆分为 base（设计令牌/全局/画布/HUD）/ screens（菜单/结算）/
+         interaction（暂停/摇杆/触屏/响应式媒体查询）；加载顺序即原 style.css 顺序，
+         CSS 级联覆盖（后定义优先）语义逐字节不变 -->
+    <link rel="stylesheet" href="/src/style.base.css" />
+    <link rel="stylesheet" href="/src/style.screens.css" />
+    <link rel="stylesheet" href="/src/style.interaction.css" />
     <!-- PWA：manifest link 由 vite-plugin-pwa 构建时自动注入（避免重复），此处不手写 -->
     <meta name="theme-color" content="#ffd75e" />
     <!-- PWA：移动端添加到主屏幕 -->

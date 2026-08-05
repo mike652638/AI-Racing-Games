@@ -1,0 +1,518 @@
+/* 设计令牌：间距、字体、色彩、字号统一由变量管理，方便响应式与安全区适配 */
+:root {
+  --hud-pad: 24px;
+  --font-mono: 'Consolas', 'Courier New', monospace;
+  --font-display: 'Impact', 'Arial Black', 'Helvetica Neue', sans-serif;
+  --font-body: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --accent: #ffd75e;
+  --color-accent: #ffd75e;
+  --color-accent-rgb: 255, 215, 94;
+  --accent-2: #ff8c1a;
+  --color-p1: #fde047;
+  --color-p1-rgb: 253, 224, 71;
+  --color-p2: #4ade80;
+  --color-p2-rgb: 74, 222, 128;
+  --color-danger: #ff5252;
+  --color-danger-rgb: 255, 82, 82;
+  --speed-fs: clamp(32px, 9vw, 44px);
+  --title-fs: clamp(28px, 9vw, 64px);
+  --subtitle-fs: clamp(16px, 4vw, 24px);
+  --hud-fs: clamp(14px, 3vw, 20px);
+  --hint-fs: clamp(14px, 3vw, 16px);
+  --menu-pink: #ff3864;
+  --menu-cyan: #00d9ff;
+  --minimap-size: 110px;
+}
+
+/* 修复：display:flex 会覆盖浏览器默认的 [hidden] 样式，需要显式强制 */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: var(--font-body);
+}
+
+/* 画布：CSS 尺寸接管显示大小，避免 DPR 缩放导致只显示左上角；禁止触摸默认手势 */
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+}
+
+#hud {
+  position: fixed;
+  top: calc(var(--hud-pad) + env(safe-area-inset-top));
+  right: calc(var(--hud-pad) + env(safe-area-inset-right));
+  font-family: var(--font-mono);
+  color: #fff;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#hud-speed {
+  font-size: var(--speed-fs);
+  font-weight: 700;
+  line-height: 1;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 1);
+}
+
+#hud-speed-unit {
+  /* UX-15 修复（2026-08-05）：单位字号适度提升，与数字形成 ≈2.2:1 层级（原 4:1 过悬殊） */
+  font-size: clamp(16px, 3.5vw, 20px);
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+#hud-lap,
+#hud-time {
+  font-size: var(--hud-fs);
+  opacity: 1;
+  color: #f5f5f5;
+  text-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.8),
+    0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+#hud-best {
+  font-size: clamp(12px, 2.6vw, 18px);
+  opacity: 0.95;
+}
+
+/* 分屏模式：P1 位于左半区域，HUD 从右上移到左上（左右对称） */
+#hud.split {
+  right: auto;
+  left: calc(var(--hud-pad) + env(safe-area-inset-left));
+}
+
+/* 旋转提示：竖屏移动端全屏遮罩，提示用户横屏游玩 */
+#rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 7, 15, 0.92);
+  color: #fff;
+  font-family: var(--font-mono);
+  text-align: center;
+  user-select: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#rotate-hint .rotate-icon {
+  font-size: clamp(48px, 15vw, 80px);
+  color: var(--accent);
+  margin-bottom: 16px;
+  animation: rotate-phone 2s ease-in-out infinite;
+  text-shadow: 0 0 24px rgba(var(--color-accent-rgb), 0.5);
+}
+
+#rotate-hint h2 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 7vw, 42px);
+  margin: 0 0 10px;
+  letter-spacing: 4px;
+  background: linear-gradient(180deg, #fff 0%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+#rotate-hint p {
+  font-size: var(--subtitle-fs);
+  opacity: 0.9;
+  margin: 0 24px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* C+E 竖屏兼容（2026-08-05）：遮罩内提供「竖屏继续 / 横屏体验」两个操作按钮，
+ * 竖屏不再强制横屏——选择竖屏后进入 portrait-mode（菜单紧凑布局 + 竖屏 HUD 适配） */
+#rotate-hint .rotate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 26px;
+  width: min(240px, 68vw);
+}
+
+#rotate-hint .rotate-actions button {
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: clamp(15px, 4vw, 19px);
+  letter-spacing: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+#rotate-hint .rotate-actions button:active {
+  transform: scale(0.97);
+}
+
+#rotate-play-portrait {
+  border: 2px solid var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.18);
+  color: var(--color-accent);
+}
+
+#rotate-play-portrait:hover {
+  background: rgba(var(--color-accent-rgb), 0.4);
+  color: #fff;
+}
+
+#rotate-play-landscape {
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+#rotate-play-landscape:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#rotate-hint .rotate-actions button:focus-visible {
+  outline: 2px solid var(--menu-cyan);
+  outline-offset: 3px;
+}
+
+/* 遮罩被 JS 隐藏时（用户已选择竖屏/横屏）须压过竖屏媒体查询的 display:flex */
+#rotate-hint[hidden] {
+  display: none !important;
+}
+
+@keyframes rotate-phone {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
+}
+
+/* 分屏模式：P2 位于右半区域，HUD 从左下移到右上（左右对称） */
+#hud2.split {
+  bottom: auto;
+  top: calc(var(--hud-pad) + env(safe-area-inset-top));
+  left: auto;
+  right: calc(var(--hud-pad) + env(safe-area-inset-right));
+}
+
+#hud2 {
+  position: fixed;
+  bottom: calc(var(--hud-pad) + env(safe-area-inset-bottom));
+  left: calc(var(--hud-pad) + env(safe-area-inset-left));
+  font-family: var(--font-mono);
+  color: #fff;
+  text-align: left;
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#hud-speed-2 {
+  font-size: var(--speed-fs);
+  font-weight: 700;
+  line-height: 1;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 1);
+}
+
+#hud-speed-unit-2 {
+  /* UX-15 修复（2026-08-05）：同 P1 单位字号层级 */
+  font-size: clamp(16px, 3.5vw, 20px);
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+#hud-lap-2,
+#hud-time-2 {
+  font-size: var(--hud-fs);
+  opacity: 1;
+  color: #f5f5f5;
+  text-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.8),
+    0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+#drift-indicator {
+  margin-top: 12px;
+  font-size: clamp(24px, 6vw, 32px);
+  font-weight: 700;
+  color: #ff8c1a;
+  letter-spacing: 2px;
+  animation: pulse 0.3s ease-in-out infinite alternate;
+  text-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.9),
+    0 0 4px rgba(255, 140, 26, 0.5);
+}
+
+/* 漂移得分数字变化动画：由 hud.ts 通过 score-pop 类触发一次性放大回弹 */
+#drift-score-value {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+#drift-score-value.score-pop {
+  animation: score-pulse 0.25s ease-out;
+}
+
+/* M16 碰撞计数（#hud-collision：比赛阶段碰撞次数，红色警示色，出现时轻微抖动提示） */
+#hud-collision {
+  margin-top: 4px;
+  font-size: clamp(12px, 2.6vw, 15px);
+  font-weight: 700;
+  color: var(--color-danger);
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 漂移连击倍率（#drift-combo：active 且 combo≥1 时由 updateHud 显示；黄绿加粗随漂移指示） */
+#drift-combo {
+  margin-top: 4px;
+  font-size: clamp(14px, 3vw, 18px);
+  font-weight: 700;
+  color: var(--color-p1);
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 挑战模式倒计时（#challenge-timer：?challenge=1 时由 game-loop 帧块更新；橙红醒目随漂移指示） */
+#challenge-timer {
+  margin-top: 6px;
+  font-size: clamp(18px, 4vw, 26px);
+  font-weight: 700;
+  color: #ff8c1a;
+  letter-spacing: 1px;
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* 挑战模式实时得分（#challenge-score：challenge 模式竞赛中显示当前漂移得分，黄绿独立层级） */
+#challenge-score {
+  margin-top: 4px;
+  font-size: clamp(16px, 3.5vw, 22px);
+  font-weight: 700;
+  color: var(--color-p1);
+  letter-spacing: 1px;
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* m17：挑战模式倒计时剩余 10 秒内紧急闪烁 */
+#challenge-timer.urgent {
+  color: #ff3864;
+  animation: timer-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 小地图 / 赛道进度指示器（#hud-minimap：Batch 6 单屏比赛阶段显示；canvas 像素内容由 src/ui/minimap.ts 每帧绘制。
+   必须显式覆盖全局 canvas 规则的 width/height——否则 100vw/100vh 会把小地图撑满整个视口） */
+#hud-minimap {
+  display: block;
+  width: var(--minimap-size);
+  height: var(--minimap-size);
+  margin-top: 8px;
+  border-radius: 10px;
+  opacity: 0.9;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* BOOST 氮气条（#boost-bar：G4 帧块按 P1 charge 百分比设置宽度；底部固定横条，
+ * 黄→橙渐变填充。2026-08-05 P1-1 重构为「固定轨道 + 填充层」双元素——轨道常驻
+ * 显示暗色底槽，玩家在未蓄能时也能感知 BOOST 功能与蓄能进度；.boost-fill 宽度
+ * 由 frame-update 按 charge 设置。 */
+#boost-bar {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 200px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  box-sizing: border-box;
+}
+
+#boost-bar .boost-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, #ffd166, #ff8c1a);
+  box-shadow: 0 0 8px rgba(255, 140, 26, 0.5);
+  transition: width 0.1s ease;
+}
+
+#boost-bar span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  padding-left: 8px;
+  /* V-1（2026-08-05 审计）：标签对比度提升——字号 10→11px + 字间距 + 深色描边投影，防小字误读 */
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  line-height: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* BOOST 未蓄能红色闪烁反馈（game-loop 在键盘按下且 charge<=0 时触发） */
+@keyframes no-charge-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(var(--color-danger-rgb), 0.9),
+      0 0 16px rgba(var(--color-danger-rgb), 0.8);
+  }
+}
+
+#boost-bar.no-charge {
+  animation: no-charge-flash 0.3s ease-in-out 2;
+  border-color: rgba(var(--color-danger-rgb), 0.9);
+}
+
+/* 热座当前驾驶玩家标签（#hud-player-tag 由 GameLoop 控制显隐与 p1/p2 类） */
+#hud-player-tag {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+#hud-player-tag.p1 {
+  color: var(--color-p1);
+}
+
+#hud-player-tag.p2 {
+  color: var(--color-p2);
+}
+
+/* 热座结算胜负/交棒提示横幅 */
+#finish-hint {
+  margin-top: 12px;
+  font-size: var(--subtitle-fs);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 分屏漂移竞速排名横幅（#finish-drift-winner：GameLoop 计算 driftWinner，
+   fillFinishPanel 控制显隐与 p1/p2 类；配色与 #hud-player-tag 同风格） */
+#finish-drift-winner {
+  margin-top: 12px;
+  font-size: var(--subtitle-fs);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#finish-drift-winner.p1 {
+  color: var(--color-p1);
+}
+
+#finish-drift-winner.p2 {
+  color: var(--color-p2);
+}
+
+/* 胜场统计行（#finish-wins：热座/分屏分胜负时由 fillFinishPanel 填充；小字灰色弱化） */
+#finish-wins {
+  margin-top: 10px;
+  font-size: var(--hint-fs);
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* 榜单卡片内容区（#drift-top/#best-summary/#match-top 共享；M-8 合并旧两段重复规则） */
+.lb-card-body {
+  margin: 0;
+  /* 2026-08-05 LB-3：等宽数字 + 左对齐——排名号与时间数字纵向对齐整齐；
+   *  居中对齐会让"1."与"经典赛道 P1"中线分离导致视觉错位 */
+  /* LB-7：字号 clamp(14px, 3vw, 16px)→clamp(13px, 2.8vw, 14px)，面板更紧凑 */
+  font-size: clamp(13px, 2.8vw, 14px);
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.9);
+  /* LB-3：行高 1.6→1.4，三行内容更紧凑节省垂直空间 */
+  line-height: 1.4;
+  text-align: left;
+  /* LB-4：保留 pre-line 支持 \n 换行；同时加 padding 防止文字贴边溢出 */
+  white-space: pre-line;
+  padding: 0 4px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  /* M-3（菜单审计）：限高 + max-height 过渡提供展开反馈；默认 overflow:hidden
+   *  消除嵌套滚动陷阱（滚轮悬停卡片不再被捕获），仅条目多时由 JS 加 .scrollable 开启内滚 */
+  max-height: 120px;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
+}
+
+/* M-3：条目数 >8 时由 top-refresh 加 .scrollable，才允许面板内部滚动 */
+/* LB-Z2（榜单专项审计）：内滚仅限展开态——旧规则 .scrollable 全局开 overflow-y:auto，
+ *  但卡片被互斥收起后 refresh 不重跑，.scrollable 残留使收起态（max-height 120px）
+ *  也能卡片内滚，重新引入嵌套滚动陷阱；收起态恒为 overflow:hidden */
+.lb-card-clickable.expanded .lb-card-body.scrollable {
+  overflow-y: auto;
+}
+
+/* LB-Z3（榜单专项审计）：收起态内容被 max-height 硬裁切（实测 5 条×2 行=196px 仅显 120px，
+ *  第 4 条拦腰截断无提示）——JS 按 scrollHeight>clientHeight 加 .clipped，底部渐隐提示更多内容 */
+.lb-card-body.clipped {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+/* LB-5 + M-3：展开态上限放宽到 210px（原 135px 与折叠态仅差 15px，展开感知弱），
+ *  配合 max-height 过渡与箭头旋转形成明确展开反馈；开始按钮由 sticky 保底可见（M-1） */
+.lb-card-clickable.expanded .lb-card-body {
+  max-height: 210px;
+}
+

@@ -1,0 +1,993 @@
+
+/* 暂停菜单保持原有简洁玻璃风格 */
+#pause-screen {
+  background: rgba(8, 10, 20, 0.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+#pause-screen h1,
+#pause-screen p {
+  font-size: var(--subtitle-fs);
+  margin: 6px 0;
+  opacity: 0.9;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+#pause-screen h1 {
+  font-size: var(--title-fs);
+  margin: 0 0 16px;
+  letter-spacing: 6px;
+  background: linear-gradient(180deg, #ffd166, #ef476f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+/* P6（P6）：暂停菜单控件（音量 slider + 重开按钮），随 #pause-screen 面板显隐 */
+#pause-controls {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+#pause-controls label {
+  font-size: var(--subtitle-fs);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#pause-volume,
+#pause-music-volume,
+#pause-sfx-volume {
+  width: 200px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 暂停滑块数值：等宽金色小字，紧贴 slider 右侧 */
+#pause-volume-value,
+#pause-music-volume-value,
+#pause-sfx-volume-value {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-size: clamp(12px, 2.5vw, 16px);
+  min-width: 3.2ch;
+  text-align: right;
+  margin-left: 8px;
+  opacity: 0.95;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+#pause-restart,
+#pause-resume,
+#pause-quit-btn {
+  padding: 8px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--hint-fs);
+  cursor: pointer;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+#pause-quit-btn {
+  border-color: rgba(var(--color-accent-rgb), 0.55);
+  color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.1);
+}
+
+#pause-restart:hover,
+#pause-restart:active,
+#pause-resume:hover,
+#pause-resume:active,
+#pause-quit-btn:hover,
+#pause-quit-btn:active {
+  opacity: 0.85;
+  border-color: rgba(255, 255, 255, 0.65);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#pause-quit-btn:hover,
+#pause-quit-btn:active {
+  border-color: rgba(var(--color-accent-rgb), 0.85);
+  background: rgba(var(--color-accent-rgb), 0.2);
+}
+
+/* F3（F3）：触屏暂停悬浮按钮（#pause-btn：HUD 内左下角圆形按钮，RACING 阶段由 applyPhase 显示；
+   半透明背景 + z-index 高于 canvas，与右下角虚拟摇杆互不遮挡） */
+#pause-btn {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 30;
+  /* 2026-08-05 暂停按钮可点性修复：父级 #hud 为 pointer-events:none（防 HUD 文字挡画面）会被继承，
+     导致真实鼠标/触摸点击穿透按钮落到 canvas、用户点不动；覆写 auto 恢复命中（程序化 .click() 不受影响） */
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* M11：分屏模式下暂停按钮居中，两视窗对称可见，避免与任意一侧摇杆重叠 */
+#pause-btn.split-center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#pause-btn:hover,
+#pause-btn:active {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* U-2（2026-08-05 审计）：键鼠设备（hover:hover + pointer:fine）暂停按钮与 ESC 能力重复，
+   默认低透明度减少视觉噪声，hover/按下时增强；触屏设备保持全不透明 */
+@media (hover: hover) and (pointer: fine) {
+  #pause-btn {
+    opacity: 0.35;
+    transition: opacity 0.15s ease;
+  }
+
+  #pause-btn:hover,
+  #pause-btn:active {
+    opacity: 1;
+  }
+}
+
+/* 虚拟摇杆：样式统一由 CSS 控制，JS 仅负责显示/隐藏与位置更新 */
+.joystick-base {
+  position: fixed;
+  width: min(22vw, 120px);
+  height: min(22vw, 120px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  display: none;
+  z-index: 100;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* 触屏设备常驻摇杆：JS 检测触屏后给 base 加 touch-visible，右下角半透明提示可操作，按下时 active 高亮 */
+.joystick-base.touch-visible {
+  display: block;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.joystick-base.touch-visible.active {
+  opacity: 1;
+}
+
+.joystick-knob {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
+@media (hover: none) {
+  #touch-hint {
+    display: block;
+    font-size: var(--hint-fs);
+    opacity: 0.85;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  }
+
+  /* 触屏设备无键盘：隐藏桌面键盘提示，显示触屏菜单提示 */
+  #keyboard-hint,
+  #menu-hint {
+    display: none;
+  }
+
+  #menu-hint-touch {
+    display: block;
+  }
+
+  /* 触屏友好：赛道按钮增大点击热区 */
+  .track-option {
+    min-height: 52px;
+    padding: 8px 14px;
+  }
+}
+
+/* 桌面端显式隐藏触屏提示与触屏菜单提示 */
+@media (hover: hover) {
+  #touch-hint,
+  #menu-hint-touch {
+    display: none;
+  }
+}
+
+/* 竖屏手机：强制横屏提示覆盖游戏画面 */
+@media (orientation: portrait) and (max-width: 1024px) {
+  #rotate-hint {
+    display: flex;
+  }
+}
+
+/* 横屏手机：隐藏旋转提示，确保 canvas 铺满 */
+@media (orientation: landscape) {
+  #rotate-hint {
+    display: none;
+  }
+}
+
+/* ===== C+E 竖屏兼容（2026-08-05）：body.portrait-mode 由「竖屏继续」激活 ===== */
+
+/* C：竖屏菜单——内容超高时改为顶部对齐（修复 flex 居中在溢出时顶部被裁剪，
+ * 与 #start-screen 的 overflow-y:auto 配合实现完整滚动查看） */
+body.portrait-mode #start-screen {
+  justify-content: flex-start;
+  padding-top: calc(22px + env(safe-area-inset-top));
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+body.portrait-mode .title-wrap {
+  margin-bottom: 4px;
+}
+
+body.portrait-mode .title-sub {
+  margin-bottom: 2px;
+}
+
+body.portrait-mode #track-select {
+  gap: 8px;
+  max-width: 400px;
+  margin: 4px auto 4px;
+  padding: 0 10px;
+}
+
+body.portrait-mode .track-option {
+  padding: 6px 8px;
+  min-height: 46px;
+}
+
+body.portrait-mode .leaderboard-cards {
+  gap: 6px;
+  max-width: 460px;
+}
+
+body.portrait-mode .lb-card {
+  padding: 8px 10px;
+}
+
+body.portrait-mode .lb-card-body {
+  max-height: 150px;
+}
+
+body.portrait-mode #touch-hint {
+  margin-top: 4px;
+}
+
+/* E：竖屏游戏——渲染层按视口比例自动投影（道路略窄但完整可玩），HUD 做竖屏适配 */
+body.portrait-mode #boost-bar {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(220px, 52vw);
+}
+
+body.portrait-mode #pause-btn {
+  left: 14px;
+  bottom: 14px;
+}
+
+body.portrait-mode #hud {
+  right: 10px;
+  top: calc(8px + env(safe-area-inset-top));
+}
+
+/* 竖屏空间有限：隐藏 HUD 侧边玩家标签，减少右上角堆叠遮挡 */
+body.portrait-mode #hud .hud-side-tag {
+  display: none;
+}
+
+body.portrait-mode #hud-minimap {
+  width: 76px;
+  height: 76px;
+  margin-top: 4px;
+}
+
+/* 竖屏挑战模式：顶部计时/得分条收窄防溢出 */
+body.portrait-mode #challenge-timer,
+body.portrait-mode #challenge-score {
+  font-size: clamp(13px, 3.2vw, 18px);
+  padding: 4px 10px;
+}
+
+/* 竖屏分屏：左右半屏在窄比例下过窄，提示横屏体验更佳（仅提示，不强制） */
+body.portrait-mode #hud2 .hud-side-tag {
+  display: none;
+}
+
+/* 竖屏手机：进一步缩小 HUD 间距与字号，避免遮挡画面 */
+@media (max-width: 640px) {
+  :root {
+    --hud-pad: 12px;
+    --speed-fs: clamp(32px, 10vw, 48px);
+    --title-fs: clamp(24px, 8vw, 48px);
+    --subtitle-fs: clamp(14px, 3.5vw, 20px);
+    --hud-fs: clamp(12px, 2.5vw, 16px);
+  }
+
+  #hud2 {
+    --speed-fs: clamp(24px, 8vw, 36px);
+    --hud-fs: clamp(10px, 2vw, 14px);
+  }
+
+  #track-select {
+    gap: 10px;
+    max-width: 420px;
+  }
+
+  /* 移动端 2 列网格：最后一项奇数时居中 */
+  .track-option {
+    padding: 8px 10px;
+    min-width: 0;
+    flex: 1 1 42%;
+    max-width: none;
+    min-height: 52px;
+  }
+
+  .track-option:nth-child(odd):last-child {
+    margin: 0 auto;
+  }
+
+  .track-preview-wrap {
+    height: 52px;
+  }
+
+  #track-preview {
+    width: 160px;
+    height: 52px;
+  }
+
+  .leaderboard-cards {
+    gap: 8px;
+  }
+
+  .lb-card {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 10px 12px;
+  }
+
+  .finish-panel {
+    padding: 16px;
+    width: 96vw;
+  }
+
+  .finish-card {
+    padding: 12px 14px;
+  }
+}
+
+/* 超小屏（如 iPhone SE / 迷你机型）：标题与副标题不再比中屏更小，至少持平或略大 */
+@media (max-width: 390px) {
+  :root {
+    --title-fs: 26px;
+    --subtitle-fs: 15px;
+  }
+}
+
+/* M-1（菜单审计）：低高度桌面分级压缩——≤700px 压缩标题/网格/预览/榜单的垂直占位，
+ *  使 1366×768 笔记本（可用高度 ≈600–650px）首屏容纳全部内容；≤620px 进一步隐藏
+ *  副标题与预览缩略图；配合 #start-btn sticky 保底（下方），主 CTA 始终可见 */
+@media (max-height: 700px) {
+  .title-wrap {
+    margin-bottom: 4px;
+  }
+
+  .title-sub {
+    margin: -6px 0 2px;
+  }
+
+  #track-select {
+    margin: 4px auto 2px;
+    gap: 10px;
+  }
+
+  .track-preview-wrap {
+    height: 44px;
+    margin-top: 2px;
+  }
+
+  #track-name {
+    margin: 2px 0 0;
+  }
+
+  .leaderboard-cards {
+    margin-top: 4px;
+  }
+
+  .lb-card {
+    padding: 4px 8px;
+  }
+
+  #start-btn {
+    margin-top: 6px;
+  }
+
+  #start-screen .hint,
+  #menu-hint-touch {
+    margin-top: 8px;
+  }
+}
+
+/* M-1 第二档：≤620px 隐藏副标题与预览缩略图（与横屏移动低高度策略一致） */
+@media (max-height: 620px) {
+  .title-sub {
+    display: none;
+  }
+
+  .track-preview-wrap {
+    display: none;
+  }
+}
+
+/* M-6（菜单审计）：宽屏 ≥1600px 放宽内容列宽，减少两侧大面积留白
+ *  （1920×1080 实测网格仅 584px 宽悬浮于空背景） */
+@media (min-width: 1600px) {
+  #track-select {
+    max-width: 660px;
+  }
+
+  .leaderboard-cards {
+    max-width: 860px;
+  }
+
+  .lb-card {
+    max-width: 260px;
+  }
+}
+
+/* 横屏手机（高度受限）：压缩标题与屏幕间距 */
+@media (max-height: 480px) {
+  /* P1 修复：标题由 .title-main（div）渲染，必须覆盖 --title-fs 变量本身（原规则只命中 h1 无效） */
+  :root {
+    --title-fs: clamp(18px, 5vw, 30px);
+    --subtitle-fs: clamp(11px, 2.6vw, 15px);
+  }
+
+  #start-screen h1,
+  #finish-screen h1,
+  #pause-screen h1 {
+    font-size: clamp(18px, 5vw, 30px);
+    margin: 0 0 6px;
+  }
+
+  /* 副标题负上边距在低高度下与标题挤压成叠影，压缩标题整体占高 */
+  .title-wrap {
+    margin-bottom: 2px;
+  }
+
+  .title-sub {
+    margin: 0 0 2px;
+    font-size: clamp(10px, 2.2vw, 12px);
+  }
+
+  #start-screen .hint,
+  #finish-screen .hint,
+  #pause-screen .hint {
+    margin-top: 10px;
+  }
+
+  #track-select {
+    margin: 4px 0 2px;
+    gap: 8px;
+  }
+
+  /* 横屏低高度：缩小赛道卡片与预览区，保证开始按钮不被挤出视口 */
+  .track-option {
+    min-height: 32px;
+    padding: 3px 8px;
+  }
+
+  /* 低高度下隐藏中央赛道缩略图预览（节省 40px，卡片 3×3 网格本身已含赛道信息） */
+  .track-preview-wrap {
+    display: none;
+  }
+
+  /* 榜单卡片强制单行（三卡并排），避免 812px 下换行成两行挤压开始按钮 */
+  .leaderboard-cards {
+    margin: 2px auto 0;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .lb-card {
+    padding: 3px 8px;
+    min-width: 0;
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  .lb-card-head {
+    font-size: clamp(10px, 2vw, 12px);
+    /* M-2（菜单审计）：横屏触屏设备卡片头触控目标抬高至 44px（原实测仅 23px，
+     *  远低于触控目标建议；body 在低高度已隐藏，head 即唯一可点区） */
+    min-height: 44px;
+  }
+
+  #start-btn {
+    margin-top: 6px;
+    padding: 6px 24px;
+  }
+
+  /* 低高度下隐藏键盘提示（横屏手机以触屏为主，menu-hint-touch 已单独提示） */
+  #start-screen #menu-hint {
+    display: none;
+  }
+
+  .menu-content {
+    padding: 6px 0;
+    /* 低高度内容紧凑后即使溢出也可滚动到开始按钮 */
+    justify-content: flex-start;
+  }
+
+  /* 低高度：光晕进一步缩小并贴地（底部 8% 在 375px 高度下仍会与赛道卡片重叠） */
+  .finish-sun {
+    bottom: 2%;
+    width: min(14vw, 96px);
+    height: min(14vw, 96px);
+    box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.25);
+  }
+
+  /*
+   * 低高度下赛道卡片被压缩后整体居中下移，原本贴底的光晕会叠到卡片；
+   * 将菜单光晕缩到更小并移到视口下方，只保留底部微光，避免与卡片重叠。
+   */
+  .menu-sun {
+    bottom: -80px;
+    width: 56px;
+    height: 56px;
+    box-shadow: 0 0 24px 8px rgba(255, 56, 100, 0.18);
+  }
+
+  /* 低高度：赛道名与榜单占位文案隐藏，只保留可点击头部，避免把开始按钮挤出 375px */
+  #track-name,
+  #p2-track-name {
+    display: none;
+  }
+
+  /* LB-Z1（榜单专项审计）：旧版 .lb-card-body 在 ≤480px 恒 display:none——
+   *  点击展开后 toggle 切「收起 ▾」/aria-expanded=true 但内容不可见，交互契约违背
+   *  （menu-probe 实测移动端 body 高度恒 0）。改为：收起态仍隐藏省空间，
+   *  展开态恢复可见并限高内滚；内容推高的开始按钮由 sticky 保底可见 */
+  .lb-card-body {
+    display: none;
+  }
+
+  .lb-card-clickable.expanded .lb-card-body {
+    display: block;
+    max-height: 88px;
+    overflow-y: auto;
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  .lb-card-clickable.expanded .lb-card-head {
+    margin-bottom: 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .lb-card {
+    padding: 3px 6px;
+    min-height: 0;
+    border-radius: 8px;
+  }
+
+  .lb-card-head {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  #start-screen .hint,
+  #menu-hint-touch {
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  #start-btn {
+    margin-top: 2px;
+    padding: 4px 16px;
+    font-size: 14px;
+    min-height: 32px;
+  }
+}
+
+/* 分屏模式：第二位 HUD 字号进一步缩小，避免左右分屏时信息拥挤 */
+#hud2 {
+  --speed-fs: clamp(24px, 8vw, 48px);
+  --hud-fs: clamp(12px, 2.5vw, 18px);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes score-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ===== 赛道主题背景色（切换赛道时通过 .menu-bg 子类切换渐变色调） ===== */
+.menu-bg.track-classic .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 56, 100, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #0b0518 0%, #1a0b2e 50%, #2d1b4e 100%);
+}
+.menu-bg.track-highway .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 180, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(var(--color-accent-rgb), 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #04101e 0%, #0b2840 50%, #124060 100%);
+}
+.menu-bg.track-s-curve .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(120, 80, 220, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #10081e 0%, #201040 50%, #382060 100%);
+}
+.menu-bg.track-island .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 200, 160, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #041818 0%, #0b3030 50%, #124848 100%);
+}
+.menu-bg.track-canyon .menu-gradient {
+  /* M-5（菜单审计）：拉大与 desert 的色相差——原 #482810 红棕与 #483010 金棕观感近似，
+   *  改红黑峡谷调 + 更红的底部光斑，两主题截图并排可即时区分 */
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 60, 40, 0.38) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 140, 50, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #200808 0%, #3a1210 50%, #551a12 100%);
+}
+.menu-bg.track-desert .menu-gradient {
+  /* M-5：desert 保持金黄调但底部提亮，与 canyon 红黑调形成明度+色相双重差异 */
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 200, 50, 0.38) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 100, 50, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #201600 0%, #3c2a08 50%, #543c14 100%);
+}
+.menu-bg.track-forest .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(50, 200, 50, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(100, 255, 100, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #041804 0%, #083008 50%, #0c480c 100%);
+}
+.menu-bg.track-coast .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(0, 150, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 255, 200, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #021020 0%, #042040 50%, #063060 100%);
+}
+.menu-bg.track-alpine .menu-gradient {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180, 200, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 55%),
+    linear-gradient(180deg, #0a0e18 0%, #142030 50%, #203048 100%);
+}
+
+/* ===== 起步倒计时覆盖层 ===== */
+#countdown-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 100;
+  pointer-events: none;
+}
+
+#countdown-overlay .countdown-number {
+  font-family: var(--font-display);
+  font-size: clamp(80px, 20vw, 160px);
+  color: var(--color-accent);
+  text-shadow:
+    0 0 40px rgba(var(--color-accent-rgb), 0.8),
+    0 0 80px rgba(255, 56, 100, 0.5);
+  animation: countdown-pop 0.5s ease-out;
+  line-height: 1;
+}
+
+#countdown-overlay .countdown-hints {
+  margin-top: 24px;
+  text-align: center;
+}
+
+#countdown-overlay .countdown-hints p {
+  font-family: var(--font-mono);
+  font-size: clamp(14px, 3vw, 18px);
+  color: rgba(255, 255, 255, 0.9);
+  margin: 6px 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===== 菜单阶段隐藏虚拟摇杆（右下角圆环） =====
+ * 2026-08-05 P0 修复：原 #start-screen ~ .joystick-base 不依赖 body class，且
+ * .joystick-base DOM 位置在 #start-screen 之后（通用兄弟选择器恒匹配），配合
+ * !important 在 RACING 阶段也压过 .joystick-base.touch-visible { display: block }，
+ * 导致触屏摇杆在比赛中完全不可见。改为仅 MENU 阶段（body:not(.racing)）隐藏且去掉
+ * !important，让 touch-visible 在 RACING 阶段正常胜出。 */
+body:not(.racing) #start-screen ~ .joystick-base,
+body:not(.racing) .joystick-base {
+  display: none;
+}
+
+/* ===== UX-3 修复（2026-08-05）：菜单模式徽章（分屏/热座/挑战显式标识，防误认为单屏） ===== */
+#menu-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 2px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 2.6vw, 15px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  border: 1px solid;
+  animation: content-fade-in 0.9s ease-out 0.2s both;
+}
+
+/* hidden 属性优先：单屏模式隐藏徽章（display 会覆盖 [hidden] 默认 none，需显式补回） */
+#menu-mode-badge[hidden] {
+  display: none;
+}
+
+#menu-mode-badge.mode-split {
+  color: var(--color-p2);
+  border-color: rgba(var(--color-p2-rgb), 0.5);
+  background: rgba(var(--color-p2-rgb), 0.12);
+  text-shadow: 0 0 10px rgba(var(--color-p2-rgb), 0.3);
+}
+
+#menu-mode-badge.mode-hotseat {
+  color: var(--menu-cyan);
+  border-color: rgba(0, 217, 255, 0.5);
+  background: rgba(0, 217, 255, 0.1);
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
+#menu-mode-badge.mode-challenge {
+  color: var(--accent-2);
+  border-color: rgba(255, 140, 26, 0.55);
+  background: rgba(255, 140, 26, 0.12);
+  text-shadow: 0 0 10px rgba(255, 140, 26, 0.3);
+}
+
+/* ===== UX-8 修复（2026-08-05）：分屏模式 HUD P1/P2 侧标签（默认隐藏，body.split-mode 时显示） ===== */
+.hud-side-tag {
+  display: none;
+}
+
+body.split-mode .hud-side-tag {
+  display: inline-block;
+  align-self: flex-end;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 2.2vw, 14px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+body.split-mode #hud .hud-side-tag {
+  color: var(--accent);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.45);
+  background: rgba(var(--color-accent-rgb), 0.1);
+}
+
+body.split-mode #hud2 .hud-side-tag {
+  color: var(--color-p2);
+  border: 1px solid rgba(var(--color-p2-rgb), 0.45);
+  background: rgba(var(--color-p2-rgb), 0.1);
+  align-self: flex-start;
+}
+
+/* ===== 比赛中触屏引导浮层（A6） ===== */
+#racing-touch-hint {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 45;
+  pointer-events: none;
+  text-align: center;
+}
+
+.racing-touch-hint-text {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.35);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--hint-fs);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+}
+
+@keyframes racing-hint-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (hover: none) {
+  #racing-touch-hint.show {
+    display: block;
+  }
+
+  #racing-touch-hint.show .racing-touch-hint-text {
+    animation: racing-hint-fade 2s ease-out forwards;
+  }
+}
+
+/* ===== 减少动画偏好降级：无限循环动画关闭，必要淡入缩短为 150ms 纯 opacity ===== */
+@keyframes reduced-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-icon,
+  .menu-grid,
+  .menu-sun,
+  .menu-stars,
+  .menu-light,
+  .title-wrap,
+  .title-main,
+  .title-stroke,
+  .title-glow,
+  .track-option.selected,
+  .track-option.selected-p2,
+  .menu-gradient,
+  #start-screen .hint,
+  #menu-hint-touch,
+  #finish-screen .hint,
+  .finish-banner,
+  #challenge-timer.urgent,
+  #drift-indicator {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  .menu-content,
+  .title-sub,
+  .lb-card,
+  #track-name,
+  #track-preview path,
+  #countdown-overlay .countdown-number,
+  .finish-title,
+  #finish-screen:not([hidden]) .finish-line {
+    animation: reduced-fade-in 150ms ease-out both !important;
+  }
+
+  #finish-screen:not([hidden]) .finish-line {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  #racing-touch-hint.show .racing-touch-hint-text,
+  .score-pop {
+    animation: none !important;
+  }
+}
+
+/* ===== PWA 新版本提示条（S 修复 S1：registerType='prompt' 后由玩家确认刷新） ===== */
+.pwa-update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(10, 14, 26, 0.92);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.4);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: var(--hint-fs);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pwa-update-toast button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #1a1a1a;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--hint-fs);
+  cursor: pointer;
+}
