@@ -499,7 +499,10 @@ canvas {
   padding-top: 0;
   padding-bottom: 0;
   overflow: hidden;
-  transition: max-height 0.25s ease, padding-top 0.25s ease, padding-bottom 0.25s ease;
+  transition:
+    max-height 0.25s ease,
+    padding-top 0.25s ease,
+    padding-bottom 0.25s ease;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
 }

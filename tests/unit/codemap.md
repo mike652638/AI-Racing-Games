@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 48 个 `.test.ts` 文件（706 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
+Vitest 单元测试目录。覆盖 `src/` 下所有模块的纯函数、状态机与领域逻辑，用行为驱动的中文测试名描述场景，既验证正确性又充当模块行为文档。目前共 48 个 `.test.ts` 文件（710 用例），覆盖引擎投影/渲染、车辆物理、赛道系统、bot 决策、UI/HUD、音频合成、存档与游戏状态等全部模块；`../helpers/`（track.ts、sprites.ts）存放从 src 迁移的仅测试使用导出（`createDefaultTrack`、线性版 `spritesInRange`），供多个测试文件共享。
 
 ## Design
 
