@@ -7,6 +7,13 @@ dist/
 # 验证截图等临时产物
 shots/
 
+# 菜单专项测试产物（2026-08-06 Playwright 多分辨率截图 + 重叠分析 JSON，
+# 结论已固化为 docs/reports/research_report_menu_testing_2026-08-06.md 等报告，截图不再入库）
+docs/menu-test/
+
+# IDE 上传图片目录（参考截图，非源码）
+image/
+
 # Playwright e2e 产物（测试结果/截图/trace）
 test-results/
 playwright-report/
