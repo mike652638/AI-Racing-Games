@@ -2,7 +2,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <!-- M20 P3-2：移除 maximum-scale=1 + user-scalable=no，允许用户按需缩放（可访问性）；
+         同时保留 viewport-fit=cover 以适配刘海屏安全区 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- 缓存策略（2026-08-05）：强制浏览器每次导航重新校验 HTML，配合 vite-plugin-pwa 不预缓存 HTML
      （globPatterns 剔除 html）的策略，确保部署后普通刷新即拿到新版，避免依赖 Ctrl+F5 -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -88,7 +90,6 @@
       <div class="menu-bg" aria-hidden="true">
         <div class="menu-gradient"></div>
         <div class="menu-grid"></div>
-        <div class="menu-sun"></div>
         <div class="menu-stars"></div>
         <div class="menu-light"></div>
       </div>
@@ -98,7 +99,7 @@
           <div class="title-stroke" aria-hidden="true">像素狂飙</div>
           <div class="title-glow" aria-hidden="true">像素狂飙</div>
         </div>
-        <p class="title-sub" aria-hidden="true">经典街机竞速 · 伪 3D 复刻</p>
+        <p class="title-sub" aria-hidden="true">经典街机竞速 OUTRUN · 伪 3D 复刻</p>
         <div id="menu-mode-badge" hidden></div>
         <div id="track-select">
           <div class="track-option selected" id="track-option-0" tabindex="0" role="button" aria-pressed="true" aria-label="选择赛道 1：经典赛道">
@@ -165,37 +166,48 @@
             </span>
           </div>
         </div>
-        <!-- M-10（菜单审计）：赛道名并入预览行（SVG 左 + 名称右，单行 flex），省 ~24px 垂直空间 -->
+        <!-- M-10（菜单审计）：赛道预览（2026-08-06 优化：移除赛道名文字，SVG 全宽展示更醒目） -->
         <div class="track-preview-wrap">
-          <svg id="track-preview" viewBox="0 0 200 64" aria-hidden="true"></svg>
-          <p id="track-name">经典赛道</p>
-          <p id="p2-track-name" hidden>经典赛道</p>
+          <svg id="track-preview" viewBox="0 0 560 140" aria-hidden="true"></svg>
         </div>
         <!-- M-9：文案由 copy.ts 的 RACING_TOUCH_HINT 同源填充（GameLoop 构造时写入） -->
         <p id="touch-hint"></p>
-        <div class="leaderboard-cards">
-          <div class="lb-card lb-card-clickable" data-target="best-summary" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">
-              <span class="lb-card-title">赛道最佳</span>
-              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
-            </div>
-            <div class="lb-card-body" id="best-summary">暂无最佳成绩</div>
+        <!-- M20：榜单整体控制 + 整体感容器 .leaderboard-section（包住 toolbar + cards，
+             形成一个"dashboard widget"视觉组）——单卡内 .lb-card-toggle 隐藏 -->
+        <section class="leaderboard-section">
+          <div class="leaderboard-toolbar">
+            <span class="leaderboard-label">我的榜单</span>
+            <button id="lb-toggle-all" type="button" class="lb-toggle-all" aria-expanded="true" aria-controls="leaderboard-cards">
+              <span class="lb-toggle-text">收起</span>
+              <span class="lb-toggle-arrow" aria-hidden="true">▾</span>
+            </button>
           </div>
-          <div class="lb-card lb-card-clickable" data-target="drift-top" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">
-              <span class="lb-card-title">漂移榜单</span>
-              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
+          <div class="leaderboard-cards" id="leaderboard-cards">
+            <div class="lb-card lb-card-clickable expanded" data-target="best-summary" aria-expanded="true">
+              <div class="lb-card-head">
+                <span class="lb-card-title">赛道最佳</span>
+              </div>
+              <div class="lb-card-body" id="best-summary">暂无最佳成绩</div>
             </div>
-            <div class="lb-card-body" id="drift-top">暂无漂移记录</div>
-          </div>
-          <div class="lb-card lb-card-clickable" data-target="match-top" tabindex="0" role="button" aria-expanded="false">
-            <div class="lb-card-head">
-              <span class="lb-card-title">对局战绩</span>
-              <span class="lb-card-toggle" aria-hidden="true"><span class="lb-expand-text">展开</span><span class="lb-collapse-text">收起</span><span class="lb-arrow">▾</span></span>
+            <div class="lb-card lb-card-clickable expanded" data-target="drift-top" aria-expanded="true">
+              <div class="lb-card-head">
+                <span class="lb-card-title">漂移榜单</span>
+              </div>
+              <div class="lb-card-body" id="drift-top">暂无漂移记录</div>
             </div>
-            <div class="lb-card-body" id="match-top">暂无对局记录</div>
+            <div class="lb-card lb-card-clickable expanded" data-target="match-top" aria-expanded="true">
+              <div class="lb-card-head">
+                <span class="lb-card-title">对局战绩</span>
+              </div>
+              <div class="lb-card-body" id="match-top">暂无对局记录</div>
+            </div>
           </div>
-        </div>
+        </section>
+      </div>
+      <!-- 2026-08-06（菜单专项测试报告 P0-1）：开始按钮+提示移出 .menu-content 滚动容器，
+           独立为 .menu-footer 固定底部层——根治 sticky 按钮吸底覆盖榜单卡的问题，
+           同时保证内容超高滚动时主 CTA 始终保底可见 -->
+      <div class="menu-footer">
         <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
         <p class="hint" id="menu-hint">空格键开始 · 1-9 / 方向键 切换赛道</p>
         <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 点击榜单可展开</p>
@@ -240,7 +252,8 @@
       <p id="pause-track-name" class="hint"></p>
       <p class="hint">按 ESC 继续</p>
       <div id="pause-controls">
-        <button id="pause-resume" type="button">继续</button>
+        <!-- M20 P2-1：按钮文案与「按 ESC 继续」提示去重，改为动作性更强的「恢复比赛」 -->
+        <button id="pause-resume" type="button">恢复比赛</button>
         <label>音量 <input id="pause-volume" type="range" min="0" max="100" value="60"><span id="pause-volume-value">60%</span></label>
         <label>音乐 <input id="pause-music-volume" type="range" min="0" max="100" value="80"><span id="pause-music-volume-value">80%</span></label>
         <label>音效 <input id="pause-sfx-volume" type="range" min="0" max="100" value="100"><span id="pause-sfx-volume-value">100%</span></label>

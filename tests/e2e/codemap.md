@@ -7,7 +7,7 @@ Playwright 视觉回归目录（M16 引入）。通过 `npm run test:e2e`（`pla
 ## Design
 
 - **双 project 视口矩阵**：`desktop`（1280×720）与 `mobile-landscape`（812×375）两 project 各跑一遍全部用例；跨视口不适用的断言用 `test.skip` 条件守卫（如硬编码 720/375 边界、移动端断言桌面跳过、桌面断言移动端跳过），保证每个用例只在语义正确的视口下生效。
-- **DOM 几何断言**：`menuBoxes()` 通过 `page.evaluate` 读取 `.menu-sun`/`.track-option`/`.title-main`/`.title-sub`/`#start-btn` 的 `getBoundingClientRect()`，以「矩形重叠检测」断言光晕不遮挡卡片、标题不叠影、按钮在视口内——直接锚定 P1-1/P1-2 修复，比截图比对更稳定。
+- **DOM 几何断言**：`menuBoxes()` 通过 `page.evaluate` 读取 `.track-option`/`.title-main`/`.title-sub`/`#start-btn` 的 `getBoundingClientRect()`，以「矩形重叠检测」断言标题不叠影、按钮在视口内——直接锚定 P1-1/P1-2 修复，比截图比对更稳定（2026-08-06：`.menu-sun` 光晕元素已移除，原「光晕不遮挡卡片」用例改为「`.menu-sun` 不存在」回归断言）。
 - **canvas 像素级断言**：天空条纹用例用 `getImageData` 逐行扫描天空区域（画布上 35% 高度内）相邻像素 RGB 分量差的最大值，断言 `< 60`（修复前接近满量程 255），从渲染输出层面锚定 P0-1。
 - **文案同源断言**：倒计时提示用例读取 `#countdown-overlay .countdown-hints p` 全部文本，断言与 `src/ui/copy.ts` 常量逐字一致（`['WASD / 方向键 驾驶', '空格 氮气加速', '高速急转 自动漂移']`），防 README/运行时文案漂移。
 - **真实指针命中**：暂停按钮用例通过 Playwright `click`（真实指针命中）验证 `#pause-btn` 的 `pointer-events: auto` 覆写有效（防 #hud 的 `pointer-events:none` 被继承导致按钮点不动），并端到端走「点击 → 暂停屏 → 继续 → 恢复」流程。

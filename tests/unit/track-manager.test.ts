@@ -2,22 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { TrackManager } from '../../src/game/track-manager'
 import { TRACK_DEFS } from '../../src/engine/tracks'
 
-/** 构造 TrackManager 依赖 mock：重置回调与选单 DOM（双玩家双类高亮、双赛道名） */
-function createHarness(includeP2 = true, splitMode = true) {
+/** 构造 TrackManager 依赖 mock：重置回调与选单 DOM（双玩家双类高亮） */
+function createHarness(splitMode = true) {
   const resetRace = vi.fn()
-  const trackName = { textContent: '' }
-  const p2TrackName = { textContent: '' }
   const trackOptions = Array.from({ length: TRACK_DEFS.length }, () => ({
     classList: { toggle: vi.fn() },
   }))
   const manager = new TrackManager({
     resetRace,
-    trackName: trackName as unknown as HTMLSpanElement,
-    ...(includeP2 ? { p2TrackName: p2TrackName as unknown as HTMLSpanElement } : {}),
     splitMode,
     trackOptions: trackOptions as unknown as HTMLDivElement[],
   })
-  return { manager, resetRace, trackName, p2TrackName, trackOptions }
+  return { manager, resetRace, trackOptions }
 }
 
 describe('TrackManager 双玩家赛道上下文', () => {
@@ -79,25 +75,10 @@ describe('TrackManager 选单双类高亮与回调', () => {
   })
 
   it('单屏模式（splitMode=false）不应用 P2 的 selected-p2 高亮', () => {
-    const { manager, trackOptions } = createHarness(true, false)
+    const { manager, trackOptions } = createHarness(false)
     // 构造时 P2 虽默认选中 classic（index0），单屏下不得加绿色边框
     expect(trackOptions[0].classList.toggle).toHaveBeenCalledWith('selected-p2', false)
     manager.selectTrack(1, 2)
     expect(trackOptions[2].classList.toggle).toHaveBeenCalledWith('selected-p2', false)
-  })
-
-  it('P1/P2 赛道名随各自选择更新；未传 p2TrackName 时不抛错', () => {
-    const { manager, trackName, p2TrackName } = createHarness()
-    expect(trackName.textContent).toBe(TRACK_DEFS[0].name)
-    expect(p2TrackName.textContent).toBe(TRACK_DEFS[0].name)
-    manager.selectTrack(1, 1)
-    expect(p2TrackName.textContent).toBe(TRACK_DEFS[1].name)
-    expect(trackName.textContent).toBe(TRACK_DEFS[0].name)
-
-    // p2TrackName 为可选依赖：不传时构造与切换均不抛错
-    const { manager: noP2 } = createHarness(false)
-    expect(() => noP2.selectTrack(0, 2)).not.toThrow()
-    expect(noP2.getTrackId(0)).toBe('s-curve')
-    expect(noP2.getTrackId(1)).toBe('classic')
   })
 })

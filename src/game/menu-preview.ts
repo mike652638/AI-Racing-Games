@@ -14,7 +14,7 @@ export function applyTrackPreview(trackIndex: number): void {
   if (!preview) return
   const def = TRACK_DEFS[trackIndex]
   if (!def) return
-  const svg = buildTrackPreviewSvg(def, 200, 64, 8, getEnvironmentPreviewColor(def.environment))
+  const svg = buildTrackPreviewSvg(def, 560, 140, 14, getEnvironmentPreviewColor(def.environment))
   if (svg !== null) {
     preview.innerHTML = svg
   }

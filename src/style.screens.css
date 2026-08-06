@@ -21,10 +21,11 @@
 /* 启动画面：霓虹日落氛围 */
 #start-screen {
   background: #0b0518;
+  /* 2026-08-06（P0-1）：滚动职责下沉到 .menu-content（top:0 bottom:130px 占满除 footer 外），
+   * #start-btn 移入 .menu-footer 固定底部（absolute bottom:0 height:110px），
+   * 消除 sticky 覆盖榜单卡。menu-content 与 menu-footer 均 absolute 定位，脱离
+   * 共享块的 flex column 布局，避免 flex/grid 子项收缩在跨浏览器的不一致。 */
   overflow: hidden;
-  overflow-y: auto; /* 2026-08-05 P1-2 修复：菜单内容超高时允许纵向滚动，
-                      * 避免底部"空格键开始·切换赛道"提示文字被 justify-content:center
-                      * + overflow:hidden 裁剪出视口而完全不可见 */
   z-index: 60;
 }
 
@@ -106,19 +107,7 @@
   }
 }
 
-.menu-sun {
-  position: absolute;
-  left: 50%;
-  bottom: 8%;
-  width: min(22vw, 160px);
-  height: min(22vw, 160px);
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(circle, #ffeb3b 0%, #ff3864 50%, rgba(255, 56, 100, 0) 70%);
-  /* UX-7 修复（2026-08-05）：光晕半径/透明度降低，防遮挡周围文字 */
-  box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.22);
-  animation: sun-pulse 4s ease-in-out infinite alternate;
-}
+/* 2026-08-06 菜单专项测试报告 P2-1：移除 .menu-sun 光晕矩形（刺眼 + 与开始按钮重叠） */
 
 @keyframes sun-pulse {
   0% {
@@ -179,20 +168,55 @@
 }
 
 .menu-content {
-  position: relative;
+  /* 2026-08-06（P0-1）：absolute 定位占满除 .menu-footer 外的视口空间（top:0 bottom:130px），
+   * 内容超高时内部 overflow-y: auto 滚动；first/last 子元素 margin: auto 实现
+   * 不超高时垂直居中、超高时从顶部滚动（flexbox 可滚动居中技巧） */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 150px; /* 预留 .menu-footer 空间（含按钮/提示/安全区），竖屏下 footer 较大需更多预留 */
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  width: 100%;
-  max-height: 100vh;
+  width: min(100%, 1280px);
+  margin: 0 auto;
   overflow-y: auto;
-  padding: 16px 0 20px;
+  padding: 20px 0 24px;  /* M20：顶部 16→20、底部 32→24（底部空间由 footer 接管） */
   animation: content-fade-in 0.9s ease-out both;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--color-accent-rgb), 0.35) transparent;
+}
+
+/* 内容组垂直居中（超高时 margin auto 归零 → 从顶部可滚，不裁顶） */
+.menu-content > :first-child {
+  margin-top: auto;
+}
+
+.menu-content > :last-child {
+  margin-bottom: auto;
+}
+
+/* 2026-08-06（P0-1）：开始按钮 + 操作提示固定底部层——absolute bottom:0 贴底，
+ * 与 .menu-content（bottom:130px）预留 130px 固定间距。底部渐变遮罩防滚动内容穿透。
+ * 脱离共享块 flex column 布局，独立 fixed 层，永不与滚动内容重叠。 */
+.menu-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: min(100%, 1280px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 0%, rgba(11, 5, 24, 0.75) 35%, rgba(11, 5, 24, 0.92) 100%);
 }
 
 .menu-content::-webkit-scrollbar {
@@ -221,7 +245,7 @@
 
 .title-wrap {
   position: relative;
-  margin: 0 0 10px;
+  margin: 0 0 18px;  /* M20：10→18，标题块整体下移 */
   animation: title-bounce 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -245,7 +269,8 @@
   letter-spacing: 4px;
   color: rgba(255, 255, 255, 0.78);
   text-transform: uppercase;
-  margin: -8px 0 6px;
+  /* M20 P2-2：标题与首行卡片间距 —— 副标题底部 margin 6px→20px，桌面副标题底到卡片顶 ≈24px */
+  margin: -8px 0 28px;  /* M20：再增 8px，标题区与赛道卡拉开距离 */
   padding: 0 16px;
   text-align: center;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
@@ -333,11 +358,13 @@
 }
 
 #track-select {
-  display: flex;
-  gap: 14px;
-  justify-content: center;
-  margin: 8px auto 6px;
-  flex-wrap: wrap;
+  display: grid;
+  /* M20 P3-3：卡片水平间距 14px→20px（桌面基准；低高度分支已有更紧凑覆盖）。
+   * M20 P1-1：flex-wrap 在 1920 视口下 max-width:160px × 9 卡 + 20 gap 撑不出整齐 3×3 网格，
+   * 导致卡片 wrap 成 1+3+4+1 错落、整组偏左 90px。改用 grid + repeat(3,1fr) 强制 3 列均分。 */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin: 12px auto 14px;  /* M20：8/6→12/14，赛道卡组上下间距平衡 */
   max-width: 560px;
   padding: 0 12px;
 }
@@ -609,46 +636,39 @@
 }
 
 /* 赛道缩略图预览（中央信息区）：由 controlPoints 积分生成的 SVG 轨迹；
-   2026-08-05 菜单优化：放大更醒目、轨迹主题色随环境区分（内联 stroke/fill/color），光晕用 currentColor 同色；
-   M-10（菜单审计）：赛道名并入预览行（SVG 左 + 名称右，单行 flex），省 ~24px 垂直空间 */
+   2026-08-05 菜单优化：轨迹主题色随环境区分（内联 stroke/fill/color），光晕用 currentColor 同色；
+   2026-08-06（菜单专项测试报告 P3）：移除赛道名文字（#track-name/#p2-track-name），
+   预览全宽展示——扩展尺寸 560×140 + 环境背景装饰（天空/远山/地形特征），与全屏背景更融合 */
 .track-preview-wrap {
-  margin: 6px auto 0;
-  height: 60px;
+  margin: 18px auto 0;  /* M20：6→18，与赛道卡拉开距离 */
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
 }
 
 #track-preview {
-  width: 200px;
-  height: 60px;
+  width: min(560px, 86vw);
+  height: auto;
+  aspect-ratio: 4 / 1;
   overflow: visible;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.55));
 }
 
 /* 轨迹主题色由内联 stroke/color 属性提供（随环境区分）；此处不再用 stroke: var(--accent) 覆盖，
-   否则内联环境色会被 CSS 盖掉；光晕用 currentColor 跟随轨迹色 */
-#track-preview path {
+   否则内联环境色会被 CSS 盖掉；光晕用 currentColor 跟随轨迹色。
+   2026-08-06：改用 .tp-route/.tp-start 精确选择器（背景装饰 path 不受 fill:none 影响） */
+#track-preview .tp-route {
   fill: none;
-  stroke-width: 3.5;
+  stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.95;
-  filter: drop-shadow(0 0 6px currentColor);
+  filter: drop-shadow(0 0 8px currentColor);
   animation: track-name-pop 0.4s ease-out;
 }
 
-#track-preview circle {
-  filter: drop-shadow(0 0 5px currentColor);
-}
-
-#track-name {
-  color: var(--accent);
-  font-weight: 700;
-  text-shadow: 0 0 12px rgba(var(--color-accent-rgb), 0.45);
-  margin: 4px 0 2px;
-  font-size: var(--subtitle-fs);
-  animation: track-name-pop 0.5s ease-out;
+#track-preview .tp-start {
+  filter: drop-shadow(0 0 6px currentColor);
 }
 
 @keyframes track-name-pop {
@@ -662,14 +682,6 @@
   }
 }
 
-#p2-track-name {
-  color: var(--color-p2);
-  font-weight: 700;
-  margin: 2px 0 0;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  font-size: var(--subtitle-fs);
-}
-
 #touch-hint {
   font-size: var(--hint-fs);
   opacity: 0.9;
@@ -681,33 +693,119 @@
   display: none;
 }
 
+/* M20：榜单整体感容器——包住 toolbar + cards 形成 dashboard widget
+ *  统一圆角、背景、内边距，让"我的榜单"标题与三卡片视觉成组 */
+.leaderboard-section {
+  width: 100%;
+  max-width: 720px;
+  margin: 20px auto 0;
+  padding: 10px 12px 14px;
+  background: rgba(10, 8, 26, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  animation: content-fade-in 0.9s ease-out 0.4s both;
+}
+
+/* M20：宽屏三列——容器 max-width 900 让 3 卡各 ~290px 紧凑并排 */
+@media (min-width: 1100px) {
+  .leaderboard-section {
+    max-width: 900px;
+  }
+}
+
+/* M20：榜单整体控制工具栏——master 切换按钮（展开/收起）+ 区域标题
+ *  在 .leaderboard-section 内不再需要 max-width（受父容器约束） */
+.leaderboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;  /* M20：12→4，"我的榜单" 与切换按钮靠近 */
+  margin-bottom: 8px;  /* 与下方卡片组的呼吸 */
+}
+
+.leaderboard-label {
+  font-family: var(--font-mono);
+  /* M20：字号 13→15，letter-spacing 2→3.5，凸显"我的榜单"作为 section header */
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  color: rgba(255, 215, 94, 0.95);  /* 金黄——与标题"像素狂飙"同色协调 */
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.lb-toggle-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(0, 217, 255, 0.95);
+  background: rgba(0, 217, 255, 0.08);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.lb-toggle-all:hover,
+.lb-toggle-all:focus-visible {
+  background: rgba(0, 217, 255, 0.18);
+  border-color: rgba(0, 217, 255, 0.55);
+  outline: none;
+}
+
+.lb-toggle-all .lb-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.25s ease;
+  font-size: 11px;
+}
+
+/* collapsed 态箭头朝上（展开方向） */
+.lb-toggle-all.collapsed .lb-toggle-arrow {
+  transform: rotate(180deg);
+}
+
 .leaderboard-cards {
   display: flex;
   gap: 10px;
   justify-content: center;
-  margin: 8px auto 0;
   flex-wrap: wrap;
-  max-width: 720px;
-  padding: 0 12px;
+  /* M20：在 .leaderboard-section 内，不再需要 max-width 与 width:100%（父容器已约束） */
 }
 
 .lb-card {
-  flex: 1 1 180px;
-  min-width: 160px;
+  flex: 1 1 200px;
+  /* M20：max-width 280→220（base），宽屏 360→280——记录行宽减少、右侧留白降低 */
+  min-width: 180px;
   max-width: 220px;
   background: rgba(0, 0, 0, 0.58);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 14px;
+  border-radius: 12px;  /* M20：14→12，与外层 .leaderboard-section 16px 嵌套层级清晰 */
   /* 2026-08-05 LB-6：减小 padding 10px→6px / 12px→8px，腾出横向空间减少文字换行 */
-  padding: 6px 8px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px 10px;  /* M20：8→10，让头部标题与正文左对齐更协调 */
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
   animation: card-rise 0.8s ease-out both;
+  cursor: default;
+}
+
+/* M20：宽屏三列——卡片 max-width 280px，3 卡各 ~290px 内容紧凑 */
+@media (min-width: 1100px) {
+  .lb-card {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 280px;
+  }
 }
 
 .lb-card:nth-child(1) {
@@ -741,9 +839,9 @@
 
 .lb-card-head {
   /* M-8（菜单审计）：改 flex 布局替代旧 ::after float:right，窄宽下不再挤压换行；
-   * 展开标签改为真实 span（.lb-card-toggle），支持箭头旋转过渡（M-3） */
+   * 2026-08-06：去掉单卡内收起/展开按钮（仅保留外部 master 整体控制），标题居左 */
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   font-size: clamp(10px, 2.2vw, 12px);
@@ -756,52 +854,9 @@
   padding-bottom: 6px;
 }
 
-/* 可点击统计卡片：点击展开/收起完整榜单（漂移榜单/对局战绩） */
+/* 可点击统计卡片：M20 改为整体控制——单卡不再独立点击，cursor 改 default */
 .lb-card-clickable {
-  cursor: pointer;
-}
-
-/* M-3/M-8（菜单审计）：展开标签改真实 span（原 ::after 伪元素 + float）——
- * 青色小字 + 箭头 ▾，展开态箭头旋转 180° 替代「展开/收起」文本硬切，动画连贯 */
-.lb-card-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--menu-cyan);
-  opacity: 0.9;
-  text-shadow: 0 0 8px rgba(0, 217, 255, 0.35);
-  transition: opacity 0.15s ease;
-  white-space: nowrap;
-}
-
-.lb-card-clickable:hover .lb-card-toggle {
-  opacity: 1;
-}
-
-/* 展开/收起文案双 span 切换（不依赖 content 硬切，保留文本可译性） */
-.lb-card-toggle .lb-collapse-text {
-  display: none;
-}
-
-.lb-card-clickable.expanded .lb-card-toggle .lb-expand-text {
-  display: none;
-}
-
-.lb-card-clickable.expanded .lb-card-toggle .lb-collapse-text {
-  display: inline;
-}
-
-/* 箭头旋转过渡（展开态 ▾ 转 180° 指上） */
-.lb-card-toggle .lb-arrow {
-  display: inline-block;
-  transition: transform 0.25s ease;
-}
-
-.lb-card-clickable.expanded .lb-card-toggle .lb-arrow {
-  transform: rotate(180deg);
+  cursor: default;
 }
 
 .lb-card-clickable.expanded {
@@ -862,18 +917,13 @@
 }
 
 #start-btn {
-  margin-top: 10px;
+  /* 2026-08-06（P0-1）：移出 .menu-content 滚动容器后为正常流元素，
+   * 固定在 .menu-footer 底部层，无需 sticky/backdrop（不再覆盖滚动内容） */
+  margin-top: 8px;
   margin-bottom: 4px;
   padding: 10px 36px;
   font-size: clamp(15px, 3.8vw, 20px);
-  flex-shrink: 0; /* 2026-08-05 P1-2：开始按钮不随内容超高被压缩变形 */
-  /* M-1（菜单审计）：内容超出视口时主 CTA sticky 保底可见（.menu-content 为滚动容器），
-   * 内容不超高时保持自然位置无视觉变化；保留 .btn-primary 原背景，backdrop 模糊防滚动内容穿透混杂 */
-  position: sticky;
-  bottom: 8px;
-  z-index: 5;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
 
 #start-btn::before {

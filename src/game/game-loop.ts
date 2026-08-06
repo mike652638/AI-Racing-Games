@@ -22,7 +22,7 @@ import { installDebugHook } from './debug-hook'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
-import { CHALLENGE_SECONDS, RACE_COUNTDOWN_SECONDS } from './constants'
+import { CHALLENGE_SECONDS, CHALLENGE_TARGET_SCORE, RACE_COUNTDOWN_SECONDS } from './constants'
 import { refreshBestSummary, refreshDriftTop, refreshMatchTop } from './top-refresh'
 // rt4 批次：DOM 交互工具模块（监听清理经 onCleanup 契约登记）
 import { bindLeaderboardCards } from './leaderboard-cards'
@@ -221,7 +221,8 @@ export class GameLoop {
         modeBadge.className = 'mode-badge mode-hotseat'
       } else if (this.mode.challengeMode) {
         modeBadge.hidden = false
-        modeBadge.textContent = `挑战模式 · ${CHALLENGE_SECONDS} 秒刷分`
+        // M20 P3-4：徽章文案补目标分（CHALLENGE_TARGET_SCORE 真源 src/shared/constants）
+        modeBadge.textContent = `挑战模式 · ${CHALLENGE_SECONDS} 秒刷分 · 目标 ${CHALLENGE_TARGET_SCORE}`
         modeBadge.className = 'mode-badge mode-challenge'
       } else {
         modeBadge.hidden = true
@@ -236,9 +237,6 @@ export class GameLoop {
 
     const hud2Container = $('hud2') as HTMLDivElement
     hud2Container.hidden = !this.mode.splitMode
-    // 分屏菜单 P2 赛道名：仅分屏时可见（index.html 初始 hidden，缺陷②修复）
-    const p2TrackName = $('p2-track-name') as HTMLSpanElement
-    p2TrackName.hidden = !this.mode.splitMode
     this.hudElements = collectHudElements($, hud2Container)
     // M11：分屏模式下暂停按钮移至底部中央，避免遮挡右下虚拟摇杆
     if (this.mode.splitMode && this.hudElements.pauseBtn) {
@@ -248,15 +246,12 @@ export class GameLoop {
     // P6（P6）：暂停菜单控件事件——音量 slider input → clamp+gain 同步+持久化；按钮 click → 阶段切换
     // （Task D：闭包内联 volume.ts 纯函数，masterGain 未惰性创建时仅 clamp；元素缺失守卫式绑定）
     this.bindPauseControls()
-    const trackName = $('track-name') as HTMLSpanElement
     // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
     const trackOptions = this.buildTrackOptions($)
 
-    // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用；P2 赛道名元素 B4 控制显隐）
+    // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用）
     this.trackManager = new TrackManager({
       resetRace: () => this.resetRace(),
-      trackName,
-      p2TrackName,
       splitMode: this.splitMode,
       trackOptions,
     })

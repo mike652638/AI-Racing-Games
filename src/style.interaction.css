@@ -1,8 +1,8 @@
-/* 暂停菜单保持原有简洁玻璃风格 */
+/* 暂停菜单保持原有简洁玻璃风格（M20 P3-1：背景加深 + 模糊增强，防玩家车/游戏画面透出干扰） */
 #pause-screen {
-  background: rgba(8, 10, 20, 0.55);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  background: rgba(8, 10, 20, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 #pause-screen h1,
@@ -270,17 +270,24 @@ body.portrait-mode .track-option {
   min-height: 46px;
 }
 
+/* 2026-08-06（P2-2）：竖屏榜单紧凑化——缩小卡片 padding 与 body 限高，
+ * 降低竖屏下 3 卡纵向堆叠的总高度（榜单是内容超高的重要推手） */
 body.portrait-mode .leaderboard-cards {
   gap: 6px;
   max-width: 460px;
 }
 
 body.portrait-mode .lb-card {
-  padding: 8px 10px;
+  padding: 6px 8px;
 }
 
 body.portrait-mode .lb-card-body {
-  max-height: 150px;
+  max-height: 120px;
+}
+
+body.portrait-mode .lb-card-head {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
 }
 
 body.portrait-mode #touch-hint {
@@ -347,11 +354,15 @@ body.portrait-mode #hud2 .hud-side-tag {
     max-width: 420px;
   }
 
-  /* 移动端 2 列网格：最后一项奇数时居中 */
+  /* 移动端 2 列网格：最后一项奇数时居中。
+   * M20 P1-1：grid 化后 #track-select 在窄屏切 2 列以保留原 9 卡 5 行的视觉布局 */
+  #track-select {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .track-option {
     padding: 8px 10px;
     min-width: 0;
-    flex: 1 1 42%;
     max-width: none;
     min-height: 52px;
   }
@@ -360,13 +371,9 @@ body.portrait-mode #hud2 .hud-side-tag {
     margin: 0 auto;
   }
 
-  .track-preview-wrap {
-    height: 52px;
-  }
-
   #track-preview {
-    width: 160px;
-    height: 52px;
+    width: min(400px, 86vw);
+    aspect-ratio: 4 / 1;
   }
 
   .leaderboard-cards {
@@ -396,6 +403,13 @@ body.portrait-mode #hud2 .hud-side-tag {
     --title-fs: 26px;
     --subtitle-fs: 15px;
   }
+
+  /* P1-1（菜单专项测试报告）：极窄屏（≤390px）主标题与副标题叠影——
+   * 基础 .title-sub 负上边距 -8px 在窄屏标题行高收缩后挤入主标题内，
+   * 收敛为 0（该分支高度 >700px 时生效；≤700px/≤620px 低高度分支在下方另行处理） */
+  .title-sub {
+    margin: 0 0 20px;
+  }
 }
 
 /* M-1（菜单审计）：低高度桌面分级压缩——≤700px 压缩标题/网格/预览/榜单的垂直占位，
@@ -416,12 +430,7 @@ body.portrait-mode #hud2 .hud-side-tag {
   }
 
   .track-preview-wrap {
-    height: 44px;
     margin-top: 2px;
-  }
-
-  #track-name {
-    margin: 2px 0 0;
   }
 
   .leaderboard-cards {
@@ -442,12 +451,17 @@ body.portrait-mode #hud2 .hud-side-tag {
   }
 }
 
-/* M-1 第二档：≤620px 隐藏副标题与预览缩略图（与横屏移动低高度策略一致） */
-@media (max-height: 620px) {
+/* M-1 第二档：≤620px 隐藏副标题与预览缩略图（与横屏移动低高度策略一致）。
+ * M20 修复（2026-08-06 P1-2）：副标题改为仅「低高度且窄屏（竖屏手机）」隐藏——
+ * 移动横屏 812×375（宽 ≥600）应保留副标题（品牌信息 + a11y），配合 max-height:480
+ * 分支的小字号紧凑样式显示；桌面低高度（宽 ≥600）同样保留。 */
+@media (max-height: 620px) and (max-width: 599px) {
   .title-sub {
     display: none;
   }
+}
 
+@media (max-height: 620px) {
   .track-preview-wrap {
     display: none;
   }
@@ -505,10 +519,11 @@ body.portrait-mode #hud2 .hud-side-tag {
     gap: 8px;
   }
 
-  /* 横屏低高度：缩小赛道卡片与预览区，保证开始按钮不被挤出视口 */
+  /* 横屏低高度：缩小赛道卡片与预览区，保证开始按钮不被挤出视口。
+     M20 P2-4：横向 padding 3px 8px→3px 10px，避免 812 横屏下 6 号「沙漠疾驰」文字贴边 */
   .track-option {
     min-height: 32px;
-    padding: 3px 8px;
+    padding: 3px 10px;
   }
 
   /* 低高度下隐藏中央赛道缩略图预览（节省 40px，卡片 3×3 网格本身已含赛道信息） */
@@ -559,23 +574,6 @@ body.portrait-mode #hud2 .hud-side-tag {
     width: min(14vw, 96px);
     height: min(14vw, 96px);
     box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.25);
-  }
-
-  /*
-   * 低高度下赛道卡片被压缩后整体居中下移，原本贴底的光晕会叠到卡片；
-   * 将菜单光晕缩到更小并移到视口下方，只保留底部微光，避免与卡片重叠。
-   */
-  .menu-sun {
-    bottom: -80px;
-    width: 56px;
-    height: 56px;
-    box-shadow: 0 0 24px 8px rgba(255, 56, 100, 0.18);
-  }
-
-  /* 低高度：赛道名与榜单占位文案隐藏，只保留可点击头部，避免把开始按钮挤出 375px */
-  #track-name,
-  #p2-track-name {
-    display: none;
   }
 
   /* LB-Z1（榜单专项审计）：旧版 .lb-card-body 在 ≤480px 恒 display:none——
@@ -916,7 +914,6 @@ body.split-mode #hud2 .hud-side-tag {
 @media (prefers-reduced-motion: reduce) {
   .rotate-icon,
   .menu-grid,
-  .menu-sun,
   .menu-stars,
   .menu-light,
   .title-wrap,
@@ -939,8 +936,7 @@ body.split-mode #hud2 .hud-side-tag {
   .menu-content,
   .title-sub,
   .lb-card,
-  #track-name,
-  #track-preview path,
+  #track-preview .tp-route,
   #countdown-overlay .countdown-number,
   .finish-title,
   #finish-screen:not([hidden]) .finish-line {

@@ -63,7 +63,7 @@
 
 `main.ts` 调 `initGame()` → `new GameLoop()` 构造：
 
-1. **模式判定与 DOM 收集**：`?split` 与 `?hotseat`（`params.has('hotseat') && !splitMode`）解析模式，M12 加 `?challenge`（与双人模式互斥），M15 加 `?perf`（性能降级开关，与 split 不互斥）；`createModeStrategy` 按已解析标志创建策略实例；`$()` 帮助函数取全部 HUD/屏幕元素，DOM 组装下沉 `dom-setup.ts`（`collectHudElements`/`collectScreenElements`）；`#menu-hint` 文案取 `mode.menuHint`；模式徽章 `#menu-mode-badge`（分屏/热座/挑战显式标识，单屏隐藏）；分屏为 body 加 `split-mode` 类并显示 `hud2`/`p2-track-name`；读取持久化音量（`loadVolumeFromStorage`/`loadMusicVolumeFromStorage`/`loadSfxVolumeFromStorage`）。
+1. **模式判定与 DOM 收集**：`?split` 与 `?hotseat`（`params.has('hotseat') && !splitMode`）解析模式，M12 加 `?challenge`（与双人模式互斥），M15 加 `?perf`（性能降级开关，与 split 不互斥）；`createModeStrategy` 按已解析标志创建策略实例；`$()` 帮助函数取全部 HUD/屏幕元素，DOM 组装下沉 `dom-setup.ts`（`collectHudElements`/`collectScreenElements`）；`#menu-hint` 文案取 `mode.menuHint`；模式徽章 `#menu-mode-badge`（分屏/热座/挑战显式标识，单屏隐藏）；分屏为 body 加 `split-mode` 类并显示 `hud2`（2026-08-06：`p2-track-name` 赛道名元素已随菜单专项优化移除）；读取持久化音量（`loadVolumeFromStorage`/`loadMusicVolumeFromStorage`/`loadSfxVolumeFromStorage`）。
 2. **暂停控件与赛道选项**：`bindPauseControls()` 绑定三个音量 slider + 重开/继续/触屏暂停/结算返回按钮；`buildTrackOptions` 按 `TRACK_DEFS.length`（9）动态构建赛道按钮（文本 `${i + 1} ${def.name} ${'★'.repeat(difficulty)}${'☆'.repeat(3 - difficulty)}`，E5 星级 + diff-1/2/3 颜色编码 + title 难度提示），按钮 click/keydown(Enter/Space) 等价键盘 1-9；`refreshTrackPreview(0)` 渲染中央赛道缩略图 SVG。
 3. **TrackManager**：注入 `{ resetRace: () => this.resetRace(), trackName, p2TrackName, splitMode, trackOptions }`，内部用 `TRACK_DEFS[0]` 创建双上下文并刷新选单高亮。
 4. **基础件**：`createCarConfig()`、`createRaceState()`（双 PlayerState + 双 `TrackContext(TRACK_DEFS[0])` + `lastLap/lastLap2` 初始 1 + `phase: PHASE_MENU`）。

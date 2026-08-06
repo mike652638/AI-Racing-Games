@@ -468,10 +468,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     new GameLoop()
     env.fireKey('Digit4')
     expect(env.debugValue('selectedTrack')).toBe('island')
-    expect(env.getElement('track-name').textContent).toBe('环岛巡回')
     env.fireKey('Digit5')
     expect(env.debugValue('selectedTrack')).toBe('canyon')
-    expect(env.getElement('track-name').textContent).toBe('峡谷疾驰')
     expect(env.phase()).toBe(PHASE_MENU)
   })
 
@@ -479,10 +477,8 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     new GameLoop()
     env.fireKey('Digit6')
     expect(env.debugValue('selectedTrack')).toBe('desert')
-    expect(env.getElement('track-name').textContent).toBe('沙漠疾驰')
     env.fireKey('Digit9')
     expect(env.debugValue('selectedTrack')).toBe('alpine')
-    expect(env.getElement('track-name').textContent).toBe('山岳险道')
     expect(env.phase()).toBe(PHASE_MENU)
   })
 
@@ -492,7 +488,6 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     splitEnv.fireKey('Digit3', true)
     expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
     expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
-    expect(splitEnv.getElement('p2-track-name').textContent).toBe('S 弯挑战')
     expect(splitEnv.phase()).toBe(PHASE_MENU)
   })
 
@@ -526,20 +521,6 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     expect(splitEnv.debugValue('selectedTrack2')).toBe('s-curve')
     expect(splitEnv.debugValue('selectedTrack')).toBe('classic')
     expect(splitEnv.phase()).toBe(PHASE_MENU)
-  })
-
-  it('分屏模式：p2-track-name 菜单可见，Shift+Digit3 后文本更新为 S 弯挑战', () => {
-    const splitEnv = stubEnvironment(true)
-    new GameLoop()
-    // 缺陷②回归：分屏构造后 P2 赛道名元素应可见
-    expect(splitEnv.getElement('p2-track-name').hidden).toBe(false)
-    splitEnv.fireKey('Digit3', true)
-    expect(splitEnv.getElement('p2-track-name').textContent).toBe('S 弯挑战')
-  })
-
-  it('单人模式：p2-track-name 保持隐藏', () => {
-    new GameLoop()
-    expect(env.getElement('p2-track-name').hidden).toBe(true)
   })
 
   it(
@@ -653,10 +634,11 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       splitEnv.fireKey('ArrowUp')
       splitEnv.driveUntilFinished(700)
       expect(splitEnv.phase()).toBe(PHASE_FINISHED)
-      // 双完赛 → 记录 1 局：首行 `1. P1 胜 · 0:0 · 森林穿梭`（零漂移得分平局归 P1）
+      // 双完赛 → 记录 1 局：首行 `1. P1胜  0:0  森林穿梭`（零漂移得分平局归 P1），
+      // M20 紧凑格式：去掉「·」分隔符，多空格分隔以保证单行不换行
       const top = splitEnv.getElement('match-top').textContent
       expect(top.startsWith('1. ')).toBe(true)
-      expect(top).toContain('胜 ·')
+      expect(top).toContain('胜')
       expect(top).toContain('森林穿梭')
     },
     SIM_TIMEOUT,
@@ -1010,11 +992,12 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     const env2 = stubEnvironment('', storage)
     new GameLoop()
     const top = env2.getElement('drift-top').textContent
-    // 首行（score 降序第一）：`1. P1 · 300 分 · 经典赛道 · 连击 x2.00`（1 + 4*0.25 = 2.00）
-    expect(top.startsWith('1. P1 · 300 分')).toBe(true)
-    expect(top).toContain('连击 x2.00')
-    // 旧条目无 combo → 不追加连击后缀
-    expect(top).not.toContain('连击 x1')
+    // 首行（score 降序第一）：`1. P1  300分  经典赛道  x2.00`（1 + 4*0.25 = 2.00），
+    // M20 紧凑格式：去掉「·」与「连击」字节省字符以保证单行不换行（11px 字号）
+    expect(top.startsWith('1. P1  300分')).toBe(true)
+    expect(top).toContain('x2.00')
+    // 旧条目无 combo → 不追加倍率后缀
+    expect(top).not.toContain('x1')
   })
 
   it('F4（F4）：驱动到雨段（~100s）rainPlaying 为 true、阴/晴段为 false', { timeout: SIM_TIMEOUT_EPIC }, () => {

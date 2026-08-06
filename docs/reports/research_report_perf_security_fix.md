@@ -82,25 +82,25 @@
 
 ### 2.1 性能基准（`npm run bench` / `npm run bench:reuse`，Node 25，Set 身份实测）
 
-| 指标 | 修复前（alloc） | 修复后（reuse） | 变化 |
-|---|---|---|---|
-| 道路投影对象分配/帧 | 1260.0 | 0.1 | **-99.99%** |
-| 道路投影耗时/帧 | 0.0789 ms | 0.0114 ms | **-85.5%** |
-| updateDrift 分配/帧 | 2.18 | 2.18 | 0（保守优化，非漂移稳态零分配） |
-| updateDrift 耗时/帧 | 0.00032 ms | 0.00039 ms | 波动（<0.1µs，噪声） |
-| 输入路由分配/次 | 4.0 | 4.0 | 单次路由不变（P4 消除的是帧内第二次路由） |
+| 指标                | 修复前（alloc） | 修复后（reuse） | 变化                                      |
+| ------------------- | --------------- | --------------- | ----------------------------------------- |
+| 道路投影对象分配/帧 | 1260.0          | 0.1             | **-99.99%**                               |
+| 道路投影耗时/帧     | 0.0789 ms       | 0.0114 ms       | **-85.5%**                                |
+| updateDrift 分配/帧 | 2.18            | 2.18            | 0（保守优化，非漂移稳态零分配）           |
+| updateDrift 耗时/帧 | 0.00032 ms      | 0.00039 ms      | 波动（<0.1µs，噪声）                      |
+| 输入路由分配/次     | 4.0             | 4.0             | 单次路由不变（P4 消除的是帧内第二次路由） |
 
 说明：P4 的收益是「每帧少一次完整 routeInputs 调用及其 4-8 个对象分配」，基准脚本按单次路由建模无法体现帧级去重，收益由代码结构与测试共同保证；P2 属报告高估项，实测漂移态分配本就不大，优化目标是非漂移稳态的零分配。道路投影是唯一量级级热点，其分配下降 99.99% 对 GC 压力与移动端 60fps 稳定性收益最大。
 
 ### 2.2 安全静态扫描（`npm run scan`，src/**/*.ts 共 65 文件）
 
-| 指标 | 修复前 | 修复后 | 说明 |
-|---|---|---|---|
-| 危险 sink（innerHTML 等） | 3 | 3 | 全部为受控数据（倒计时提示/难度星级/SVG 预览），无注入面，符合预期 |
-| addEventListener / removeEventListener | 16 / 3 | **17 / 17** | 完全平衡（+1 为 PWA 刷新按钮监听） |
-| setInterval/setTimeout / clear | 7 / 1 | 7 / **3** | 倒计时 interval+timeout 可取消；余下为短生命周期 UI 超时 |
-| @ts-ignore / @ts-expect-error / as any / :any | 0 | 0 | 无类型安全泄漏 |
-| npm audit（依赖漏洞） | — | **0 漏洞** | 官方 registry 审计 |
+| 指标                                          | 修复前 | 修复后      | 说明                                                               |
+| --------------------------------------------- | ------ | ----------- | ------------------------------------------------------------------ |
+| 危险 sink（innerHTML 等）                     | 3      | 3           | 全部为受控数据（倒计时提示/难度星级/SVG 预览），无注入面，符合预期 |
+| addEventListener / removeEventListener        | 16 / 3 | **17 / 17** | 完全平衡（+1 为 PWA 刷新按钮监听）                                 |
+| setInterval/setTimeout / clear                | 7 / 1  | 7 / **3**   | 倒计时 interval+timeout 可取消；余下为短生命周期 UI 超时           |
+| @ts-ignore / @ts-expect-error / as any / :any | 0      | 0           | 无类型安全泄漏                                                     |
+| npm audit（依赖漏洞）                         | —      | **0 漏洞**  | 官方 registry 审计                                                 |
 
 ## 三、测试结果与验证结论
 
@@ -129,7 +129,7 @@
 
 ## 参考来源
 
-1. [《AI-Racing-Games 深度架构分析报告》（修复依据，3.2/3.3 节）](d:/AI/AI-Racing-Games/research_report_ai_racing_games.md)
+1. [《AI-Racing-Games 深度架构分析报告》（修复依据，3.2/3.3 节）](d:/AI/AI-Racing-Games/docs/reports/research_report_ai_racing_games.md)
 2. [Vitest issue #10812：Windows 套件级 "failed to find the runner"（vitest 4.1.10 频发，cwd 驱动器号大小写触发）](https://github.com/vitest-dev/vitest/issues/10812)
 3. [Vitest issue #3396：Cannot read properties of undefined (reading 'config')（版本错配根因参考）](https://github.com/vitest-dev/vitest/pull/3396)
 4. [vitest 官方常见错误文档](https://cn.vitest.dev/guide/common-errors.html)

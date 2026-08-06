@@ -23,7 +23,6 @@ async function menuBoxes(page: Page) {
       return { x: r.x, y: r.y, width: r.width, height: r.height }
     }
     return {
-      sun: rect('.menu-sun'),
       trackOptions: Array.from(document.querySelectorAll('.track-option')).map((el) => el.getBoundingClientRect()),
       titleMain: rect('.title-main'),
       titleSub: rect('.title-sub'),
@@ -33,17 +32,16 @@ async function menuBoxes(page: Page) {
 }
 
 test.describe('桌面菜单（1280×720）', () => {
-  test('红色光晕不遮挡任何赛道卡片（P1-1 回归）', async ({ page }) => {
+  test('菜单不再渲染 .menu-sun 光晕元素（2026-08-06 移除回归）', async ({ page }) => {
     await page.goto('/')
-    const { sun, trackOptions } = await menuBoxes(page)
-    expect(sun).not.toBeNull()
+    const sun = await page.$('.menu-sun')
+    expect(sun, '.menu-sun 应已从菜单移除').toBeNull()
+  })
+
+  test('赛道卡片数量与网格完整（9 卡）', async ({ page }) => {
+    await page.goto('/')
+    const { trackOptions } = await menuBoxes(page)
     expect(trackOptions.length).toBeGreaterThanOrEqual(9)
-    for (const card of trackOptions) {
-      // 光晕与卡片不重叠：任一轴无交集
-      const overlapsX = sun!.x < card.x + card.width && card.x < sun!.x + sun!.width
-      const overlapsY = sun!.y < card.y + card.height && card.y < sun!.y + sun!.height
-      expect(overlapsX && overlapsY, `光晕与赛道卡片重叠: ${JSON.stringify({ sun, card })}`).toBe(false)
-    }
   })
 
   test('标题与副标题不叠影', async ({ page }) => {
@@ -56,6 +54,9 @@ test.describe('桌面菜单（1280×720）', () => {
   })
 
   test('开始按钮在视口内可见', async ({ page }) => {
+    // M20：仅 desktop project（1280×720）运行——断言写死 720 高度上限，
+    // mobile-landscape (375) 与 large-screen (1080) 视口下布局差异不适用
+    test.skip(page.viewportSize()!.width !== 1280, '仅桌面项目运行')
     await page.goto('/')
     const { startBtn } = await menuBoxes(page)
     expect(startBtn).not.toBeNull()
@@ -138,6 +139,48 @@ test.describe('起步碰撞修复回归（2026-08-05 新增）', () => {
       () => (window as { __gameDebug?: { collisions: number } }).__gameDebug?.collisions ?? -1,
     )
     expect(collisions, '开局 3.5s 内应零碰撞（debug 钩子缺失时 -1 亦视为失败）').toBe(0)
+  })
+})
+
+test.describe('大屏菜单（1920×1080，M20 新增）', () => {
+  // 仅 large-screen project（1920×1080）运行
+  test.skip(({ page }) => page.viewportSize()!.width !== 1920, '仅大屏项目运行')
+
+  test('内容整体居中：轨道卡片网格中心 ≈ 视口中心（P1-1 回归）', async ({ page }) => {
+    await page.goto('/')
+    // 等菜单入场动画
+    await page.waitForTimeout(1_200)
+    const { cards, startBtn } = await page.evaluate(() => {
+      const rect = (sel: string) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { x: r.x, y: r.y, width: r.width, height: r.height }
+      }
+      return {
+        cards: Array.from(document.querySelectorAll('.track-option')).map((el) => el.getBoundingClientRect()),
+        startBtn: rect('#start-btn'),
+      }
+    })
+    expect(cards.length).toBeGreaterThanOrEqual(9)
+    // 第一行卡片整体水平居中：最左卡 x 与最右卡右缘应关于视口中心对称（±24px 容差）
+    const row1 = cards.slice(0, 3)
+    const left = row1[0].x
+    const right = row1[2].x + row1[2].width
+    const center = (left + right) / 2
+    expect(
+      Math.abs(center - page.viewportSize()!.width / 2),
+      `卡片网格中心 ${center} 偏离视口中心`,
+    ).toBeLessThanOrEqual(24)
+    // 开始按钮水平居中（±24px 容差）
+    expect(startBtn).not.toBeNull()
+    const btnCenter = startBtn!.x + startBtn!.width / 2
+    expect(
+      Math.abs(btnCenter - page.viewportSize()!.width / 2),
+      `开始按钮中心 ${btnCenter} 偏离视口中心`,
+    ).toBeLessThanOrEqual(24)
+    // 开始按钮在视口内
+    expect(startBtn!.y + startBtn!.height).toBeLessThanOrEqual(1080)
   })
 })
 

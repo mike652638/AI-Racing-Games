@@ -1,14 +1,10 @@
 import { TRACK_DEFS } from '../engine/tracks'
 import { createTrackContext, type TrackContext } from './track-context'
 
-/** TrackManager 依赖注入：重置回调与选单 DOM（P1/P2 双赛道名、双类高亮） */
+/** TrackManager 依赖注入：重置回调与选单 DOM（P1/P2 双类高亮） */
 export interface TrackManagerDeps {
   /** 切换赛道后的对局重置回调（由 GameLoop 提供） */
   resetRace: () => void
-  /** P1 赛道名显示元素 */
-  trackName: HTMLSpanElement
-  /** P2 赛道名显示元素（分屏时显示；可选，未传则跳过） */
-  p2TrackName?: HTMLSpanElement
   /** 分屏模式标志：单屏（false）时不应用 P2 的 selected-p2 高亮，避免 P2 选择残留绿色边框 */
   splitMode: boolean
   /** 赛道选项元素（P1 用 selected 类、P2 用 selected-p2 类分别高亮） */
@@ -69,10 +65,8 @@ export class TrackManager {
     this.updateTrackSelect()
   }
 
-  /** 刷新选单高亮与赛道名（P1 selected / P2 selected-p2 双类高亮） */
+  /** 刷新选单高亮（P1 selected / P2 selected-p2 双类高亮） */
   updateTrackSelect(): void {
-    this.deps.trackName.textContent = this.contexts[0].def.name
-    if (this.deps.p2TrackName) this.deps.p2TrackName.textContent = this.contexts[1].def.name
     this.deps.trackOptions.forEach((option, i) => {
       option.classList.toggle('selected', i === this.selectedIndexes[0])
       option.classList.toggle('selected-p2', this.deps.splitMode && i === this.selectedIndexes[1])
