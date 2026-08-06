@@ -255,6 +255,7 @@ body.portrait-mode .title-wrap {
 }
 
 body.portrait-mode .title-sub {
+  margin-top: 0;
   margin-bottom: 2px;
 }
 
@@ -281,7 +282,9 @@ body.portrait-mode .lb-card {
   padding: 6px 8px;
 }
 
-body.portrait-mode .lb-card-body {
+/* 2026-08-06（P3-⑤）：竖屏紧凑化限高只作用于展开态——收起态依赖 base 的
+ * max-height:0（此规则若不加 expanded 会以更高特异性覆盖，竖屏默认收起失效） */
+body.portrait-mode .lb-card-clickable.expanded .lb-card-body {
   max-height: 120px;
 }
 
@@ -400,7 +403,8 @@ body.portrait-mode #hud2 .hud-side-tag {
 /* 超小屏（如 iPhone SE / 迷你机型）：标题与副标题不再比中屏更小，至少持平或略大 */
 @media (max-width: 390px) {
   :root {
-    --title-fs: 26px;
+    /* M20 菜单审计：320×568 实测标题独占过大约 1/4 屏高，收敛到 22px */
+    --title-fs: 22px;
     --subtitle-fs: 15px;
   }
 
@@ -409,6 +413,11 @@ body.portrait-mode #hud2 .hud-side-tag {
    * 收敛为 0（该分支高度 >700px 时生效；≤700px/≤620px 低高度分支在下方另行处理） */
   .title-sub {
     margin: 0 0 20px;
+  }
+
+  /* M20 菜单审计：320×568 卡片高 45px 贴近 44px 触控下限，抬升 3px 余量 */
+  .track-option {
+    min-height: 48px;
   }
 }
 

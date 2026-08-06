@@ -485,7 +485,7 @@ canvas {
    *  必须再压一档字号才能单行容纳"1. P1  800分  经典赛道  x1.50"） */
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.95);
   /* LB-3：行高 1.6→1.4，三行内容更紧凑节省垂直空间 */
   line-height: 1.4;
   text-align: left;

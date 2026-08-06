@@ -169,6 +169,8 @@ export class GameLoop {
   private bestTime2: number | null = null
   /** 菜单预览相机位置（仅 PHASE_MENU 推进；分屏 P1/P2 各自独立，切换赛道时按圈长等分重置起点） */
   private previewCameraZ: [number, number] = [0, 0]
+  /** 菜单当前选中赛道（P1）：hover 预览临时切换后由 mouseleave 恢复显示该赛道（2026-08-06 P3-③） */
+  private previewTrackIndex = 0
   private last = performance.now()
   /** 帧循环是否已调度 rAF（防重复调度导致双倍速）；完赛 return 时链断置 false，ensureLoop 重启（2026-08-05 音频/冻结修复） */
   private loopRunning = false
@@ -385,10 +387,24 @@ export class GameLoop {
         }
       }
       option.addEventListener('keydown', onKeyDown)
+      // P3-③（2026-08-06）：hover 预览联动——悬停某赛道卡临时预览该赛道，
+      // 移出（或悬停下方开始按钮）恢复显示当前选中赛道（previewTrackIndex 由 selectTrackFor 同步）
+      const onMouseEnter = (): void => {
+        if (this.phase !== PHASE_MENU) return
+        applyTrackPreview(i)
+      }
+      const onMouseLeave = (): void => {
+        if (this.phase !== PHASE_MENU) return
+        applyTrackPreview(this.previewTrackIndex)
+      }
+      option.addEventListener('mouseenter', onMouseEnter)
+      option.addEventListener('mouseleave', onMouseLeave)
       // S 修复 S3：监听经清理函数登记（destroy() 时移除）
       this.onCleanup(() => {
         option.removeEventListener('click', onClick)
         option.removeEventListener('keydown', onKeyDown)
+        option.removeEventListener('mouseenter', onMouseEnter)
+        option.removeEventListener('mouseleave', onMouseLeave)
       })
     })
     // 低优①：中央信息区赛道缩略图（controlPoints 积分生成 SVG 轨迹，初始显示 0 号赛道）
@@ -859,6 +875,7 @@ export class GameLoop {
     this.previewCameraZ[playerIndex] = initialPreviewCameraZ(trackIndex, this.race.tracks[playerIndex].lapLength)
     // 低优①：P1 选赛道时同步刷新中央缩略图（分屏 P2 选赛道不覆盖 P1 预览）
     if (playerIndex === 0) {
+      this.previewTrackIndex = trackIndex
       applyTrackPreview(trackIndex)
       updateMenuBackground(trackIndex)
     }

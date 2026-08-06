@@ -4,7 +4,8 @@
  * M20 重构：改为整体控制——
  * - 移除每张卡片独立 click/keydown toggle（去掉 tabindex / role=button）
  * - master 按钮 #lb-toggle-all 一次性展开/收起三张卡片
- * - 默认全部展开（class="expanded" + aria-expanded="true"）
+ * - 桌面/横屏默认全部展开（class="expanded" + aria-expanded="true"）；
+ *   竖屏默认收起（P3-⑤：三卡纵向堆叠占高约 300px，首屏空间优先赛道选择）
  * - 折叠时隐藏卡片 body；展开时按 data-target 刷新对应榜单内容
  */
 export interface LeaderboardRefreshers {
@@ -68,6 +69,15 @@ export function bindLeaderboardCards(refreshers: LeaderboardRefreshers, onCleanu
     onCleanup(() => master.removeEventListener('click', onClick))
   }
 
-  // M20：页面初始化时默认全部展开 + 刷新三个榜单 + 同步 master 按钮
-  applyAll(true)
+  // M20：页面初始化默认全部展开 + 刷新三个榜单 + 同步 master 按钮；
+  // P3-⑤（2026-08-06）：竖屏默认收起——三卡纵向堆叠在竖屏首屏占高约 300px，
+  // 赛道选择与开始按钮优先；用户点 master 展开时按需刷新（收起态无需渲染）。
+  // 竖屏判定与 portrait-mode.ts 的 isPortraitViewport 同源（异常环境降级为横屏行为）。
+  let portrait = false
+  try {
+    portrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth
+  } catch {
+    /* 忽略 */
+  }
+  applyAll(!portrait)
 }

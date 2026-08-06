@@ -913,6 +913,16 @@
   transform: translateY(0) scale(0.98);
 }
 
+/* M20 菜单审计：开始按钮 hover 反馈增强——轻微放大 + 更明显的金色柔光晕 */
+#start-btn:hover {
+  box-shadow: 0 0 28px rgba(var(--color-accent-rgb), 0.55);
+  transform: translateY(-2px) scale(1.03);
+}
+
+#start-btn.loading:hover {
+  transform: translateY(0) scale(0.99);
+}
+
 .btn-primary:focus-visible {
   outline: 2px solid var(--menu-cyan);
   outline-offset: 3px;
