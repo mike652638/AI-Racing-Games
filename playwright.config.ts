@@ -13,14 +13,15 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   // vitest 与 playwright 均默认忽略 node_modules；e2e 目录与 vitest include（tests/**/*.test.ts）不重叠
   timeout: 60_000,
+  // M20 P2-6：默认 expect 5s 在 1920×1080 高 DPR / 字体加载下偶发超时，放宽至 15s
+  // （expect 是顶层 TestConfig 选项，不属 use 的 UseOptions）
+  expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // M20 P2-6：默认 expect 5s 在 1920×1080 高 DPR / 字体加载下偶发超时，放宽至 15s
-    expect: { timeout: 15_000 },
   },
   projects: [
     {
