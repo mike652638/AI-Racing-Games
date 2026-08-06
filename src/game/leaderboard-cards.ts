@@ -1,7 +1,11 @@
 /**
- * 榜单卡片展开交互（M18 可访问性；rt4 批次自 game-loop.ts 拆分）：
- * 点击 / Enter / Space 切换 .expanded + aria-expanded；互斥展开——展开一个时自动收起其他
- * （UX-5：防三面板同展把开始按钮顶出视口）；展开后按 data-target 刷新对应榜单内容。
+ * 榜单卡片展开交互（M18 可访问性；rt4 批次自 game-loop.ts 拆分）。
+ *
+ * M20 重构：改为整体控制——
+ * - 移除每张卡片独立 click/keydown toggle（去掉 tabindex / role=button）
+ * - master 按钮 #lb-toggle-all 一次性展开/收起三张卡片
+ * - 默认全部展开（class="expanded" + aria-expanded="true"）
+ * - 折叠时隐藏卡片 body；展开时按 data-target 刷新对应榜单内容
  */
 export interface LeaderboardRefreshers {
   driftTop: () => void
@@ -10,47 +14,60 @@ export interface LeaderboardRefreshers {
 }
 
 /**
- * 绑定全部 .lb-card-clickable 卡片。
+ * 绑定整体 master 切换按钮 + 初始化卡片状态。
  * onCleanup：监听清理登记回调（GameLoop.destroy 时统一移除，S 修复 S3 契约）。
  */
 export function bindLeaderboardCards(refreshers: LeaderboardRefreshers, onCleanup: (fn: () => void) => void): void {
-  const cards = document.querySelectorAll?.('.lb-card-clickable') ?? []
-  const updateAria = (c: Element): void => {
-    if (typeof c.setAttribute === 'function') {
-      c.setAttribute('aria-expanded', String(c.classList.contains('expanded')))
+  const cards = document.querySelectorAll?.('.lb-card') ?? []
+  const master = document.getElementById('lb-toggle-all') as HTMLButtonElement | null
+
+  /** 同步 master 按钮文案与状态——根据当前所有卡片中是否有任一收起判断 */
+  const syncMaster = (): void => {
+    if (!master) return
+    const anyCollapsed = Array.from(cards).some((c) => !c.classList.contains('expanded'))
+    // 按钮文案：当前任一收起 → 显示「展开」；全部展开 → 显示「收起」
+    const nextText = anyCollapsed ? '展开' : '收起'
+    const textEl = master.querySelector?.('.lb-toggle-text')
+    if (textEl) textEl.textContent = nextText
+    if (typeof master.setAttribute === 'function') {
+      master.setAttribute('aria-expanded', String(!anyCollapsed))
+    }
+    if (typeof master.classList?.toggle === 'function') {
+      master.classList.toggle('collapsed', anyCollapsed)
     }
   }
-  const toggleCard = (card: Element): void => {
-    const willExpand = !card.classList.contains('expanded')
-    if (willExpand) {
-      cards.forEach((other) => {
-        if (other !== card) {
-          other.classList.remove('expanded')
-          updateAria(other)
-        }
-      })
-    }
-    card.classList.toggle('expanded')
-    updateAria(card)
-    const target = card.getAttribute?.('data-target')
-    if (target === 'drift-top') refreshers.driftTop()
-    else if (target === 'match-top') refreshers.matchTop()
-    else if (target === 'best-summary') refreshers.bestSummary()
-  }
-  cards.forEach((card) => {
-    const onCardClick = (): void => toggleCard(card)
-    const onCardKeydown = (e: Event): void => {
-      const ke = e as KeyboardEvent
-      if (ke.code === 'Enter' || ke.code === 'Space') {
-        e.preventDefault()
-        toggleCard(card)
+
+  /** 应用展开/收起 + 刷新对应榜单 */
+  const applyAll = (expand: boolean): void => {
+    cards.forEach((card) => {
+      const el = card as HTMLElement
+      if (typeof el.classList?.toggle === 'function') {
+        el.classList.toggle('expanded', expand)
       }
-    }
-    card.addEventListener('click', onCardClick)
-    card.addEventListener('keydown', onCardKeydown)
-    onCleanup(() => {
-      card.removeEventListener('click', onCardClick)
-      card.removeEventListener('keydown', onCardKeydown)
+      if (typeof el.setAttribute === 'function') {
+        el.setAttribute('aria-expanded', String(expand))
+      }
+      const target = el.getAttribute?.('data-target')
+      // 仅展开时刷新（收起态下 body 已折叠，无需渲染）
+      if (expand) {
+        if (target === 'drift-top') refreshers.driftTop()
+        else if (target === 'match-top') refreshers.matchTop()
+        else if (target === 'best-summary') refreshers.bestSummary()
+      }
     })
-  })
+    syncMaster()
+  }
+
+  if (master && typeof master.addEventListener === 'function') {
+    const onClick = (): void => {
+      const anyCollapsed = Array.from(cards).some((c) => !c.classList.contains('expanded'))
+      // 任一收起 → 全部展开；全部展开 → 全部收起
+      applyAll(anyCollapsed)
+    }
+    master.addEventListener('click', onClick)
+    onCleanup(() => master.removeEventListener('click', onClick))
+  }
+
+  // M20：页面初始化时默认全部展开 + 刷新三个榜单 + 同步 master 按钮
+  applyAll(true)
 }

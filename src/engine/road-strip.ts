@@ -87,8 +87,9 @@ const CENTER_LINE_RATIO = 0.06
 /** 中心虚线颜色（与逐段渲染一致） */
 const CENTER_LINE_COLOR = '#e8e8e8'
 
-/** M16 路面颗粒噪点密度（每段横向撒点数；确定性 PRNG，纹理烘焙一次，帧内零成本） */
-const ROAD_NOISE_PER_SEG = 14
+/** M16 路面颗粒噪点密度（每段横向撒点数；确定性 PRNG，纹理烘焙一次，帧内零成本）。
+ *  M20 P2-5：14→10 且 alpha 下调（0.12-0.22→0.08-0.15），降低静态画面对比度斑驳感 */
+const ROAD_NOISE_PER_SEG = 10
 /** M16 颗粒噪点 seed 偏移（确定性：不同 strip 用不同 offset 避免噪点跨段重复） */
 const ROAD_NOISE_SEED_BASE = 0x9e3779b9
 
@@ -146,7 +147,7 @@ export function renderRoadStripToCanvas(strip: RoadStrip, options: RoadStripRend
       const ny = y + 0.25 + noise() * (pixelsPerSegment - 2)
       // 跳过中心虚线带（±lineHalf 内不撒点，避免覆盖白线）
       if (Math.abs(nx - centerX) < lineHalf) continue
-      const alpha = 0.12 + noise() * 0.1
+      const alpha = 0.08 + noise() * 0.07
       ctx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`
       ctx.fillRect(nx, ny, 1.5, 1.5)
     }

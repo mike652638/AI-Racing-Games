@@ -62,9 +62,11 @@ export function refreshDriftTop(): void {
       : top
           .map(
             (e, i) =>
-              `${i + 1}. ${e.player} · ${e.score} 分 · ${getTrackDef(e.trackId)?.name ?? '未知赛道'}` +
-              // H4（H4）：最高连击档位 → ` · 连击 x倍率`（1 + combo*COMBO_MULTIPLIER_STEP）；旧条目无 combo 不追加
-              (e.combo ? ` · 连击 x${(1 + e.combo * COMBO_MULTIPLIER_STEP).toFixed(2)}` : ''),
+              // M20：极简单行格式——去掉所有「·」与「连击」字节省字符，
+              // "1. P1  800分  经典赛道  x1.50" 在 11px 字号 + 224px 卡片宽下单行不换行
+              `${i + 1}. ${e.player}  ${e.score}分  ${getTrackDef(e.trackId)?.name ?? '未知赛道'}` +
+              // H4（H4）：最高连击档位 → ` x倍率`（1 + combo*COMBO_MULTIPLIER_STEP）；旧条目无 combo 不追加
+              (e.combo ? `  x${(1 + e.combo * COMBO_MULTIPLIER_STEP).toFixed(2)}` : ''),
           )
           .join('\n')
   syncScrollable(el)
@@ -94,7 +96,9 @@ export function refreshBestSummary(): void {
     if (t1 === null && t2 === null) return
     rank++
     const p1 = t1 !== null ? formatTime(t1) : '--'
-    const p2 = t2 !== null ? ` · P2 ${formatTime(t2)}` : ''
+    // M20：去掉「·」分隔符，与漂移/对局榜单统一紧凑单行格式——
+    // 单行"1. 经典赛道  P1 0:49.899  P2 0:51.335" 在 340px 宽屏卡片内不换行
+    const p2 = t2 !== null ? `  P2 ${formatTime(t2)}` : ''
     lines.push(`${rank}. ${def.name}  P1 ${p1}${p2}`)
   })
   const visible = isCardExpanded(el) ? lines : lines.slice(0, 5)
@@ -120,7 +124,9 @@ export function refreshMatchTop(): void {
       : top
           .map(
             (e, i) =>
-              `${i + 1}. ${e.winner} 胜 · ${e.p1Score}:${e.p2Score} · ${getTrackDef(e.trackId)?.name ?? '未知赛道'}`,
+              // M20：紧凑单行格式（去掉「·」分隔符，多空格分隔）——
+              // 与漂移榜单格式统一，单行容纳便于在 340px 宽屏卡片内不换行
+              `${i + 1}. ${e.winner}胜  ${e.p1Score}:${e.p2Score}  ${getTrackDef(e.trackId)?.name ?? '未知赛道'}`,
           )
           .join('\n')
   syncScrollable(el)

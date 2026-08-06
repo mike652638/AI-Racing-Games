@@ -356,9 +356,12 @@ canvas {
  * 显示暗色底槽，玩家在未蓄能时也能感知 BOOST 功能与蓄能进度；.boost-fill 宽度
  * 由 frame-update 按 charge 设置。 */
 #boost-bar {
+  /* M20 P2/HUD-2：从左下改为底部居中——与 #pause-btn（左下 52×52 圆形）位置解耦，
+   * 避免 BOOST 文字左侧被暂停按钮遮住；居中横条视觉重心更平衡 */
   position: fixed;
-  left: 16px;
-  bottom: 16px;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
   width: 200px;
   height: 12px;
   border-radius: 6px;
@@ -387,7 +390,10 @@ canvas {
   top: 0;
   width: 100%;
   height: 100%;
-  padding-left: 8px;
+  /* M20 P2/HUD-2：底部居中后 BOOST 文字改 text-align:center + 移除 padding-left，
+   * 防「左偏显示不全」——之前 left:0 + padding-left:8px 让 BOOST 字靠左，被左下角
+   * 暂停按钮圆形遮住首字符 */
+  text-align: center;
   /* V-1（2026-08-05 审计）：标签对比度提升——字号 10→11px + 字间距 + 深色描边投影，防小字误读 */
   font-size: 11px;
   font-weight: 700;
@@ -475,8 +481,9 @@ canvas {
   margin: 0;
   /* 2026-08-05 LB-3：等宽数字 + 左对齐——排名号与时间数字纵向对齐整齐；
    *  居中对齐会让"1."与"经典赛道 P1"中线分离导致视觉错位 */
-  /* LB-7：字号 clamp(14px, 3vw, 16px)→clamp(13px, 2.8vw, 14px)，面板更紧凑 */
-  font-size: clamp(13px, 2.8vw, 14px);
+  /* M20：字号 clamp(13px, 2.8vw, 14px)→11px（在 800-1100 视口下 3 列各 ~224px 宽，
+   *  必须再压一档字号才能单行容纳"1. P1  800分  经典赛道  x1.50"） */
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.9);
   /* LB-3：行高 1.6→1.4，三行内容更紧凑节省垂直空间 */
@@ -486,11 +493,13 @@ canvas {
   white-space: pre-line;
   padding: 0 4px;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-  /* M-3（菜单审计）：限高 + max-height 过渡提供展开反馈；默认 overflow:hidden
-   *  消除嵌套滚动陷阱（滚轮悬停卡片不再被捕获），仅条目多时由 JS 加 .scrollable 开启内滚 */
-  max-height: 120px;
+  /* M20：收起态完全隐藏内容（max-height: 0 + padding:0）——只显示标题行，
+   * 卡片高度只占 .lb-card-head；展开态再放开 max-height + padding */
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
   overflow: hidden;
-  transition: max-height 0.25s ease;
+  transition: max-height 0.25s ease, padding-top 0.25s ease, padding-bottom 0.25s ease;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 217, 255, 0.4) transparent;
 }
@@ -510,8 +519,10 @@ canvas {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
 
-/* LB-5 + M-3：展开态上限放宽到 210px（原 135px 与折叠态仅差 15px，展开感知弱），
+/* LB-5 + M-3 + M20：展开态上限放宽到 260px（容纳 10 条记录 + 每条单行不换行），
  *  配合 max-height 过渡与箭头旋转形成明确展开反馈；开始按钮由 sticky 保底可见（M-1） */
 .lb-card-clickable.expanded .lb-card-body {
-  max-height: 210px;
+  max-height: 260px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }

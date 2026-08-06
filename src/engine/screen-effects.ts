@@ -2,13 +2,16 @@
  *  均为纯函数（仅依赖 ctx 与 opts），帧内最上层轻量特效，不参与世界投影。 */
 import type { ProjectionOptions } from './projection'
 
-/** M8：速度线——速度 > 0.7×maxSpeed 时屏幕边缘 8 条径向条纹，alpha 0.0→0.6 */
+/** M8：速度线——速度 > 0.7×maxSpeed 时屏幕边缘 8 条径向条纹，alpha 0.0→0.6
+ *  M20 P2/HUD-1：颜色从纯白 rgba(255,255,255,0.6) 改为淡蓝白 rgba(190,220,255,0.6)，
+ *  降低突兀感（纯白在深色天空背景上视觉刺眼，淡蓝白更协调）；alpha 与 len 保持原值
+ *  避免触发天空条纹 P0-1 回归断言（maxDelta<60） */
 export function drawSpeedLines(ctx: CanvasRenderingContext2D, opts: ProjectionOptions, speedRatio: number): void {
   if (speedRatio <= 0.7) return
   const t = Math.min((speedRatio - 0.7) / 0.3, 1)
   const alpha = t * 0.6
   const len = 40 + t * 40
-  ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`
+  ctx.strokeStyle = `rgba(190, 220, 255, ${alpha})`
   ctx.lineWidth = 2
   ctx.beginPath()
   const w = opts.width

@@ -7,7 +7,14 @@ import {
   RENDER_DEPTH_RATIO,
   RENDER_HORIZON_RATIO,
 } from '../shared/constants'
-import { clampSpriteScale, project, type Projected, type ProjectionOptions } from './projection'
+import {
+  MAX_LAMP_SCALE,
+  MAX_SPRITE_SCALE,
+  clampSpriteScale,
+  project,
+  type Projected,
+  type ProjectionOptions,
+} from './projection'
 import { SEGMENT_LENGTH, trackIndexForCameraZ, type Segment } from './track'
 import { generateMountainProfile, parallaxOffset } from './scenery'
 import {
@@ -618,8 +625,13 @@ export class Renderer {
     if (!bottom) {
       return
     }
-    // M18：精灵近距缩放上限（MAX_SPRITE_SCALE）——在精灵侧 clamp，路面投影数学不动
-    const hpx = clampSpriteHeight(sprite.kind, sprite.height * clampSpriteScale(bottom.scale) * opts.height * 0.5)
+    // M18：精灵近距缩放上限（MAX_SPRITE_SCALE）——在精灵侧 clamp，路面投影数学不动。
+    // M20 P1-3：路灯用更紧的 MAX_LAMP_SCALE（细杆+灯头比例，防屏幕中心巨型黄斑）
+    const scaleLimit = sprite.kind === 'lamp' ? MAX_LAMP_SCALE : MAX_SPRITE_SCALE
+    const hpx = clampSpriteHeight(
+      sprite.kind,
+      sprite.height * clampSpriteScale(bottom.scale, scaleLimit) * opts.height * 0.5,
+    )
     switch (sprite.kind) {
       case 'lamp':
         drawLamp(this.ctx, bottom.x, bottom.y, hpx)

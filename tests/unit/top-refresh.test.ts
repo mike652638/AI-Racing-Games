@@ -85,7 +85,8 @@ describe('syncClipped 裁切渐隐类（LB-Z3）', () => {
     )
     refreshMatchTop()
     expect(el.classes.has('clipped')).toBe(false)
-    expect(el.textContent).toContain('P1 胜')
+    // M20 紧凑格式：去掉「·」与多余空格，"P1胜  10:5  经典赛道"
+    expect(el.textContent).toContain('P1胜')
   })
 })
 

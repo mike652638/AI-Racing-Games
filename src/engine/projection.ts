@@ -35,13 +35,21 @@ export interface Projected {
 export const MAX_SPRITE_SCALE = 2.2
 
 /**
+ * 路灯近距缩放上限（M20 P1-3）：路灯世界高度仅 0.8（树 1.2），贴脸投影下
+ * 视觉高度比树更易夸张（路灯 MAX_LAMP_HEIGHT_PX=200 仍会在屏幕中心形成巨型黄斑）。
+ * 单独给路灯收紧 scale（1.4），保持路灯细杆+灯头比例，不与车流/树共用上限。
+ */
+export const MAX_LAMP_SCALE = 1.4
+
+/**
  * 精灵投影 scale clamp（M18）：近距贴脸时收敛到 MAX_SPRITE_SCALE。
  * 注意：clamp 放在精灵侧（renderer drawSpriteProjected 消费），不放 project 内——
  * project 同时被路面 quad 投影（road-geometry projectSegmentQuad）共用，路面数学必须保持原语义。
  * 车流近距防护走既有 MAX_TRAFFIC_HEIGHT_PX（保宽高比 clamp，P2），不叠加本 clamp。
+ * M20：可选 max 参数支持路灯专用上限（MAX_LAMP_SCALE），缺省仍为 MAX_SPRITE_SCALE。
  */
-export function clampSpriteScale(scale: number): number {
-  return Math.min(scale, MAX_SPRITE_SCALE)
+export function clampSpriteScale(scale: number, max: number = MAX_SPRITE_SCALE): number {
+  return Math.min(scale, max)
 }
 
 /**
