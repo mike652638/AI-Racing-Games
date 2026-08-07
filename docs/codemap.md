@@ -38,40 +38,41 @@ M16 起演进档案形成"计划 + 研究报告"双轨：`superpowers/plans/` �
 16. **运行时实测与修复（M16）**：由 `reports/` 系列报告承载闭环——`research_report_runtime_testing.md` 通过 agent-browser 实测（四模式 + 9 赛道代表）发现 minimap 渲染空白、玩家车出界卡死、开局碰撞 ×1 等 2 个核心 bug 与多项 UX 问题；`research_report_fixes_applied.md` 按 P0-P3 优先级实施全部修复（天空条纹、热座 P2 渲染/RAF 链断裂、菜单光晕、移动端适配、HUD 对比度），另发现并修复热座 P1 完赛后 RAF 链断裂 bug；`research_report_m16_improvements.md` 落地三项工程化改进（copy.ts 操作提示与 README 同源、`shouldScheduleNextFrame` 帧循环调度纯函数化、Playwright 视觉回归 + CI 集成，桌面/移动横屏双 project）；`research_report_road_optimization.md` 完成道路视觉优化（路面 9 带渐变 + 颗粒噪点 + fallback 3 带 + shadeColor 纯函数化）；`research_report_collision_feedback.md` 增强碰撞反馈（屏幕红闪 vignette + HUD 碰撞计数 + 双层碰撞音 + 横向弹开防贴车）；`research_report_legacy_issues_audit.md` 对旧运行时报告逐项代码级核查修复。
 17. **环境差异化（M17）**：`research_report_track_validation.md` 验证 9 赛道几何/难度有差异但环境视觉维度缺失 → `research_report_environment_diff.md` 为 `TrackDef` 增加 `environment` 字段 + environment.ts 9 环境配置（plains/highway/s-curve/island/canyon/desert/forest/coast/alpine 的天空/草地/远山/景物色板）并渲染层落地 → `research_report_sprite_terrain.md` 扩展 SpriteKind（cactus/palm/snowpile）+ EnvironmentProfile.terrain 地形装饰（沙漠沙丘/海岸海面/峡谷岩壁）→ `research_report_phase2_terrain.md` 增强阶段 2（海面波浪/仙人掌群/棕榈弯曲/岩壁锯齿）；远山缓存按环境懒重建。
 18. **专项优化方案（docs/ 根）**：`ui-optimization-plan.md`（基于 22 张截图分析确认的 UI/UX 真实问题清单，纯 CSS/HTML/DOM 修复，orchestrator + fixer 协作执行）与 `menu-ui-optimization-plan.md`（菜单页图标风格统一、星级显示、选中状态、信息层次与交互反馈优化方案）直接存放于 docs 根目录，供对应里程碑引用。
+19. **菜单布局优化（M20 收尾）**：`reports/research_report_menu_track_preview_layout.md` 诊断大屏赛道预览区纵向挤压 → 实施全屏 SVG 背景层方案（`buildTrackPreviewBackgroundSvg` + 中央预览小屏降级 + 融合度优化两轮）；`reports/research_report_start_screen_responsive_audit.md` 以 17 视口矩阵自动化实测 #start-screen 并修复 P0-P3 共 11 项响应式问题（新增 `max-height:800px` 低高度桌面分支、移动横屏默认收起榜单 + 渐隐滚动提示、竖屏 rotate-hint 上移，716 用例全绿）。
 
 整体演进遵循"先打地基、再扩展、后优化"的顺序，每份新计划都承诺对既有 API 的向后兼容，形成可追溯的工程档案。
 
 ## Files
 
-| File | Responsibility |
-|------|----------------|
-| codemap.md | 本目录索引：docs 目录职责、规划方式、文档演进关系与文件清单 |
-| superpowers/codemap.md | `docs/superpowers` 子目录索引（计划体系与技能目录的说明占位） |
-| superpowers/plans/codemap.md | `plans` 子目录索引（计划文档清单的说明占位） |
-| superpowers/plans/2026-08-02-m4-m5-complete.md | M4-M5 完整实施方案：bot 决策器 + 跑圈模拟器 + `npm run bot` 报告 + HUD/音效/状态机/结算/发布（8 个 Task） |
-| superpowers/plans/2026-08-02-extensions.md | 第一轮扩展（M6）：平滑弯道控制点、路面景物（路灯/树木）、漂移系统、双人分屏、localStorage 存档（5 个 Task） |
-| superpowers/plans/2026-08-02-extensions-2.md | 第二轮扩展：车流/碰撞、漂移得分、关卡选单（3 条赛道）、WebAudio 合成音乐、移动端触控（5 个 Task） |
-| superpowers/plans/2026-08-02-optimize.md | 项目复盘与优化：P0 功能缺陷修复（暂停/分屏碰撞/多赛道存档等）、代码质量与性能优化、游戏性增强（10 个 Task + 经验总结） |
-| superpowers/plans/2026-08-03-optimization.md | 完整优化实施：互碰冷却、渲染尺寸校准、菜单 HUD 隐藏、分屏独立实例、main.ts 拆分与 Phase 下沉、纯函数化、常量集中、赛道预览动画、测试补充、空间索引（10 个 Task + 无人值守推进指南） |
-| superpowers/plans/2026-08-03-split-screen-multi-track.md | M6 分屏双赛道：分界线修复 + 双人独立选赛道与双世界渲染重构（Task A + B1-B5） |
-| superpowers/plans/2026-08-03-split-save-finish.md | M7 双人存档与结算：P2 最佳成绩独立存档、P2 圈速与 HUD BEST、结算面板双人化、codemap 刷新（Task C1-C5） |
-| superpowers/plans/2026-08-03-hotseat-drift-gameplay.md | M8 热座与游戏性扩展：单屏 P2 BEST、热座轮流模式、漂移竞速横幅、新赛道 ×2 与 5 槽选择、车流密度调参、天气循环（Task D1-D8） |
-| superpowers/plans/2026-08-03-wins-ranks-difficulty.md | M9 遗留修复与双人持久化：P1 结算前缀、白天天空色相修复、热座车流推进、胜场统计与连胜、新赛道 ×4 扩至 9 条 + 难度星级、漂移得分 TOP10 排行榜（Task E1-E8） |
-| superpowers/plans/2026-08-03-finish-combo-weather-pause.md | M10 结算打磨与游戏性扩展：圈速行前缀与面板间距、漂移连击/倍率 + 得分上限落地、各赛道 BEST 汇总、车流避让 AI、雨天气三态循环、暂停菜单音量/重开（Task P1-P8） |
-| superpowers/plans/2026-08-03-night-match-touch-audio.md | M11 夜晚/对局/触屏/音效扩展：夜晚赛道 + 车灯、分屏对局 TOP10、触屏暂停入口、雨声/碰撞音、drawRain 离屏缓存、漂移得分 MAX 标记（Task F1-F8） |
-| superpowers/plans/2026-08-03-challenge-boost-wet-audio.md | M12 挑战/氮气/雨天/工程优化：漂移挑战模式限时刷分、车灯转向、雨天物理、BOOST 氮气、lapRef 复用、MusicPlayer 纯函数化、音量分级（Task G1-G9） |
-| superpowers/plans/2026-08-03-challenge-bonus-particles-matrix.md | M13 挑战加成/粒子/尾灯/排行榜/回归矩阵：挑战模式天气/难度加成计分、BOOST 音效与尾焰粒子、车流夜间尾灯、漂移连击排行榜权重、updatePlayerFrame 签名重构、碰撞音强度分级、结算面板可滚动、run-bot 9 赛道矩阵回归（Task H1-H10） |
-| superpowers/plans/2026-08-03-performance-optimization-plan.md | M14 性能优化：道路曲率段离屏缓存（road-strip.ts）、每帧分配削减（复用数组/缓存对象/fillStyle 缓存）、分屏与性能模式降级（Task 1-10） |
-| superpowers/plans/2026-08-03-performance-optimization-task8-report.md | M14 Task 8 实施报告：PerformanceConfig 三档（PERF_HIGH 120 / PERF_MID 80 / PERF_LOW 60）与 `?perf` 查询参数落地详情 |
-| superpowers/plans/2026-08-04-improvements.md | M15 已识别改进实施：渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分 + pauseTitle、死代码清理与文档同步、工程化配置（Task A-F） |
-| superpowers/specs/codemap.md | `specs` 子目录索引（设计文档清单） |
-| superpowers/specs/2026-08-03-performance-optimization-design.md | M14 性能优化设计文档（已批准）：预计算 + 缓存基线分析、道路离屏缓存 / 分配削减 / 三档降级设计 |
-| reports/codemap.md | `reports` 子目录索引（15 份研究报告清单与主题） |
-| reports/research_report_*.md | 15 份研究报告：M16-M17 运行时实测、修复交付、工程化改进、道路/碰撞/环境差异化、项目级复盘（详见 reports/codemap.md） |
-| visual-analysis/codemap.md | `visual-analysis` 子目录索引（视觉分析报告清单） |
-| visual-analysis/FINAL_VISUAL_ANALYSIS.md | 视觉分析最终综合报告（8 任务调和版）：3 路 observer + 5 路代码侧分析整合，P0-P3 分级问题与性能评价（2026-08-04） |
-| visual-analysis/UI_UX_ANALYSIS.md | UI/UX 综合分析报告：22 张截图自动化视觉分析，52 项问题分级清单（2026-08-03） |
-| visual-analysis/VISUAL_ANALYSIS_RECONCILED.md | 视觉分析三方整合报告：A1/A2/A3 三路 observer 诊断的去重与优先级合并（11 张截图） |
-| menu-ui-optimization-plan.md | 菜单页面 UI/UX 优化方案：图标风格统一、星级显示、选中状态、信息层次与交互反馈（2026-08-03） |
-| ui-optimization-plan.md | UI/UX 专项优化实施计划：22 张截图分析确认的真实问题清单 + 纯 CSS/HTML/DOM 修复方案（orchestrator + fixer 协作执行） |
-| screenshots/ | 证据截图归档：`audit-*`（运行时实测）、`auto-*`（无人值守自动化）、`shot-*`（各模式演进）、`roadfix-*`/`zorder-*`/`zfix-*`/`road-*`/`menu-*`/`finishbox-*`（专项修复前后对比） |
+| File                                                                  | Responsibility                                                                                                                                                                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| codemap.md                                                            | 本目录索引：docs 目录职责、规划方式、文档演进关系与文件清单                                                                                                                                                                  |
+| superpowers/codemap.md                                                | `docs/superpowers` 子目录索引（计划体系与技能目录的说明占位）                                                                                                                                                                |
+| superpowers/plans/codemap.md                                          | `plans` 子目录索引（计划文档清单的说明占位）                                                                                                                                                                                 |
+| superpowers/plans/2026-08-02-m4-m5-complete.md                        | M4-M5 完整实施方案：bot 决策器 + 跑圈模拟器 + `npm run bot` 报告 + HUD/音效/状态机/结算/发布（8 个 Task）                                                                                                                    |
+| superpowers/plans/2026-08-02-extensions.md                            | 第一轮扩展（M6）：平滑弯道控制点、路面景物（路灯/树木）、漂移系统、双人分屏、localStorage 存档（5 个 Task）                                                                                                                  |
+| superpowers/plans/2026-08-02-extensions-2.md                          | 第二轮扩展：车流/碰撞、漂移得分、关卡选单（3 条赛道）、WebAudio 合成音乐、移动端触控（5 个 Task）                                                                                                                            |
+| superpowers/plans/2026-08-02-optimize.md                              | 项目复盘与优化：P0 功能缺陷修复（暂停/分屏碰撞/多赛道存档等）、代码质量与性能优化、游戏性增强（10 个 Task + 经验总结）                                                                                                       |
+| superpowers/plans/2026-08-03-optimization.md                          | 完整优化实施：互碰冷却、渲染尺寸校准、菜单 HUD 隐藏、分屏独立实例、main.ts 拆分与 Phase 下沉、纯函数化、常量集中、赛道预览动画、测试补充、空间索引（10 个 Task + 无人值守推进指南）                                          |
+| superpowers/plans/2026-08-03-split-screen-multi-track.md              | M6 分屏双赛道：分界线修复 + 双人独立选赛道与双世界渲染重构（Task A + B1-B5）                                                                                                                                                 |
+| superpowers/plans/2026-08-03-split-save-finish.md                     | M7 双人存档与结算：P2 最佳成绩独立存档、P2 圈速与 HUD BEST、结算面板双人化、codemap 刷新（Task C1-C5）                                                                                                                       |
+| superpowers/plans/2026-08-03-hotseat-drift-gameplay.md                | M8 热座与游戏性扩展：单屏 P2 BEST、热座轮流模式、漂移竞速横幅、新赛道 ×2 与 5 槽选择、车流密度调参、天气循环（Task D1-D8）                                                                                                   |
+| superpowers/plans/2026-08-03-wins-ranks-difficulty.md                 | M9 遗留修复与双人持久化：P1 结算前缀、白天天空色相修复、热座车流推进、胜场统计与连胜、新赛道 ×4 扩至 9 条 + 难度星级、漂移得分 TOP10 排行榜（Task E1-E8）                                                                    |
+| superpowers/plans/2026-08-03-finish-combo-weather-pause.md            | M10 结算打磨与游戏性扩展：圈速行前缀与面板间距、漂移连击/倍率 + 得分上限落地、各赛道 BEST 汇总、车流避让 AI、雨天气三态循环、暂停菜单音量/重开（Task P1-P8）                                                                 |
+| superpowers/plans/2026-08-03-night-match-touch-audio.md               | M11 夜晚/对局/触屏/音效扩展：夜晚赛道 + 车灯、分屏对局 TOP10、触屏暂停入口、雨声/碰撞音、drawRain 离屏缓存、漂移得分 MAX 标记（Task F1-F8）                                                                                  |
+| superpowers/plans/2026-08-03-challenge-boost-wet-audio.md             | M12 挑战/氮气/雨天/工程优化：漂移挑战模式限时刷分、车灯转向、雨天物理、BOOST 氮气、lapRef 复用、MusicPlayer 纯函数化、音量分级（Task G1-G9）                                                                                 |
+| superpowers/plans/2026-08-03-challenge-bonus-particles-matrix.md      | M13 挑战加成/粒子/尾灯/排行榜/回归矩阵：挑战模式天气/难度加成计分、BOOST 音效与尾焰粒子、车流夜间尾灯、漂移连击排行榜权重、updatePlayerFrame 签名重构、碰撞音强度分级、结算面板可滚动、run-bot 9 赛道矩阵回归（Task H1-H10） |
+| superpowers/plans/2026-08-03-performance-optimization-plan.md         | M14 性能优化：道路曲率段离屏缓存（road-strip.ts）、每帧分配削减（复用数组/缓存对象/fillStyle 缓存）、分屏与性能模式降级（Task 1-10）                                                                                         |
+| superpowers/plans/2026-08-03-performance-optimization-task8-report.md | M14 Task 8 实施报告：PerformanceConfig 三档（PERF_HIGH 120 / PERF_MID 80 / PERF_LOW 60）与 `?perf` 查询参数落地详情                                                                                                          |
+| superpowers/plans/2026-08-04-improvements.md                          | M15 已识别改进实施：渲染缓存激活、车流避让恢复、simulateLaps 车流模式、GameLoop 拆分 + pauseTitle、死代码清理与文档同步、工程化配置（Task A-F）                                                                              |
+| superpowers/specs/codemap.md                                          | `specs` 子目录索引（设计文档清单）                                                                                                                                                                                           |
+| superpowers/specs/2026-08-03-performance-optimization-design.md       | M14 性能优化设计文档（已批准）：预计算 + 缓存基线分析、道路离屏缓存 / 分配削减 / 三档降级设计                                                                                                                                |
+| reports/codemap.md                                                    | `reports` 子目录索引（18 份核心研究报告清单与主题）                                                                                                                                                                          |
+| reports/research_report_*.md                                          | 18 份研究报告：M16-M17 运行时实测、修复交付、工程化改进、道路/碰撞/环境差异化、项目级复盘、M20 菜单布局优化（详见 reports/codemap.md）                                                                                       |
+| visual-analysis/codemap.md                                            | `visual-analysis` 子目录索引（视觉分析报告清单）                                                                                                                                                                             |
+| visual-analysis/FINAL_VISUAL_ANALYSIS.md                              | 视觉分析最终综合报告（8 任务调和版）：3 路 observer + 5 路代码侧分析整合，P0-P3 分级问题与性能评价（2026-08-04）                                                                                                             |
+| visual-analysis/UI_UX_ANALYSIS.md                                     | UI/UX 综合分析报告：22 张截图自动化视觉分析，52 项问题分级清单（2026-08-03）                                                                                                                                                 |
+| visual-analysis/VISUAL_ANALYSIS_RECONCILED.md                         | 视觉分析三方整合报告：A1/A2/A3 三路 observer 诊断的去重与优先级合并（11 张截图）                                                                                                                                             |
+| menu-ui-optimization-plan.md                                          | 菜单页面 UI/UX 优化方案：图标风格统一、星级显示、选中状态、信息层次与交互反馈（2026-08-03）                                                                                                                                  |
+| ui-optimization-plan.md                                               | UI/UX 专项优化实施计划：22 张截图分析确认的真实问题清单 + 纯 CSS/HTML/DOM 修复方案（orchestrator + fixer 协作执行）                                                                                                          |
+| screenshots/                                                          | 证据截图归档：`audit-*`（运行时实测）、`auto-*`（无人值守自动化）、`shot-*`（各模式演进）、`roadfix-*`/`zorder-*`/`zfix-*`/`road-*`/`menu-*`/`finishbox-*`（专项修复前后对比）                                               |
