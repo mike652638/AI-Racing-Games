@@ -3,6 +3,10 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // 2026-08-07：静态托管子路径部署修复——线上部署于 CloudBase 静态托管 ai-racing-games/ 子目录，
+  // 默认 base '/' 会生成绝对路径资源引用（/assets/xxx.js），子路径下全部 404。
+  // 改用相对 base './'，HTML 内资源引用均为相对路径，任意子路径部署均可用。
+  base: './',
   plugins: [
     // PWA 支持：插件内部已按作用域拆分（generateSW/workbox 构建在 apply:'build'，
     // dev 模式仅注入 HTML 的 serve 插件），因此 vitest node 环境加载配置时

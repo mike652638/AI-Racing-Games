@@ -11,6 +11,24 @@ npm run build      # 类型检查 + 生产构建 (dist/)
 npm run preview    # 预览生产构建
 ```
 
+## 部署到腾讯云 CloudBase 静态托管
+
+线上地址：<https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/>
+
+```bash
+npm run build                              # 类型检查 + 生产构建（dist/）
+# 将 dist/ 下全部文件上传至 CloudBase 静态托管 bucket 的 ai-racing-games/ 目录
+# （CloudBase AI 工具 uploadFiles：localPath=dist/xxx → cloudPath=ai-racing-games/xxx）
+```
+
+部署要点：
+
+- `vite.config.ts` 已设置 `base: './'`（相对路径）——静态托管部署在子目录 `ai-racing-games/` 下，绝对路径资源引用（`/assets/xxx`）会 404，相对路径任意子目录均可用
+- `index.html` 含 no-cache meta；发布后用 `?v=<date>` 加随机参数访问可绕过浏览器/CDN 缓存验证新版本
+- PWA `manifest` 的 `start_url`/`scope` 已用相对路径 `./`，与子目录部署兼容
+- CloudBase 环境：`joyful-d6glfqzna80c9f036`（ap-shanghai，静态托管域名 `joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com`）
+- 微信分享卡 `share-card-v2.png` 一并部署（og:image 引用完整 URL）
+
 ## 测试与验证
 
 ```bash
