@@ -74,10 +74,16 @@ export function bindLeaderboardCards(refreshers: LeaderboardRefreshers, onCleanu
   // 赛道选择与开始按钮优先；用户点 master 展开时按需刷新（收起态无需渲染）。
   // 竖屏判定与 portrait-mode.ts 的 isPortraitViewport 同源（异常环境降级为横屏行为）。
   let portrait = false
+  let lowHeight = false
   try {
-    portrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth
+    if (typeof window !== 'undefined') {
+      portrait = window.innerHeight > window.innerWidth
+      lowHeight = window.innerHeight <= 480
+    }
   } catch {
     /* 忽略 */
   }
-  applyAll(!portrait)
+  // P0-1：低高度横屏（如 812×375）首屏空间极有限，默认收起榜单 body，
+  // 仅显示「我的榜单」工具栏；用户点击 master「展开」按钮后再按需加载内容。
+  applyAll(!portrait && !lowHeight)
 }

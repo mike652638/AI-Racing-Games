@@ -230,6 +230,16 @@
 @media (orientation: portrait) and (max-width: 1024px) {
   #rotate-hint {
     display: flex;
+    /* P2-2：提示内容上移，底部背景渐变透明，让后面赛道第 3 行卡片可见 */
+    justify-content: flex-start;
+    padding-top: max(14px, 7vh);
+    background: linear-gradient(
+      180deg,
+      rgba(5, 7, 15, 0.95) 0%,
+      rgba(5, 7, 15, 0.8) 45%,
+      rgba(5, 7, 15, 0.45) 70%,
+      transparent 100%
+    );
   }
 }
 
@@ -421,6 +431,78 @@ body.portrait-mode #hud2 .hud-side-tag {
   }
 }
 
+/* P1-2/P3-3：低高度桌面（≤800px）压缩垂直占位，覆盖 1024×768 与 1366×768，
+ *  使首屏可完整容纳标题+赛道网格+榜单工具栏；1600×900 与 1920×1080 不受影响。 */
+@media (max-height: 800px) {
+  .menu-content {
+    bottom: 128px; /* P1-1/P2-3：footer 预留 150→128px，榜单与 footer 留 ~18px 呼吸空间 */
+  }
+
+  .title-wrap {
+    margin-bottom: 6px;
+  }
+
+  .title-sub {
+    margin: -4px 0 8px;
+  }
+
+  #menu-mode-badge {
+    margin: 6px 0 2px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  #track-select {
+    margin: 4px auto 2px;
+    gap: 10px;
+  }
+
+  .track-option {
+    min-height: 44px;
+    padding: 6px 10px;
+  }
+
+  .track-preview-wrap {
+    display: none; /* P1-2：低高度桌面隐藏中央预览，释放 140px 给榜单区 */
+  }
+
+  .leaderboard-section {
+    margin-top: 4px;
+    padding: 8px 10px 10px;
+  }
+
+  .leaderboard-toolbar {
+    margin-bottom: 4px;
+  }
+
+  .leaderboard-cards {
+    gap: 8px;
+  }
+
+  .lb-card {
+    padding: 4px 8px;
+  }
+
+  .lb-card-head {
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+  }
+
+  .lb-card-clickable.expanded .lb-card-body {
+    max-height: 150px;
+  }
+
+  #start-btn {
+    margin-top: 6px;
+    padding: 8px 28px;
+  }
+
+  #start-screen .hint,
+  #menu-hint-touch {
+    margin-top: 6px;
+  }
+}
+
 /* M-1（菜单审计）：低高度桌面分级压缩——≤700px 压缩标题/网格/预览/榜单的垂直占位，
  *  使 1366×768 笔记本（可用高度 ≈600–650px）首屏容纳全部内容；≤620px 进一步隐藏
  *  副标题与预览缩略图；配合 #start-btn sticky 保底（下方），主 CTA 始终可见 */
@@ -474,6 +556,23 @@ body.portrait-mode #hud2 .hud-side-tag {
   .track-preview-wrap {
     display: none;
   }
+
+  /* 低高度下同时禁用宽屏背景预览 */
+  .track-preview-bg {
+    display: none !important;
+  }
+}
+
+/* 2026-08-06 菜单布局优化：大屏（≥1280px 且可用高度 ≥700px）启用背景层预览，
+ * 并隐藏中央 .track-preview-wrap，解决 1920×1080 下纵向空间挤压问题。 */
+@media (min-width: 1280px) and (min-height: 700px) {
+  .track-preview-bg {
+    display: block;
+  }
+
+  .track-preview-wrap {
+    display: none;
+  }
 }
 
 /* M-6（菜单审计）：宽屏 ≥1600px 放宽内容列宽，减少两侧大面积留白
@@ -504,12 +603,12 @@ body.portrait-mode #hud2 .hud-side-tag {
   #finish-screen h1,
   #pause-screen h1 {
     font-size: clamp(18px, 5vw, 30px);
-    margin: 0 0 6px;
+    margin: 0; /* P0-1：去除标题底部 6px 外边距，进一步压缩标题块 */
   }
 
-  /* 副标题负上边距在低高度下与标题挤压成叠影，压缩标题整体占高 */
+  /* 收尾项 1：压缩标题块底部 2px，使 812×375 完全无溢出 */
   .title-wrap {
-    margin-bottom: 2px;
+    margin-bottom: 0;
   }
 
   .title-sub {
@@ -524,15 +623,44 @@ body.portrait-mode #hud2 .hud-side-tag {
   }
 
   #track-select {
-    margin: 4px 0 2px;
-    gap: 8px;
+    margin: 2px 0 2px;
+    gap: 4px;
   }
 
-  /* 横屏低高度：缩小赛道卡片与预览区，保证开始按钮不被挤出视口。
-     M20 P2-4：横向 padding 3px 8px→3px 10px，避免 812 横屏下 6 号「沙漠疾驰」文字贴边 */
+  /* P0-1/P3-4：横屏低高度进一步压缩赛道卡片，释放 ~30px 垂直空间给榜单区。
+   * box-sizing:border-box 让 min-height 28px 即真实渲染高度，保证触控目标下限。 */
   .track-option {
-    min-height: 32px;
-    padding: 3px 10px;
+    box-sizing: border-box;
+    min-height: 28px;
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+
+  .track-option .track-num {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
+  .track-option .track-label {
+    gap: 0;
+  }
+
+  .track-option .track-name {
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  .track-option .track-stars {
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  #menu-mode-badge {
+    margin: 1px 0 1px;
+    padding: 2px 8px;
+    font-size: 10px;
   }
 
   /* 低高度下隐藏中央赛道缩略图预览（节省 40px，卡片 3×3 网格本身已含赛道信息） */
@@ -540,15 +668,15 @@ body.portrait-mode #hud2 .hud-side-tag {
     display: none;
   }
 
-  /* 榜单卡片强制单行（三卡并排），避免 812px 下换行成两行挤压开始按钮 */
+  /* P0-1：榜单卡片强制单行（三卡并排），避免 812px 下换行成两行挤压开始按钮 */
   .leaderboard-cards {
     margin: 2px auto 0;
-    gap: 6px;
+    gap: 3px;
     flex-wrap: nowrap;
   }
 
   .lb-card {
-    padding: 3px 8px;
+    padding: 1px 3px;
     min-width: 0;
     flex: 1 1 0;
     max-width: none;
@@ -556,9 +684,31 @@ body.portrait-mode #hud2 .hud-side-tag {
 
   .lb-card-head {
     font-size: clamp(10px, 2vw, 12px);
-    /* M-2（菜单审计）：横屏触屏设备卡片头触控目标抬高至 44px（原实测仅 23px，
-     *  远低于触控目标建议；body 在低高度已隐藏，head 即唯一可点区） */
-    min-height: 44px;
+    /* P0-1：横屏低高度榜单区首屏优先，卡片头保持 28px 触控下限 */
+    min-height: 28px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .leaderboard-section {
+    margin-top: 4px;
+    margin-bottom: 10px; /* 收尾项 2：榜单与开始按钮间距拉开 */
+    padding: 2px 6px 4px;
+  }
+
+  .leaderboard-toolbar {
+    margin-bottom: 2px;
+  }
+
+  .lb-toggle-all {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .leaderboard-label {
+    font-size: 12px;
+    letter-spacing: 2px;
   }
 
   #start-btn {
@@ -585,20 +735,20 @@ body.portrait-mode #hud2 .hud-side-tag {
     box-shadow: 0 0 32px 10px rgba(255, 56, 100, 0.25);
   }
 
-  /* LB-Z1（榜单专项审计）：旧版 .lb-card-body 在 ≤480px 恒 display:none——
-   *  点击展开后 toggle 切「收起 ▾」/aria-expanded=true 但内容不可见，交互契约违背
-   *  （menu-probe 实测移动端 body 高度恒 0）。改为：收起态仍隐藏省空间，
-   *  展开态恢复可见并限高内滚；内容推高的开始按钮由 sticky 保底可见 */
+  /* P0-1：低高度横屏默认仅显示榜单标题行，body 收起以释放空间；
+   *  点击 master「展开」按钮后由 JS 添加 .expanded 类，显示限高内滚内容。
+   *  保留 LB-Z2 契约：收起态 overflow:hidden，展开态限高内滚。 */
   .lb-card-body {
     display: none;
   }
 
   .lb-card-clickable.expanded .lb-card-body {
     display: block;
-    max-height: 88px;
+    max-height: 72px;
     overflow-y: auto;
     margin-top: 4px;
     font-size: 11px;
+    padding: 4px 2px;
   }
 
   .lb-card-clickable.expanded .lb-card-head {
@@ -607,22 +757,14 @@ body.portrait-mode #hud2 .hud-side-tag {
     border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  .lb-card {
-    padding: 3px 6px;
-    min-height: 0;
-    border-radius: 8px;
-  }
-
-  .lb-card-head {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
-  }
-
   #start-screen .hint,
   #menu-hint-touch {
-    margin-top: 4px;
+    margin-top: 2px;
     font-size: 10px;
+  }
+
+  #touch-hint {
+    margin-top: 2px;
   }
 
   #start-btn {
@@ -630,6 +772,19 @@ body.portrait-mode #hud2 .hud-side-tag {
     padding: 4px 16px;
     font-size: 14px;
     min-height: 32px;
+  }
+
+  /* P2-1：移动横屏内容溢出时底部渐隐提示，pointer-events:none 不阻挡滚动/点击 */
+  .menu-content::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 128px;
+    height: 36px;
+    background: linear-gradient(to top, rgba(11, 5, 24, 0.85) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 2;
   }
 }
 
@@ -946,6 +1101,7 @@ body.split-mode #hud2 .hud-side-tag {
   .title-sub,
   .lb-card,
   #track-preview .tp-route,
+  #track-preview-bg .tp-route,
   #countdown-overlay .countdown-number,
   .finish-title,
   #finish-screen:not([hidden]) .finish-line {
