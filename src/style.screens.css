@@ -64,9 +64,27 @@
   pointer-events: none;
 }
 
+/* M21 整体感优化：在 .menu-gradient 基础上叠加底部"地平线"暖色调渐变层，
+ * 让底部 30% 区域呈现与赛道预览图同源的紫橙过渡色（自然延伸"地平线"）。
+ * 与 .track-preview-bg 的氛围叠加层颜色呼应，从星空到地平线无缝过渡。
+ *
+ * v2：渐变更柔和——延长透明区 55%→62%，色阶 0.18→0.12、0.35→0.28、0.45→0.32，
+ * 避免与 .track-preview-bg::after 在 88%~100% 区段叠加产生"地平线硬切" */
+.menu-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 100%, rgba(255, 56, 100, 0.18) 0%, transparent 65%),
+    linear-gradient(180deg, transparent 0%, transparent 62%, rgba(45, 27, 78, 0.12) 78%, rgba(85, 35, 70, 0.28) 92%, rgba(140, 60, 90, 0.32) 100%);
+}
+
 .menu-gradient {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background:
     radial-gradient(ellipse 80% 60% at 50% 100%, rgba(255, 56, 100, 0.35) 0%, transparent 60%),
     radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 55%),
@@ -171,8 +189,15 @@
  * 位于 .menu-bg 内、z-index 高于 menu-grid 低于前景内容；默认隐藏，
  * 由响应式媒体查询在 (min-width:1280px and min-height:700px) 下启用。
  * 1920×480 的 4:1 viewBox 横向铺满、底部对齐，仅占据画面约 1/3 作为氛围装饰。
+ *
  * 2026-08-06 后续优化：背景层不再绘制明亮天空，改为顶部透明渐变，
- * 配合 saturate/brightness/hue-rotate 滤镜与紫橙氛围叠加层，使其与菜单星空/网格融为一体。 */
+ * 配合 saturate/brightness/hue-rotate 滤镜与紫橙氛围叠加层，使其与菜单星空/网格融为一体。
+ *
+ * M21 v2 整体感优化（2026-08-07）：
+ *  - 高度 30vh → 24vh，进一步压低"地平线"位置，让背景层仅占底部 1/4 弱
+ *  - filter blur 1.5px → 2.5px 进一步虚化
+ *  - opacity 0.5 → 0.42 进一步减弱存在感
+ *  - mask 顶部透明区 32% → 38%，更靠下出现 */
 .track-preview-bg {
   position: absolute;
   left: 0;
@@ -182,15 +207,17 @@
   display: none;
   pointer-events: none;
   width: 100%;
-  /* 轻度压暗、低饱和、微偏紫，保留环境特征的同时与菜单霓虹氛围融合 */
-  filter: saturate(0.65) brightness(0.72) contrast(0.95) hue-rotate(-4deg);
-  opacity: 0.65;
-  /* mask：顶部透明区让背景从星空浮现，内容区更充分展现 */
-  mask-image: linear-gradient(180deg, transparent 0%, transparent 18%, #000 48%, #000 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 18%, #000 48%, #000 100%);
+  /* M21 v2：更暗、更虚化、更融入 */
+  filter: saturate(0.45) brightness(0.45) contrast(0.88) hue-rotate(-6deg) blur(2.5px);
+  opacity: 0.42;
+  /* M21 v2：顶部透明区 32% → 38%，更靠下出现 */
+  mask-image: linear-gradient(180deg, transparent 0%, transparent 38%, #000 65%, #000 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 38%, #000 65%, #000 100%);
 }
 
-/* 氛围叠加层：紫橙霓虹色调，与 .menu-gradient 的 radial-gradient 呼应，增强整体感 */
+/* 氛围叠加层：紫橙霓虹色调，与 .menu-gradient 的 radial-gradient 呼应，增强整体感
+ * M21 v2：渐变色阶与 .menu-bg::after 底部色阶同源，从背景预览图向星空方向自然衔接。
+ * 末端色阶与 .menu-bg::after 100% 几乎一致（40, 60, 90 vs 0.32 alpha），叠加不产生割裂。 */
 .track-preview-bg::after {
   content: '';
   position: absolute;
@@ -198,8 +225,9 @@
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(45, 27, 78, 0.32) 45%,
-    rgba(255, 56, 100, 0.1) 100%
+    rgba(45, 27, 78, 0.4) 35%,
+    rgba(85, 35, 70, 0.42) 70%,
+    rgba(140, 60, 90, 0.32) 100%
   );
   pointer-events: none;
 }
@@ -208,7 +236,8 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: 42vh;
+  /* M21 v2：高度 30vh → 24vh，让背景层仅占底部约 1/4 弱 */
+  max-height: 24vh;
 }
 
 .menu-content {
@@ -233,9 +262,10 @@
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--color-accent-rgb), 0.35) transparent;
-  /* 2026-08-06 菜单布局优化：底部渐变遮罩，确保榜单/按钮在宽屏背景预览层上保持可读性。
-   * 后续融合度优化：遮罩起始点更靠下、强度更轻，减少背景被“切掉”的边界感。 */
-  background: linear-gradient(180deg, transparent 0%, transparent 65%, rgba(11, 5, 24, 0.28) 88%, rgba(11, 5, 24, 0.42) 100%);
+  /* M21 v2 整体感优化：背景层缩小到 24vh 后，背景层仅占底部 ~259px；
+   * 底部渐变从 80% 之前完全透明，95% 之后才轻微暗化——让背景预览图"地平线"自然浮现在内容底部，
+   * 末尾 0.18/0.32 减弱硬切感，与 .menu-footer 顶部渐变联动。 */
+  background: linear-gradient(180deg, transparent 0%, transparent 80%, rgba(11, 5, 24, 0.15) 95%, rgba(11, 5, 24, 0.28) 100%);
 }
 
 /* 内容组垂直居中（超高时 margin auto 归零 → 从顶部可滚，不裁顶） */
@@ -249,7 +279,10 @@
 
 /* 2026-08-06（P0-1）：开始按钮 + 操作提示固定底部层——absolute bottom:0 贴底，
  * 与 .menu-content（bottom:130px）预留 130px 固定间距。底部渐变遮罩防滚动内容穿透。
- * 脱离共享块 flex column 布局，独立 fixed 层，永不与滚动内容重叠。 */
+ * 脱离共享块 flex column 布局，独立 fixed 层，永不与滚动内容重叠。
+ *
+ * M21 v2 整体感优化：footer 顶部透明区 22% → 35%，让上方背景预览图"地平线"与 footer
+ * 平滑过渡；末端暗色 0.7 → 0.55 进一步减弱，footer 按钮区背景更通透（与背景图叠加仍能感知层次） */
 .menu-footer {
   position: absolute;
   left: 0;
@@ -263,8 +296,8 @@
   align-items: center;
   justify-content: center;
   padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
-  /* 2026-08-06 后续优化：减弱底部遮罩强度，让背景预览层与页脚过渡更自然 */
-  background: linear-gradient(180deg, transparent 0%, rgba(11, 5, 24, 0.55) 30%, rgba(11, 5, 24, 0.85) 100%);
+  /* M21 v2：顶部透明区 22% → 35%，末端暗色 0.7 → 0.55 */
+  background: linear-gradient(180deg, transparent 0%, transparent 35%, rgba(11, 5, 24, 0.4) 70%, rgba(11, 5, 24, 0.55) 100%);
 }
 
 .menu-content::-webkit-scrollbar {
@@ -722,19 +755,23 @@
 }
 
 /* 2026-08-06 菜单布局优化：宽屏背景层预览的轨迹样式（与中央预览同源，尺寸更大）。
- * 背景层整体经 filter 压暗去饱和，轨迹需加粗并双层 glow，确保在氛围背景中仍清晰可辨。 */
+ * 背景层整体经 filter 压暗去饱和，轨迹需加粗并双层 glow，确保在氛围背景中仍清晰可辨。
+ *
+ * M21 整体感优化：移除刺眼的白色高光 `drop-shadow(0 0 10px rgba(255, 255, 255, 0.6))`——
+ * 白色光带在背景层中显得突兀，破坏氛围统一；改用单层主题色 glow + 0.55 透明度，
+ * 让轨迹在氛围背景中"溶入"而不刺眼。 */
 #track-preview-bg .tp-route {
   fill: none;
   stroke-width: 7;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.98;
-  filter: drop-shadow(0 0 18px currentColor) drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+  opacity: 0.55;
+  filter: drop-shadow(0 0 14px currentColor);
   animation: track-name-pop 0.5s ease-out;
 }
 
 #track-preview-bg .tp-start {
-  filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 6px rgba(255, 255, 255, 0.55));
+  filter: drop-shadow(0 0 10px currentColor);
 }
 
 @keyframes track-name-pop {
@@ -760,17 +797,22 @@
 }
 
 /* M20：榜单整体感容器——包住 toolbar + cards 形成 dashboard widget
- *  统一圆角、背景、内边距，让"我的榜单"标题与三卡片视觉成组 */
+ *  统一圆角、背景、内边距，让"我的榜单"标题与三卡片视觉成组
+ *
+ *  M21 整体感优化：增强玻璃质感——backdrop-filter blur 8px → 12px + saturate(1.3)，
+ *  让背景预览图在榜单元素背后进一步虚化模糊，强化"我看到的是氛围，不是赛道图"的层次；
+ *  内部背景 0.55 → 0.5 让前景内容更突出 */
 .leaderboard-section {
   width: 100%;
   max-width: 720px;
   margin: 14px auto 0; /* P3-1：20px→14px，收紧 1920×1080 下网格-榜单间距 */
   padding: 10px 12px 14px;
-  background: rgba(10, 8, 26, 0.55);
+  background: rgba(10, 8, 26, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 16px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* M21：blur 8px → 12px + saturate(1.3)，让背景预览在卡片背后进一步虚化 */
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   box-sizing: border-box;
   animation: content-fade-in 0.9s ease-out 0.4s both;
