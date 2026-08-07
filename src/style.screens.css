@@ -167,6 +167,50 @@
   }
 }
 
+/* 2026-08-06 菜单布局优化：宽屏下赛道预览扩展为背景层。
+ * 位于 .menu-bg 内、z-index 高于 menu-grid 低于前景内容；默认隐藏，
+ * 由响应式媒体查询在 (min-width:1280px and min-height:700px) 下启用。
+ * 1920×480 的 4:1 viewBox 横向铺满、底部对齐，仅占据画面约 1/3 作为氛围装饰。
+ * 2026-08-06 后续优化：背景层不再绘制明亮天空，改为顶部透明渐变，
+ * 配合 saturate/brightness/hue-rotate 滤镜与紫橙氛围叠加层，使其与菜单星空/网格融为一体。 */
+.track-preview-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: none;
+  pointer-events: none;
+  width: 100%;
+  /* 轻度压暗、低饱和、微偏紫，保留环境特征的同时与菜单霓虹氛围融合 */
+  filter: saturate(0.65) brightness(0.72) contrast(0.95) hue-rotate(-4deg);
+  opacity: 0.65;
+  /* mask：顶部透明区让背景从星空浮现，内容区更充分展现 */
+  mask-image: linear-gradient(180deg, transparent 0%, transparent 18%, #000 48%, #000 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 18%, #000 48%, #000 100%);
+}
+
+/* 氛围叠加层：紫橙霓虹色调，与 .menu-gradient 的 radial-gradient 呼应，增强整体感 */
+.track-preview-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(45, 27, 78, 0.32) 45%,
+    rgba(255, 56, 100, 0.1) 100%
+  );
+  pointer-events: none;
+}
+
+#track-preview-bg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 42vh;
+}
+
 .menu-content {
   /* 2026-08-06（P0-1）：absolute 定位占满除 .menu-footer 外的视口空间（top:0 bottom:130px），
    * 内容超高时内部 overflow-y: auto 滚动；first/last 子元素 margin: auto 实现
@@ -175,7 +219,7 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 150px; /* 预留 .menu-footer 空间（含按钮/提示/安全区），竖屏下 footer 较大需更多预留 */
+  bottom: 150px; /* 大屏默认预留 150px；低高度媒体查询覆写为 128px，给 1280×720/1024×768 更多内容空间 */
   z-index: 1;
   display: flex;
   flex-direction: column;
@@ -184,11 +228,14 @@
   width: min(100%, 1280px);
   margin: 0 auto;
   overflow-y: auto;
-  padding: 20px 0 24px; /* M20：顶部 16→20、底部 32→24（底部空间由 footer 接管） */
+  padding: 20px 0 20px; /* 底部 24→20：与滚动提示/footer 呼吸空间更协调 */
   animation: content-fade-in 0.9s ease-out both;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--color-accent-rgb), 0.35) transparent;
+  /* 2026-08-06 菜单布局优化：底部渐变遮罩，确保榜单/按钮在宽屏背景预览层上保持可读性。
+   * 后续融合度优化：遮罩起始点更靠下、强度更轻，减少背景被“切掉”的边界感。 */
+  background: linear-gradient(180deg, transparent 0%, transparent 65%, rgba(11, 5, 24, 0.28) 88%, rgba(11, 5, 24, 0.42) 100%);
 }
 
 /* 内容组垂直居中（超高时 margin auto 归零 → 从顶部可滚，不裁顶） */
@@ -216,7 +263,8 @@
   align-items: center;
   justify-content: center;
   padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent 0%, rgba(11, 5, 24, 0.75) 35%, rgba(11, 5, 24, 0.92) 100%);
+  /* 2026-08-06 后续优化：减弱底部遮罩强度，让背景预览层与页脚过渡更自然 */
+  background: linear-gradient(180deg, transparent 0%, rgba(11, 5, 24, 0.55) 30%, rgba(11, 5, 24, 0.85) 100%);
 }
 
 .menu-content::-webkit-scrollbar {
@@ -267,13 +315,15 @@
   font-family: var(--font-mono);
   font-size: clamp(11px, 2.4vw, 14px);
   letter-spacing: 4px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.92); /* P2-4：0.78→0.92 提升副标题对比度 */
   text-transform: uppercase;
   /* M20 P2-2：标题与首行卡片间距 —— 副标题底部 margin 6px→20px，桌面副标题底到卡片顶 ≈24px */
   margin: -8px 0 28px; /* M20：再增 8px，标题区与赛道卡拉开距离 */
   padding: 0 16px;
   text-align: center;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.8),
+    0 0 3px rgba(0, 0, 0, 0.6); /* P2-4：加深投影进一步强化可读性 */
   animation: content-fade-in 0.9s ease-out 0.35s both;
 }
 
@@ -671,6 +721,22 @@
   filter: drop-shadow(0 0 6px currentColor);
 }
 
+/* 2026-08-06 菜单布局优化：宽屏背景层预览的轨迹样式（与中央预览同源，尺寸更大）。
+ * 背景层整体经 filter 压暗去饱和，轨迹需加粗并双层 glow，确保在氛围背景中仍清晰可辨。 */
+#track-preview-bg .tp-route {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.98;
+  filter: drop-shadow(0 0 18px currentColor) drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+  animation: track-name-pop 0.5s ease-out;
+}
+
+#track-preview-bg .tp-start {
+  filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 6px rgba(255, 255, 255, 0.55));
+}
+
 @keyframes track-name-pop {
   0% {
     transform: scale(0.8);
@@ -698,7 +764,7 @@
 .leaderboard-section {
   width: 100%;
   max-width: 720px;
-  margin: 20px auto 0;
+  margin: 14px auto 0; /* P3-1：20px→14px，收紧 1920×1080 下网格-榜单间距 */
   padding: 10px 12px 14px;
   background: rgba(10, 8, 26, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.14);

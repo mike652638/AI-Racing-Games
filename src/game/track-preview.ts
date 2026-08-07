@@ -69,19 +69,36 @@ function terrainKindOf(profile: EnvironmentProfile): TerrainKind {
  * 生成背景装饰 SVG 片段（天空渐变 + 太阳/星 + 远山 + 地形特征），
  * 与游戏内环境色板一致（getEnvironmentProfile），夜间赛道用深色夜空 + 星光。
  */
-function buildBackground(profile: EnvironmentProfile, night: boolean, W: number, H: number, pad: number): string {
-  const skyTop = night ? `hsl(${profile.skyHue} 12% 16%)` : `hsl(${profile.skyHue} 68% 74%)`
-  const skyBottom = night ? `hsl(${profile.skyHue} 10% 8%)` : `hsl(${profile.skyHue} 62% 88%)`
-  const ground = night
-    ? '#141a24'
-    : `hsl(${profile.grassHue} ${profile.grassSat}% ${Math.max(profile.grassLight, 26)}%)`
-  const horizonY = Math.round(H * 0.62)
+function buildBackground(
+  profile: EnvironmentProfile,
+  night: boolean,
+  W: number,
+  H: number,
+  pad: number,
+  gradientId = 'tp-sky',
+  forBackground = false,
+): string {
+  // 背景层：压低地平线、压暗地面/远山，让赛道预览作为底部氛围层与菜单星空自然融合
+  const horizonY = forBackground ? Math.round(H * 0.5) : Math.round(H * 0.62)
+  const farY = forBackground ? Math.round(H * 0.3) : Math.round(H * 0.4)
+  const nearY = forBackground ? Math.round(H * 0.4) : Math.round(H * 0.52)
 
-  // 远山：白天用 mountainFar/Near，夜间用 *Night 深色
+  const ground = forBackground
+    ? night
+      ? '#080b12'
+      : `hsl(${profile.grassHue} 16% 12%)`
+    : night
+      ? '#141a24'
+      : `hsl(${profile.grassHue} ${profile.grassSat}% ${Math.max(profile.grassLight, 26)}%)`
+
+  // 远山：白天用 mountainFar/Near，夜间用 *Night 深色；背景层进一步降低不透明度
   const far = night ? profile.mountainFarNight : profile.mountainFar
   const near = night ? profile.mountainNearNight : profile.mountainNear
-  const farY = Math.round(H * 0.4)
-  const nearY = Math.round(H * 0.52)
+  const farOpacity = forBackground ? 0.55 : 0.85
+  const nearOpacity = forBackground ? 0.7 : 0.9
+
+  const skyTop = night ? `hsl(${profile.skyHue} 12% 16%)` : `hsl(${profile.skyHue} 68% 74%)`
+  const skyBottom = night ? `hsl(${profile.skyHue} 10% 8%)` : `hsl(${profile.skyHue} 62% 88%)`
 
   // 地形特征（地平线之上/之下装饰）
   let terrain = ''
@@ -124,15 +141,23 @@ function buildBackground(profile: EnvironmentProfile, night: boolean, W: number,
     ? `<circle cx="${W * 0.18}" cy="${H * 0.22}" r="2.5" fill="#dfe8ff" opacity="0.8"/><circle cx="${W * 0.8}" cy="${H * 0.16}" r="1.8" fill="#cfe0ff" opacity="0.7"/><circle cx="${W * 0.62}" cy="${H * 0.1}" r="1.4" fill="#bfd4ff" opacity="0.6"/>`
     : `<circle cx="${W * 0.84}" cy="${H * 0.22}" r="16" fill="hsl(${profile.skyHue} 85% 90%)" opacity="0.9"/><circle cx="${W * 0.84}" cy="${H * 0.22}" r="22" fill="hsl(${profile.skyHue} 80% 92%)" opacity="0.35"/>`
 
+  // 背景层天空：顶部透明，让菜单星空透出来；向下渐变为深紫，与菜单主氛围衔接
+  const skyStops = forBackground
+    ? `<stop offset="0" stop-color="#0b0518" stop-opacity="0"/><stop offset="0.52" stop-color="#0b0518" stop-opacity="0.78"/><stop offset="1" stop-color="#1a0b2e" stop-opacity="0.92"/>`
+    : `<stop offset="0" stop-color="${skyTop}"/><stop offset="1" stop-color="${skyBottom}"/>`
+  const skyRect = forBackground
+    ? `<rect x="${pad}" y="${pad}" width="${W - 2 * pad}" height="${H - 2 * pad}" fill="url(#${gradientId})"/>`
+    : `<rect x="${pad}" y="${pad}" width="${W - 2 * pad}" height="${H - 2 * pad}" rx="10" fill="url(#${gradientId})"/>`
+
   return (
-    `<defs><linearGradient id="tp-sky" x1="0" y1="0" x2="0" y2="1">` +
-    `<stop offset="0" stop-color="${skyTop}"/><stop offset="1" stop-color="${skyBottom}"/></linearGradient></defs>` +
-    // 天空
-    `<rect x="${pad}" y="${pad}" width="${W - 2 * pad}" height="${H - 2 * pad}" rx="10" fill="url(#tp-sky)"/>` +
-    skyDecor +
+    `<defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">` +
+    skyStops +
+    `</linearGradient></defs>` +
+    skyRect +
+    (forBackground ? '' : skyDecor) +
     // 远山（两层）
-    `<path d="M${pad} ${horizonY} L${W * 0.25} ${farY} L${W * 0.5} ${horizonY - 4} L${W * 0.78} ${farY + 6} L${W - pad} ${horizonY} Z" fill="${far}" opacity="0.85"/>` +
-    `<path d="M${pad} ${horizonY} L${W * 0.38} ${nearY} L${W * 0.66} ${horizonY - 2} L${W - pad} ${nearY + 4} L${W - pad} ${horizonY} Z" fill="${near}" opacity="0.9"/>` +
+    `<path d="M${pad} ${horizonY} L${W * 0.25} ${farY} L${W * 0.5} ${horizonY - 4} L${W * 0.78} ${farY + 6} L${W - pad} ${horizonY} Z" fill="${far}" opacity="${farOpacity}"/>` +
+    `<path d="M${pad} ${horizonY} L${W * 0.38} ${nearY} L${W * 0.66} ${horizonY - 2} L${W - pad} ${nearY + 4} L${W - pad} ${horizonY} Z" fill="${near}" opacity="${nearOpacity}"/>` +
     // 地面
     `<rect x="${pad}" y="${horizonY}" width="${W - 2 * pad}" height="${H - pad - horizonY}" fill="${ground}"/>` +
     terrain
@@ -144,7 +169,15 @@ function buildBackground(profile: EnvironmentProfile, night: boolean, W: number,
  * 归一化到 W×H viewBox：x 按全段跨度、z 按总长纵向铺满；空控制点返回 null。
  * color 为轨迹主题色（随环境区分，2026-08-05 菜单优化），缺省金黄 #ffd75e。
  */
-export function buildTrackPreviewSvg(def: TrackDef, W = 560, H = 140, pad = 14, color = '#ffd75e'): string | null {
+export function buildTrackPreviewSvg(
+  def: TrackDef,
+  W = 560,
+  H = 140,
+  pad = 14,
+  color = '#ffd75e',
+  gradientId = 'tp-sky',
+  forBackground = false,
+): string | null {
   const pts = integrateControlPoints(def.controlPoints)
   if (pts.length === 0) return null
   let minX = Infinity
@@ -161,7 +194,7 @@ export function buildTrackPreviewSvg(def: TrackDef, W = 560, H = 140, pad = 14, 
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)} ${sy(p.z).toFixed(1)}`).join(' ')
   const profile = getEnvironmentProfile(def.environment)
   const night = def.timeOfDay === 'night'
-  const bg = buildBackground(profile, night, W, H, pad)
+  const bg = buildBackground(profile, night, W, H, pad, gradientId, forBackground)
   // color 表现属性供 CSS drop-shadow(currentColor) 生成同色光晕（2026-08-05 菜单优化）；
   // 轨迹/起点加 class（tp-route/tp-start）与背景装饰 path 区分（CSS 只美化轨迹，不误伤背景 fill）
   return (
@@ -169,4 +202,20 @@ export function buildTrackPreviewSvg(def: TrackDef, W = 560, H = 140, pad = 14, 
     `<path class="tp-route" d="${d}" fill="none" stroke="${color}" color="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>` +
     `<circle class="tp-start" cx="${sx(pts[0].x).toFixed(1)}" cy="${sy(0).toFixed(1)}" r="5" fill="${color}" color="${color}"/>`
   )
+}
+
+/**
+ * 构建宽屏背景版赛道预览 SVG 内部内容（2026-08-06 菜单布局优化）。
+ * 与 buildTrackPreviewSvg 共用控制点积分、环境背景与轨迹归一化逻辑，
+ * 但使用 1920×480 的 4:1 viewBox 以适配 1920×1080 大屏底部背景层。
+ * forBackground=true 会启用：顶部透明天空、压暗地面/远山、不绘制太阳星星。
+ */
+export function buildTrackPreviewBackgroundSvg(
+  def: TrackDef,
+  W = 1920,
+  H = 480,
+  pad = 28,
+  color = '#ffd75e',
+): string | null {
+  return buildTrackPreviewSvg(def, W, H, pad, color, 'tp-sky-bg', true)
 }

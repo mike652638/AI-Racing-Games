@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildTrackPreviewSvg, integrateControlPoints } from '../../src/game/track-preview'
+import {
+  buildTrackPreviewBackgroundSvg,
+  buildTrackPreviewSvg,
+  integrateControlPoints,
+} from '../../src/game/track-preview'
 import { TRACK_DEFS, type TrackDef } from '../../src/engine/tracks'
 
 describe('integrateControlPoints（控制点积分生成轨迹点列）', () => {
@@ -99,5 +103,52 @@ describe('buildTrackPreviewSvg（菜单赛道缩略图 SVG，2026-08-06 重绘�
     // 夜间 skyTop 为低明度（hsl ... 12% 16%）
     expect(canyon).toContain('hsl(15 12% 16%)')
     expect(alpine).toContain('hsl(205 12% 16%)')
+  })
+})
+
+describe('buildTrackPreviewBackgroundSvg（宽屏菜单背景层赛道预览，2026-08-06 新增）', () => {
+  it('9 条赛道均生成非空 SVG，且使用独立渐变 ID 避免与中央预览冲突', () => {
+    for (const def of TRACK_DEFS) {
+      const svg = buildTrackPreviewBackgroundSvg(def)
+      expect(svg).not.toBeNull()
+      expect(svg!).toContain('id="tp-sky-bg"')
+      expect(svg!).toContain('fill="url(#tp-sky-bg)"')
+      expect(svg!).toContain('class="tp-route"')
+      expect(svg!).toContain('class="tp-start"')
+    }
+  })
+
+  it('默认尺寸扩展为 1920×480（轨迹坐标 ∈ [0, 1920]）', () => {
+    const svg = buildTrackPreviewBackgroundSvg(TRACK_DEFS[0])!
+    const d = svg.match(/class="tp-route" d="([^"]+)"/)
+    expect(d).not.toBeNull()
+    const nums = [...d![1].matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]))
+    for (const n of nums) {
+      expect(n).toBeGreaterThanOrEqual(0)
+      expect(n).toBeLessThanOrEqual(1920)
+    }
+  })
+
+  it('背景层天空顶部透明、不绘制太阳/星星，rect 无圆角（与菜单星空融合）', () => {
+    const desert = buildTrackPreviewBackgroundSvg(TRACK_DEFS[5])! // desert day
+    // 天空渐变顶部 stop-opacity="0"，让菜单星空透出来
+    expect(desert).toContain('stop-opacity="0"')
+    // 背景层不绘制太阳（无 r="16" 光晕）
+    expect(desert).not.toContain('r="16"')
+    // 背景层天空 rect 无圆角
+    expect(desert).not.toMatch(/<rect[^>]*rx="10"[^>]*fill="url\(#tp-sky-bg\)"/)
+  })
+
+  it('背景层地面压暗、地平线更低，以适配底部氛围层', () => {
+    const plains = buildTrackPreviewBackgroundSvg(TRACK_DEFS[0])! // plains day
+    // 地面使用低明度 hsl(... 16% 12%)
+    expect(plains).toMatch(/hsl\([0-9]+ 16% 12%\)/)
+    // 地平线约 240（480 * 0.5），地面 rect 从 horizonY 开始
+    expect(plains).toMatch(/<rect x="28" y="240" width="1864" height="212"/)
+  })
+
+  it('空控制点返回 null', () => {
+    const def = { controlPoints: [] } as unknown as TrackDef
+    expect(buildTrackPreviewBackgroundSvg(def)).toBeNull()
   })
 })

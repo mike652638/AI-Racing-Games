@@ -6,17 +6,27 @@
  */
 import { TRACK_DEFS } from '../engine/tracks'
 import { getEnvironmentPreviewColor } from '../engine/environment'
-import { buildTrackPreviewSvg } from './track-preview'
+import { buildTrackPreviewBackgroundSvg, buildTrackPreviewSvg } from './track-preview'
 
-/** 刷新中央信息区赛道缩略图：controlPoints 积分 → SVG path（元素缺失安全跳过） */
+/** 刷新赛道缩略图：同时更新中央信息区预览与宽屏背景层预览。
+ * 背景层 1920×480（4:1）用于 1920×1080 大屏沉浸式氛围，中央 560×140 用于小屏降级。 */
 export function applyTrackPreview(trackIndex: number): void {
-  const preview = document.getElementById('track-preview')
-  if (!preview) return
   const def = TRACK_DEFS[trackIndex]
   if (!def) return
-  const svg = buildTrackPreviewSvg(def, 560, 140, 14, getEnvironmentPreviewColor(def.environment))
-  if (svg !== null) {
-    preview.innerHTML = svg
+  const color = getEnvironmentPreviewColor(def.environment)
+
+  const preview = document.getElementById('track-preview')
+  if (preview) {
+    const svg = buildTrackPreviewSvg(def, 560, 140, 14, color)
+    if (svg !== null) preview.innerHTML = svg
+  }
+
+  const bgPreview = document.getElementById('track-preview-bg')
+  if (bgPreview) {
+    // 背景层轨迹使用纯白色，确保在压暗滤镜下仍清晰可辨并带有冷辉光
+    const bgColor = '#ffffff'
+    const bgSvg = buildTrackPreviewBackgroundSvg(def, 1920, 480, 28, bgColor)
+    if (bgSvg !== null) bgPreview.innerHTML = bgSvg
   }
 }
 
