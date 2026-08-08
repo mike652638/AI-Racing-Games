@@ -13,6 +13,8 @@ import {
   type WinStats,
 } from './save'
 import { CHALLENGE_TARGET_SCORE } from '../shared/constants'
+import type { MedalGrade } from '../shared/medal'
+import { ACHIEVEMENTS, MEDAL_LABEL } from './copy'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
 import {
   FINISH_DRIFT_HINT,
@@ -49,6 +51,10 @@ export interface ScreenElements {
   finishDriftWinner?: HTMLDivElement
   /** 胜场统计行（#finish-wins，热座/分屏分胜负时填充） */
   finishWins?: HTMLDivElement
+  /** 结算新解锁成就行（#finish-achievements，M23 方案 6：本局首次解锁成就时填充并显示） */
+  finishAchievements?: HTMLDivElement
+  /** 结算今日挑战完成行（#finish-daily，M28 方案 14：本局完成每日挑战时显示） */
+  finishDaily?: HTMLDivElement
   /** 暂停菜单音量 slider（#pause-volume，input range 0-100；GameLoop 构造器绑定 input 事件） */
   pauseVolume?: HTMLInputElement
   /** 暂停菜单重开按钮（#pause-restart，click 回菜单） */
@@ -90,6 +96,18 @@ export interface FinishPanelOptions {
   challengeMode: boolean
   /** P1 漂移榜名次（2026-08-05 审计 F-3：accountFinish 返回；0 = 未入 TOP10/未记录，挑战结算显示「未进 TOP10」） */
   driftRank?: number
+  /** M23 方案 7：本局 P1 判定的赛道奖牌（S/A/B，结算最佳成绩行展示；无则 null） */
+  medalP1?: MedalGrade | null
+  /** M23 方案 7：本局 P2 判定的赛道奖牌（S/A/B，P2 结算行展示；无则 null） */
+  medalP2?: MedalGrade | null
+  /** M23 方案 6：本局新解锁的成就 id（结算行展示「新成就达成」徽章；空数组不显示） */
+  newlyUnlockedAchievements?: string[]
+  /** M28 方案 9：路线模式（?route=，结算面板走独立分支：累计总用时/总分，无单赛道 BEST/奖牌） */
+  routeMode?: boolean
+  /** M28 方案 9：路线名称（结算 speed 行展示） */
+  routeName?: string
+  /** M28 方案 14：本局完成今日挑战（结算行追加「今日挑战完成 · 连续 N 天」提示） */
+  dailyDoneToday?: boolean
 }
 
 /**
@@ -152,10 +170,22 @@ function fillFinishPanel(
   if (elements.finishDriftHint) {
     elements.finishDriftHint.hidden = true
   }
-  if (opts.challengeMode) {
+  if (opts.routeMode) {
+    // M28 方案 9：路线模式结算——展示累计总用时与累计漂移得分（每段独立赛道，无单赛道 BEST/奖牌语义）。
+    // 总用时 = routeCumulativeTime（前段累计）+ 最后段 raceTime；总分 = routeCumulativeDriftScore。
+    const totalTime = race.routeCumulativeTime + race.player1.raceTime
+    elements.finishTime.textContent = `路线总用时 ${formatTime(totalTime)}`
+    elements.finishSpeed.textContent = `完成 ${race.routeStageCount} 段路线 · ${opts.routeName ?? ''}`
+    elements.finishBest.textContent = ''
+    elements.finishScore.textContent = `累计漂移得分 ${Math.round(race.routeCumulativeDriftScore)}`
+    elements.finishLaps.textContent = ''
+  } else if (opts.challengeMode) {
     // G1（G1）：挑战模式结算——限时刷分展示：用时行、漂移得分行、漂移榜排名（F-3 改消费记账返回值）
     const score = Math.round(race.player1.driftState.score)
-    elements.finishTime.textContent = `用时 ${formatTime(race.player1.raceTime)}`
+    // M23 方案 8：挑战结算展示检查点奖励（通过检查点数 × 奖励秒），无奖励不追加
+    const checkpointInfo =
+      race.player1.challengeCheckpoints > 0 ? ` · 检查点 +${Math.round(race.player1.challengeBonus)}s` : ''
+    elements.finishTime.textContent = `用时 ${formatTime(race.player1.raceTime)}${checkpointInfo}`
     elements.finishSpeed.textContent = ''
     // F-3（2026-08-05 审计）：名次直接取 accountFinish 的 addDriftScore 插入位置——
     // 旧版 findIndex 按分数回查在同分时高估名次、挤出榜外显示空；未入榜显示「未进 TOP10」
@@ -193,6 +223,10 @@ function fillFinishPanel(
     elements.finishBest.textContent = isRecord
       ? `${opts.splitMode ? 'P1 ' : ''}NEW RECORD!`
       : `${opts.splitMode ? 'P1 ' : ''}最佳 ${formatTime(bestTime ?? race.player1.raceTime)}`
+    // M23 方案 7：本局判定奖牌（S/A/B）在最佳成绩行末尾展示（如 "NEW RECORD! S" / "最佳 0:49.899 S"）
+    if (opts.medalP1) {
+      elements.finishBest.textContent += ` ${MEDAL_LABEL[opts.medalP1]}`
+    }
 
     elements.finishScore.textContent = `${opts.splitMode ? 'P1 ' : ''}漂移得分 ${Math.round(race.player1.driftState.score)}`
     if (race.player1.driftState.score > 0) {
@@ -259,6 +293,10 @@ function fillFinishPanel(
         elements.finishBest2.textContent = isRecord2
           ? 'P2 NEW RECORD!'
           : `P2 最佳 ${formatTime(bestTime2 ?? race.player2.raceTime)}`
+        // M23 方案 7：本局 P2 判定奖牌在最佳成绩行末尾展示
+        if (opts.medalP2) {
+          elements.finishBest2.textContent += ` ${MEDAL_LABEL[opts.medalP2]}`
+        }
       }
 
       if (elements.finishScore2) {
@@ -351,6 +389,29 @@ function fillFinishPanel(
         `胜场统计 · P1 ${p1} : ${p2} P2` + (streakPlayer ? ` · ${streakPlayer} 连胜 ${streak}` : '')
     } else {
       elements.finishWins.hidden = true
+    }
+  }
+
+  // M23 方案 6：结算新解锁成就——本局首次达成且解锁的成就徽章行（空列表隐藏）
+  if (elements.finishAchievements) {
+    const newly = opts.newlyUnlockedAchievements ?? []
+    if (newly.length > 0) {
+      elements.finishAchievements.hidden = false
+      elements.finishAchievements.textContent = `新成就达成：${newly
+        .map((id) => ACHIEVEMENTS[id]?.name ?? id)
+        .join(' · ')}`
+    } else {
+      elements.finishAchievements.hidden = true
+    }
+  }
+
+  // M28 方案 14：今日挑战完成——本局完成每日挑战时结算行追加提示（含连续签到天数）
+  if (elements.finishDaily) {
+    if (opts.dailyDoneToday) {
+      elements.finishDaily.hidden = false
+      elements.finishDaily.textContent = '今日挑战完成！连续签到 +1 天'
+    } else {
+      elements.finishDaily.hidden = true
     }
   }
 }

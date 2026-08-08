@@ -979,6 +979,23 @@ body:not(.racing) .joystick-base {
   text-shadow: 0 0 10px rgba(255, 140, 26, 0.3);
 }
 
+/* M23 方案 11：菜单天气徽章（?weather=random/固定变体显式标识；auto 隐藏）——
+   青色系与 mode-badge 并列展示，与模式徽章共用 .mode-badge 基础样式 */
+#menu-weather-badge {
+  margin-top: 2px;
+}
+
+#menu-weather-badge.weather-badge {
+  color: var(--menu-cyan);
+  border-color: rgba(0, 217, 255, 0.45);
+  background: rgba(0, 217, 255, 0.08);
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.25);
+}
+
+#menu-weather-badge[hidden] {
+  display: none;
+}
+
 /* ===== UX-8 修复（2026-08-05）：分屏模式 HUD P1/P2 侧标签（默认隐藏，body.split-mode 时显示） ===== */
 .hud-side-tag {
   display: none;
@@ -995,6 +1012,17 @@ body.split-mode .hud-side-tag {
   letter-spacing: 1px;
   line-height: 1.2;
   margin-bottom: 4px;
+}
+
+/* 2026-08-08 实测修复：分屏 P2 BOOST 条——左右半屏各自独立一条（#boost-bar P1 左半、
+ * #boost-bar-2 P2 右半），避免单条跨分割线造成归属混淆 */
+body.split-mode #boost-bar {
+  left: 25%;
+}
+
+body.split-mode #boost-bar-2 {
+  left: 75%;
+  display: block;
 }
 
 body.split-mode #hud .hud-side-tag {

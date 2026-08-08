@@ -2,12 +2,13 @@ import { COUNTDOWN_HINTS } from '../ui/copy'
 
 /**
  * 起步倒计时覆盖层（2026-08-05 自 game-loop.startCountdown 下沉）：
- * 游戏开始显示 3→2→1→GO 数字动画 + 操作提示（M16：copy.ts 常量与 README 同源填充）。
+ * 游戏开始显示 3→2→1→GO 数字动画 + 操作提示（M16：copy.ts 常量与 README 同源填充；
+ * 2026-08-08 触屏适配：hints 由调用方按触屏/分屏选择，键盘玩家沿用 COUNTDOWN_HINTS）。
  * 元素缺失安全跳过；800ms/档，GO 后 500ms 隐藏覆盖层。
  * S 修复（S4）：返回 cancel() 句柄——重复 startGame/离开菜单时由调用方取消，
  * 防止叠加多个并行 interval（旧实现句柄丢失，interval 无法清理）。
  */
-export function runCountdown(overlay: HTMLElement): { cancel: () => void } {
+export function runCountdown(overlay: HTMLElement, hints: readonly string[] = COUNTDOWN_HINTS): { cancel: () => void } {
   const numberEl = overlay.querySelector('.countdown-number') as HTMLElement | null
   if (!numberEl) {
     return { cancel: () => {} }
@@ -17,7 +18,7 @@ export function runCountdown(overlay: HTMLElement): { cancel: () => void } {
     // innerHTML 收敛（2026-08-05 rt4 批次）：COUNTDOWN_HINTS 为 copy.ts 内部静态文案，
     // 改 DOM API 构建 <p> 列表，保持零 HTML 注入面（语义与原 innerHTML 逐字节一致）
     hintsEl.textContent = ''
-    COUNTDOWN_HINTS.forEach((hint) => {
+    hints.forEach((hint) => {
       const p = document.createElement('p')
       p.textContent = hint
       hintsEl.appendChild(p)

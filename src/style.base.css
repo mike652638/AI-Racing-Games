@@ -299,6 +299,108 @@ canvas {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
+/* M23 方案 6：菜单成就进度（#achievement-progress，榜单容器底部辅助行） */
+.achievement-progress {
+  margin: 10px auto 0;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.65));
+  text-align: center;
+}
+
+/* M28 方案 14：菜单每日挑战进度（#daily-progress，成就进度下方；青色系区分互动项） */
+.daily-progress {
+  margin: 4px auto 0;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: rgba(0, 217, 255, 0.85);
+  text-align: center;
+}
+
+/* M28 方案 9：路线模式段末岔路选择覆盖层（#route-choice：跑完当前段后显示，
+ * 半透明遮罩 + 左右两个路线按钮；A/D 或 ←/→ 选择后进入下一段） */
+#route-choice {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  /* M28 方案 9 深化：移除整屏背景遮罩，让 Canvas 分叉引导带在覆盖层下方可见
+   * （OutRun 式分叉路视觉）；仅按钮面板局部加毛玻璃背景（见 .route-choice-options 样式） */
+  background: transparent;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+#route-choice .route-choice-title {
+  font-size: clamp(24px, 5vw, 34px);
+  font-weight: 800;
+  color: var(--color-accent, #ffd75e);
+  letter-spacing: 4px;
+  text-shadow: 0 0 18px rgba(255, 215, 94, 0.35);
+}
+
+#route-choice .route-choice-stage {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 1px;
+}
+
+#route-choice .route-choice-options {
+  display: flex;
+  gap: 24px;
+  margin-top: 8px;
+  /* M28 方案 9 深化：按钮面板加局部毛玻璃背景（替代原整屏遮罩，可读性不变） */
+  padding: 20px 32px;
+  background: rgba(8, 10, 18, 0.72);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#route-choice .route-choice-btn {
+  min-width: 200px;
+  padding: 16px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+#route-choice .route-choice-btn:hover,
+#route-choice .route-choice-btn:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--color-accent, #ffd75e);
+  background: rgba(255, 215, 94, 0.16);
+  outline: none;
+}
+
+#route-choice .route-choice-btn.route-left {
+  border-color: rgba(80, 170, 255, 0.6);
+}
+
+#route-choice .route-choice-btn.route-right {
+  border-color: rgba(255, 140, 26, 0.6);
+}
+
+#route-choice .route-choice-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1px;
+  /* 2026-08-08 实测修复：与底部中央 BOOST 条拉开间距，避免视觉拥挤 */
+  margin-bottom: 28px;
+}
+
 /* 挑战模式倒计时（#challenge-timer：?challenge=1 时由 game-loop 帧块更新；橙红醒目随漂移指示） */
 #challenge-timer {
   margin-top: 6px;
@@ -321,6 +423,48 @@ canvas {
   text-shadow:
     0 1px 4px rgba(0, 0, 0, 0.9),
     0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* P0 near-miss 贴身超车弹出（#near-miss：贴身超车触发时由 frame-update 短暂显示；
+ * M27 修复：移到屏幕中央上方避开 HUD 区，与小地图/最佳/速度无遮挡；
+ * 金色描边 + 缩放弹出动画，不阻塞驾驶视线） */
+#near-miss {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(16px, 3.5vw, 22px);
+  font-weight: 700;
+  color: #ffd75e;
+  letter-spacing: 2px;
+  text-shadow:
+    0 0 6px rgba(255, 215, 94, 0.9),
+    0 2px 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  z-index: 40;
+}
+
+#near-miss.near-miss-pop {
+  animation: near-miss-pop 0.8s ease-out;
+}
+
+@keyframes near-miss-pop {
+  0% {
+    transform: translateX(-50%) scale(1.4);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) scale(0.9);
+    opacity: 0;
+  }
 }
 
 /* m17：挑战模式倒计时剩余 10 秒内紧急闪烁 */
@@ -351,11 +495,12 @@ canvas {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
-/* BOOST 氮气条（#boost-bar：G4 帧块按 P1 charge 百分比设置宽度；底部固定横条，
+/* BOOST 氮气条（#boost-bar / #boost-bar-2：G4 帧块按 P1/P2 charge 百分比设置宽度；底部固定横条，
  * 黄→橙渐变填充。2026-08-05 P1-1 重构为「固定轨道 + 填充层」双元素——轨道常驻
  * 显示暗色底槽，玩家在未蓄能时也能感知 BOOST 功能与蓄能进度；.boost-fill 宽度
- * 由 frame-update 按 charge 设置。 */
-#boost-bar {
+ * 由 frame-update 按 charge 设置。#boost-bar-2 为 2026-08-08 实测修复新增的分屏 P2 条。 */
+#boost-bar,
+#boost-bar-2 {
   /* M20 P2/HUD-2：从左下改为底部居中——与 #pause-btn（左下 52×52 圆形）位置解耦，
    * 避免 BOOST 文字左侧被暂停按钮遮住；居中横条视觉重心更平衡 */
   position: fixed;
@@ -373,7 +518,8 @@ canvas {
   box-sizing: border-box;
 }
 
-#boost-bar .boost-fill {
+#boost-bar .boost-fill,
+#boost-bar-2 .boost-fill {
   position: absolute;
   left: 0;
   top: 0;
@@ -384,7 +530,8 @@ canvas {
   transition: width 0.1s ease;
 }
 
-#boost-bar span {
+#boost-bar span,
+#boost-bar-2 span {
   position: absolute;
   left: 0;
   top: 0;
@@ -421,6 +568,29 @@ canvas {
 #boost-bar.no-charge {
   animation: no-charge-flash 0.3s ease-in-out 2;
   border-color: rgba(var(--color-danger-rgb), 0.9);
+}
+
+/* P0 完美氮气：激活段轨道加金色高亮描边（frame-update 按 boostPerfect 切换 .perfect 类） */
+#boost-bar.perfect,
+#boost-bar-2.perfect {
+  border-color: rgba(255, 215, 94, 0.95);
+  box-shadow:
+    0 0 10px rgba(255, 215, 94, 0.85),
+    0 0 22px rgba(255, 215, 94, 0.5);
+  animation: perfect-boost-glow 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes perfect-boost-glow {
+  0% {
+    box-shadow:
+      0 0 8px rgba(255, 215, 94, 0.7),
+      0 0 18px rgba(255, 215, 94, 0.4);
+  }
+  100% {
+    box-shadow:
+      0 0 14px rgba(255, 215, 94, 1),
+      0 0 30px rgba(255, 215, 94, 0.65);
+  }
 }
 
 /* 热座当前驾驶玩家标签（#hud-player-tag 由 GameLoop 控制显隐与 p1/p2 类） */

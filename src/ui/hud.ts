@@ -101,7 +101,12 @@ export function updateHud(
   const primary = hotseatP2 ? race.player2 : race.player1
   const primaryTrack = hotseatP2 ? tracks[1] : tracks[0]
   setText(elements.hudSpeed, formatSpeed(primary.carState.speed, carConfig.maxSpeed))
-  setText(elements.hudLap, formatLap(lapFromZ(primary.cameraZ, primaryTrack.lapLength), primaryTrack.totalLaps))
+  // M28 方案 9：路线模式显示 STAGE x/y（每段独立赛道跑 1 圈），普通模式显示 LAP x/y
+  if (race.routeStageId !== null && race.routeStageCount > 0) {
+    setText(elements.hudLap, `STAGE ${race.routeStageIndex}/${race.routeStageCount}`)
+  } else {
+    setText(elements.hudLap, formatLap(lapFromZ(primary.cameraZ, primaryTrack.lapLength), primaryTrack.totalLaps))
+  }
   setText(elements.hudTime, formatTime(primary.raceTime))
 
   // P0 修复（热座 P2）：主 HUD BEST 在 P2 回合显示 P2 的存档（bestTime2）
@@ -170,11 +175,18 @@ export function updateHud(
     }
   }
 
-  // M16：碰撞计数——比赛阶段且 collisionCount>0 时显示"碰撞 ×N"（0 时隐藏，避免常态噪音）
+  // M16：碰撞计数 + M27 优化：合并展示 NEAR MISS 贴身超车计数（同一驾驶反馈行）。
+  // 热座感知当前玩家：P2 回合显示 P2 的 near-miss 计数（碰撞计数为全局）。
+  // 任一项 >0 才显示（避免常态噪音）；文本"碰撞 ×N · 超车 ×M"（含 NEAR MISS 飘字同源语义）
   if (elements.hudCollision) {
-    elements.hudCollision.hidden = race.collisionCount === 0
-    if (race.collisionCount > 0) {
-      setText(elements.hudCollision, `碰撞 ×${race.collisionCount}`)
+    const nearMissCount = hotseatP2 ? race.player2.nearMissCount : race.player1.nearMissCount
+    const show = race.collisionCount > 0 || nearMissCount > 0
+    elements.hudCollision.hidden = !show
+    if (show) {
+      const parts: string[] = []
+      if (race.collisionCount > 0) parts.push(`碰撞 ×${race.collisionCount}`)
+      if (nearMissCount > 0) parts.push(`超车 ×${nearMissCount}`)
+      setText(elements.hudCollision, parts.join(' · '))
     }
   }
 

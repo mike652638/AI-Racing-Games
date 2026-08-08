@@ -210,6 +210,53 @@ export class CollisionSound {
   }
 }
 
+/** near-miss 贴身超车音效（P0）：白噪声短 burst → bandpass 1200→2400Hz 上扫 + gain 0.12 包络，
+ *  模拟贴身超车的"嗖"声（短促、轻量、不压引擎声；每次 play 重建节点，无防刷屏） */
+export class NearMissSound {
+  private ctx: AudioContext
+  private output: AudioNode
+  private buffer: AudioBuffer
+  private playCount = 0
+
+  constructor(ctx: AudioContext, output: AudioNode = ctx.destination) {
+    this.ctx = ctx
+    this.output = output
+    // 0.15s 白噪声 burst buffer（whoosh 素材）
+    const length = Math.floor(ctx.sampleRate * 0.15)
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+    this.buffer = buffer
+  }
+
+  /** 已触发播放次数（测试/冒烟断言用） */
+  get count(): number {
+    return this.playCount
+  }
+
+  /** 触发 near-miss 音：白噪声 burst + bandpass 上扫 1200→2400Hz + gain 0.12 包络（0.02s 起音 / 0.15s 衰减） */
+  play(): void {
+    const t = this.ctx.currentTime
+    this.playCount++
+    const source = this.ctx.createBufferSource()
+    source.buffer = this.buffer
+    const filter = this.ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(1200, t)
+    filter.frequency.linearRampToValueAtTime(2400, t + 0.12)
+    filter.Q.value = 1.5
+    const gain = this.ctx.createGain()
+    gain.gain.setValueAtTime(0, t)
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.02)
+    gain.gain.linearRampToValueAtTime(0, t + 0.15)
+    source.connect(filter).connect(gain).connect(this.output)
+    source.start(t)
+    source.stop(t + 0.16)
+  }
+}
+
 /** BOOST 氮气音效：sawtooth 200→600Hz 线性扫频 0.25s + gain 0.15 包络（每次 play 重建节点，无防刷屏） */
 export class BoostSound {
   private ctx: AudioContext

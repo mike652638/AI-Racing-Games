@@ -31,6 +31,12 @@ import {
   ROAD_HALF_WIDTH,
   SMOKE_LIFETIME,
   TRAFFIC_DEFAULT_COUNT,
+  MEDAL_GOLD_MULT,
+  MEDAL_SILVER_MULT,
+  MEDAL_BRONZE_MULT,
+  CHALLENGE_CHECKPOINT_BONUS,
+  CHALLENGE_CHECKPOINTS_PER_LAP,
+  MEDAL_BASE_SEC,
 } from '../../src/shared/constants'
 import { DRAW_DISTANCE } from '../../src/engine/road-geometry'
 
@@ -98,5 +104,23 @@ describe('constants 常量注册表（防魔法数字回潮）', () => {
     expect(WET_OVERLAY_COLOR).toBe('rgba(10, 15, 30, 0.15)')
     expect(WET_HIGHLIGHT_COLOR).toBe('rgba(180, 200, 230, 0.08)')
     expect(WET_HIGHLIGHT_MAX_K).toBe(30)
+  })
+
+  it('M23 方案 7：奖牌门槛系数与约定一致（S ≤ base × 1.0 / A ≤ 1.15 / B ≤ 1.3）', () => {
+    expect(MEDAL_GOLD_MULT).toBe(1.0)
+    expect(MEDAL_SILVER_MULT).toBe(1.15)
+    expect(MEDAL_BRONZE_MULT).toBe(1.3)
+  })
+
+  it('M23 方案 8：挑战检查点常量与约定一致（每圈 2 检查点、每点 +2s）', () => {
+    expect(CHALLENGE_CHECKPOINT_BONUS).toBe(2)
+    expect(CHALLENGE_CHECKPOINTS_PER_LAP).toBe(2)
+  })
+
+  it('M23 方案 7：9 条赛道均配置 bot 基准总用时（正数）', () => {
+    expect(Object.keys(MEDAL_BASE_SEC).length).toBeGreaterThanOrEqual(9)
+    for (const base of Object.values(MEDAL_BASE_SEC)) {
+      expect(base).toBeGreaterThan(0)
+    }
   })
 })

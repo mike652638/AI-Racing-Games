@@ -141,6 +141,65 @@ describe('getInputs 输入路由', () => {
   })
 })
 
+describe('getInputs 四分区触控路由（M21 遗留技术债修复）', () => {
+  /** 构造半屏触控源替身：P1 油门 / P2 右转，各自 active 标志可配 */
+  function quadrantSource(active1: boolean, active2: boolean): NonNullable<InputRoutingContext['touchQuadrant']> {
+    return {
+      isP1Active: () => active1,
+      getP1Input: () => ({ throttle: 1, brake: false, steer: 0, boost: false }),
+      isP2Active: () => active2,
+      getP2Input: () => ({ throttle: 0, brake: false, steer: 1, boost: false }),
+    }
+  }
+
+  test('分屏：P1 半屏有触点时 input1 取四分区输入、P2 仍取键盘', () => {
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    const { input1, input2 } = split.getInputs(routingCtx({ touchQuadrant: quadrantSource(true, false) }))
+    expect(input1).toEqual({ throttle: 1, brake: false, steer: 0, boost: false })
+    expect(input2).toEqual({ throttle: 0, brake: false, steer: 1 })
+  })
+
+  test('分屏：P2 半屏有触点时 input2 取四分区输入、P1 仍取键盘', () => {
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    const { input1, input2 } = split.getInputs(routingCtx({ touchQuadrant: quadrantSource(false, true) }))
+    expect(input1).toEqual({ throttle: 1, brake: false, steer: 0 })
+    expect(input2).toEqual({ throttle: 0, brake: false, steer: 1, boost: false })
+  })
+
+  test('分屏：双人半屏同时有触点 → 各自取四分区输入（键盘完全被覆盖）', () => {
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    const { input1, input2 } = split.getInputs(routingCtx({ touchQuadrant: quadrantSource(true, true) }))
+    expect(input1).toEqual({ throttle: 1, brake: false, steer: 0, boost: false })
+    expect(input2).toEqual({ throttle: 0, brake: false, steer: 1, boost: false })
+  })
+
+  test('分屏：四分区触控优先于摇杆（分屏不创建摇杆，tq 生效）', () => {
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    const joystickInput: CarInput = { throttle: 0, brake: true, steer: -1 }
+    const { input1 } = split.getInputs(
+      routingCtx({ touchQuadrant: quadrantSource(true, false), joystickActive: true, joystickInput }),
+    )
+    expect(input1).toEqual({ throttle: 1, brake: false, steer: 0, boost: false })
+  })
+
+  test('非分屏（SINGLE/HOTSEAT/CHALLENGE）：touchQuadrant 缺省行为与旧版逐字节一致（合并双键盘）', () => {
+    const single = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false })
+    const hotseat = createModeStrategy({ splitMode: false, hotseatMode: true, challengeMode: false })
+    const challenge = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: true })
+    const ctx = routingCtx()
+    expect(single.getInputs(ctx).input1).toEqual({ throttle: 1, brake: false, steer: 1 })
+    expect(hotseat.getInputs(ctx).input1).toEqual({ throttle: 1, brake: false, steer: 1 })
+    expect(challenge.getInputs(ctx).input1).toEqual({ throttle: 1, brake: false, steer: 1 })
+    expect(single.getInputs(ctx).input2).toEqual({ throttle: 0, brake: false, steer: 0 })
+  })
+
+  test('collectSteerInputs 分屏：P1/P2 半屏触控各自取转向（渲染倾斜数据源同源）', () => {
+    const steer = collectSteerInputs(routingCtx({ touchQuadrant: quadrantSource(true, true) }), true)
+    expect(steer.steer1).toBe(0) // P1 触控油门、无转向
+    expect(steer.steer2).toBe(1) // P2 触控右转
+  })
+})
+
 describe('updateActivePlayer 分屏最近活跃玩家', () => {
   const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
   const input1: CarInput = { throttle: 0, brake: false, steer: 0 }
@@ -287,6 +346,19 @@ describe('shouldFinish 完赛判定', () => {
     expect(mode.shouldFinish(raceWith(0, 0, 59.9), tm, 1)).toBe(false)
     expect(mode.shouldFinish(raceWith(4000, 0, 59.9), tm, 1)).toBe(true)
   })
+
+  test('CHALLENGE（M23 方案 8）：检查点奖励延长限时——raceTime < 60 + bonus 时未完赛', () => {
+    const mode = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: true })
+    const tm = mockTrackManager(1000, 3)
+    const race = raceWith(0, 0, 59.9)
+    race.player1.challengeBonus = 2 // 通过 1 个检查点 +2s
+    expect(mode.shouldFinish(race, tm, 1)).toBe(false)
+    // 限时随之延长：raceTime 60（原限时点）仍未完赛，需到 60 + 2
+    race.player1.raceTime = 60
+    expect(mode.shouldFinish(race, tm, 1)).toBe(false)
+    race.player1.raceTime = 62
+    expect(mode.shouldFinish(race, tm, 1)).toBe(true)
+  })
 })
 
 describe('afterSelectP1Track 选赛道同步', () => {
@@ -377,5 +449,75 @@ describe('menuHint 菜单提示文案', () => {
       expect(hint.length).toBeGreaterThan(0)
     }
     expect(new Set(hints).size).toBe(4)
+  })
+})
+
+describe('M28 方案 9：路线模式（ROUTE）策略', () => {
+  test('routeMode=true 且菜单提示非空（?route= 驱动）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    expect(route.routeMode).toBe(true)
+    expect(route.menuHint.length).toBeGreaterThan(0)
+    // 单屏合并输入语义与 SINGLE 一致（非分屏）
+    expect(route.splitMode).toBe(false)
+    expect(route.hotseatMode).toBe(false)
+    expect(route.challengeMode).toBe(false)
+  })
+
+  test('routeMode=false 时其余模式路由标志不受影响', () => {
+    const single = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false })
+    expect(single.routeMode).toBe(false)
+    const split = createModeStrategy({ splitMode: true, hotseatMode: false, challengeMode: false })
+    expect(split.routeMode).toBe(false)
+  })
+
+  test('getInputs 合并双键盘（与 SINGLE 一致：P2 输入并入 input1、input2 零输入）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    const { input1, input2 } = route.getInputs(routingCtx())
+    expect(input1.throttle).toBe(1)
+    expect(input1.steer).toBe(1) // P1 steer 0 + P2 steer 1 合并
+    expect(input2.steer).toBe(0)
+  })
+
+  test('shouldUpdateP2Traffic / collisionIncludesP2 恒 false（单屏语义）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    expect(route.shouldUpdateP2Traffic(1)).toBe(false)
+    expect(route.shouldUpdateP2Traffic(2)).toBe(false)
+    expect(route.collisionIncludesP2(1)).toBe(false)
+    expect(route.collisionIncludesP2(2)).toBe(false)
+  })
+
+  test('shouldFinish 恒 false（段末切换与终点完赛由 GameLoop 驱动，避免与环形圈数语义冲突）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    const tm = mockTrackManager(1000, 3)
+    const race = createRaceState()
+    race.player1.cameraZ = 4000 // 超 3 圈也不在策略层判定
+    expect(route.shouldFinish(race, tm, 1)).toBe(false)
+  })
+
+  test('updatePlayers 双玩家各自推进（与 SINGLE 一致）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    const args = playerArgs()
+    route.updatePlayers(args, 1)
+    expect(args.race.player1.cameraZ).toBe(2400)
+    expect(args.race.lastLap).toBe(3)
+    expect(args.race.player2.raceTime).toBe(1)
+  })
+
+  test('afterSelectP1Track 无操作（单屏无双人同步）', () => {
+    const route = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+    const selectTrack = vi.fn()
+    const getContext = vi.fn()
+    const race = createRaceState()
+    const tracks1Before = race.tracks[1]
+    const preview: [number, number] = [100, 200]
+    route.afterSelectP1Track({
+      trackIndex: 2,
+      race,
+      trackManager: { selectTrack, getContext } as unknown as TrackManager,
+      previewCameraZ: preview,
+    })
+    expect(selectTrack).not.toHaveBeenCalled()
+    expect(race.tracks[1]).toBe(tracks1Before)
+    expect(preview[1]).toBe(200)
   })
 })

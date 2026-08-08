@@ -140,6 +140,8 @@ function driftAllocPerFrame(frames = 1200): number {
     score: 0,
     combo: 2,
     comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
   }
   // 预热 60 帧（烟雾生成节奏稳定）
   for (let f = 0; f < 60; f++) drift = driftFrame(seen, drift)
@@ -160,6 +162,8 @@ function driftMsPerFrame(frames = 1200, samples = 5): number {
       score: 0,
       combo: 2,
       comboTimer: 0,
+      turbo: 0,
+      turboLevel: 0,
     }
     const t0 = performance.now()
     for (let f = 0; f < frames; f++) drift = driftFrame(new Set(), drift)

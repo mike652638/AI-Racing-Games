@@ -24,6 +24,20 @@ declare global {
       readonly rainPlaying: boolean
       readonly challengeTimeLeft: number | null
       readonly boostCharge: number
+      readonly weatherOverride: 'auto' | 'sunny' | 'rain' | 'night'
+      readonly weatherMode: 'auto' | 'random' | 'sunny' | 'rain' | 'night'
+      readonly trafficRubber: number
+      readonly trafficDynamic: boolean
+      readonly guideStrength: number
+      readonly routeStageId: string | null
+      readonly routeStageIndex: number
+      readonly routeStageCount: number
+      readonly routeIsFinish: boolean
+      readonly routeChoosing: boolean
+      /** M31 方案 9 三次打磨：分叉淡入动画进度（0-1，routeChoosing 期间递增） */
+      readonly routeForkAlpha: number
+      /** M28 方案 14：每日挑战状态（今日赛道/完成标记/连续天数；供自动化验证） */
+      readonly dailyState: { date: string; trackId: string; done: boolean; streak: number }
     }
   }
 }
@@ -51,6 +65,30 @@ export interface DebugHookSources {
   rainPlaying: () => boolean
   challengeTimeLeft: () => number | null
   boostCharge: () => number
+  /** M23 方案 11：本局生效的天气变体（startGame 设置） */
+  weatherOverride: () => 'auto' | 'sunny' | 'rain' | 'night'
+  /** M23 方案 11：URL 解析的天气模式（auto/random/固定变体） */
+  weatherMode: () => 'auto' | 'random' | 'sunny' | 'rain' | 'night'
+  /** M23 方案 13：当前车流橡皮筋系数（P1 世界，frame-update 平滑收敛；static 模式恒 1） */
+  trafficRubber: () => number
+  /** M23 方案 13：URL 解析的车流橡皮筋开关（dynamic=true / static=false） */
+  trafficDynamic: () => boolean
+  /** M28 方案 10：URL 解析的导航辅助线强度（?guide=1 开启 0.8 / 缺省 0 关闭） */
+  guideStrength: () => number
+  /** M28 方案 9：当前路线阶段 id（非路线模式 null） */
+  routeStageId: () => string | null
+  /** M28 方案 9：当前阶段序号（STAGE 指示 X） */
+  routeStageIndex: () => number
+  /** M28 方案 9：路线阶段总数（STAGE 指示 Y） */
+  routeStageCount: () => number
+  /** M28 方案 9：当前阶段是否为终点 */
+  routeIsFinish: () => boolean
+  /** M28 方案 9：是否处于段末岔路选择（覆盖层显示中） */
+  routeChoosing: () => boolean
+  /** M31 方案 9 三次打磨：分叉淡入动画进度 */
+  routeForkAlpha: () => number
+  /** M28 方案 14：每日挑战状态快照 */
+  dailyState: () => { date: string; trackId: string; done: boolean; streak: number }
 }
 
 /**
@@ -121,6 +159,42 @@ export function installDebugHook(sources: DebugHookSources): void {
     },
     get boostCharge() {
       return sources.boostCharge()
+    },
+    get weatherOverride() {
+      return sources.weatherOverride()
+    },
+    get weatherMode() {
+      return sources.weatherMode()
+    },
+    get trafficRubber() {
+      return sources.trafficRubber()
+    },
+    get trafficDynamic() {
+      return sources.trafficDynamic()
+    },
+    get guideStrength() {
+      return sources.guideStrength()
+    },
+    get routeStageId() {
+      return sources.routeStageId()
+    },
+    get routeStageIndex() {
+      return sources.routeStageIndex()
+    },
+    get routeStageCount() {
+      return sources.routeStageCount()
+    },
+    get routeIsFinish() {
+      return sources.routeIsFinish()
+    },
+    get routeChoosing() {
+      return sources.routeChoosing()
+    },
+    get routeForkAlpha() {
+      return sources.routeForkAlpha()
+    },
+    get dailyState() {
+      return sources.dailyState()
     },
   }
 }

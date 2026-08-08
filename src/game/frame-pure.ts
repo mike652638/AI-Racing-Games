@@ -1,8 +1,11 @@
 import type { BoostParticle, RenderView } from '../engine/renderer'
+import type { WeatherOverride } from '../engine/lighting'
 import { TRACK_DEFS } from '../engine/tracks'
+import type { DriftPopup } from '../engine/screen-effects'
+import type { RouteFork } from '../engine/guide-line'
 import { updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
-import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE } from './constants'
+import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE, MINI_TURBO_ACCEL_MULT, PERFECT_BOOST_MIN_CHARGE } from './constants'
 import { lapFromZ } from './lap'
 import type { PlayerState } from './player-state'
 import type { TrackContext } from './track-context'
@@ -77,6 +80,9 @@ export function resolvePerformanceConfig(splitMode: boolean, perfMode: boolean):
 /**
  * BOOST 蓄力/消耗（G4，纯函数）：漂移激活期间按 BOOST_CHARGE_RATE 蓄力（封顶 1）；
  * inputBoost 按下且 charge > 0 时激活 boost 并按 BOOST_DRAIN_RATE 消耗（不越 0）。
+ * P0（P0）：完美氮气——prevBoostActive 传该玩家上一帧 boost 是否激活（PlayerState.boostActive），
+ * 激活边沿（本帧激活且上帧未激活）且 charge ≥ PERFECT_BOOST_MIN_CHARGE 时返回 perfect=true；
+ * 帧块把 perfect 并入 input（perfectBoost）驱动 updateCar 更高加速度倍率。
  * 帧块调用后把返回的 boost 并入传给 updatePlayerFrame 的 input（{ ...input, boost }）。
  */
 export function updateBoostCharge(
@@ -84,15 +90,18 @@ export function updateBoostCharge(
   dt: number,
   inputBoost: boolean,
   driftActive: boolean,
-): { charge: number; boost: boolean } {
+  prevBoostActive = false,
+): { charge: number; boost: boolean; perfect: boolean } {
   if (driftActive) {
     charge = Math.min(1, charge + dt * BOOST_CHARGE_RATE)
   }
   const boost = inputBoost && charge > 0
+  // 完美氮气：仅在激活边沿判定（扣减前 charge 达标）；后续帧由帧块基于 boostPerfect 段状态保持
+  const perfect = boost && !prevBoostActive && charge >= PERFECT_BOOST_MIN_CHARGE
   if (boost) {
     charge = Math.max(0, charge - dt * BOOST_DRAIN_RATE)
   }
-  return { charge, boost }
+  return { charge, boost, perfect }
 }
 
 /**
@@ -129,6 +138,7 @@ const _viewCache: RenderView = {
   curvePrefixSum: new Float64Array(0),
   spriteIndex: new Map(),
   traffic: [],
+  weatherOverride: 'auto',
 }
 
 /**
@@ -145,12 +155,35 @@ export function viewFor(
   steer = 0,
   collisionFlash = 0,
   playerIndex?: 1 | 2,
+  weatherOverride: WeatherOverride = 'auto',
+  gameFeel?: {
+    nearMissPulse?: number
+    perfectBoostFlash?: number
+    miniTurboFlash?: number
+    driftPopup?: DriftPopup | null
+  },
+  guideStrength = 0,
+  routeFork?: RouteFork,
+  routeForkAlpha = 1,
 ): RenderView {
   _viewCache.track = ctx.segments
   _viewCache.curvePrefixSum = ctx.curvePrefixSum
   _viewCache.spriteIndex = ctx.spriteIndex
   _viewCache.traffic = ctx.traffic
-  _viewCache.night = ctx.def.timeOfDay === 'night'
+  // M23 方案 11：night 由对局天气变体覆盖优先（'night' 强制夜晚色板/车灯，与赛道 timeOfDay 无关）
+  _viewCache.night = weatherOverride === 'night' ? true : ctx.def.timeOfDay === 'night'
+  _viewCache.weatherOverride = weatherOverride
+  // M23 方案 12：Game Feel 特效透传（触发式短效；菜单预览/无触发缺省 0，不产生绘制）
+  _viewCache.nearMissPulse = gameFeel?.nearMissPulse ?? 0
+  _viewCache.perfectBoostFlash = gameFeel?.perfectBoostFlash ?? 0
+  _viewCache.miniTurboFlash = gameFeel?.miniTurboFlash ?? 0
+  _viewCache.driftPopup = gameFeel?.driftPopup ?? null
+  // M28 方案 10：导航辅助线强度透传（?guide=1 开启；缺省 0 关闭零绘制）
+  _viewCache.guideStrength = guideStrength
+  // M28 方案 9 深化：岔路选择分叉渲染参数透传（active 时绘制分叉引导带）
+  _viewCache.routeFork = routeFork
+  // M28 方案 9 三次打磨：分叉淡入动画进度透传（0-1，缺省 1 完全显示）
+  _viewCache.routeForkAlpha = routeForkAlpha
   // M17：环境场景（驱动天空/草地色相与远山配色；由 TrackDef.environment 透传）
   _viewCache.environment = ctx.def.environment
   // H2（H2）：BOOST 尾焰粒子（比赛渲染传，菜单预览不传/无粒子）
@@ -196,6 +229,15 @@ export function updatePlayerFrame(
   )
   player.carState.speed *= driftSpeedFactor(player.driftState)
   updateCar(dt, input, player.carState, carConfig, effectiveTurnRate(carConfig, player.driftState), wet)
+  // 漂移小喷（Mini-Turbo，P0）：释放漂移时 drift.ts 按释放时 charge 档位设置了 turbo 剩余时长，
+  // 此处对速度施加额外加速度（加速度 ×MINI_TURBO_ACCEL_MULT，不突破 maxSpeed——与 BOOST 突破上限区分；
+  // 时长递减/归零由 updateDrift 处理，turbo 仅作存在性判定）
+  if (player.driftState.turbo > 0) {
+    player.carState.speed = Math.min(
+      carConfig.maxSpeed,
+      player.carState.speed + carConfig.acceleration * MINI_TURBO_ACCEL_MULT * dt,
+    )
+  }
   player.cameraZ += player.carState.speed * dt
   player.raceTime += dt
 

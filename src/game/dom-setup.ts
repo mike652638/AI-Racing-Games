@@ -52,6 +52,8 @@ export function collectScreenElements($: (id: string) => HTMLElement): ScreenEle
     finishDriftHint: $('finish-drift-hint') as HTMLDivElement,
     finishDriftWinner: $('finish-drift-winner') as HTMLDivElement,
     finishWins: $('finish-wins') as HTMLDivElement,
+    finishAchievements: $('finish-achievements') as HTMLDivElement,
+    finishDaily: $('finish-daily') as HTMLDivElement,
     racingTouchHint: $('racing-touch-hint') as HTMLDivElement,
     pauseVolume: $('pause-volume') as HTMLInputElement,
     pauseRestart: $('pause-restart') as HTMLButtonElement,

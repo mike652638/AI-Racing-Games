@@ -134,6 +134,8 @@ export function createMockCanvas(width = 800, height = 600): MockCanvas {
     removeEventListener: noop,
     appendChild: noop,
     setPointerCapture: noop,
+    // M21：分屏四分区触控 TouchQuadrantInput.view() 需要视口 rect（触达即返回宽度）
+    getBoundingClientRect: () => ({ width: currentWidth, height: currentHeight, left: 0, top: 0 }),
   } as unknown as MockCanvas
 
   return canvas

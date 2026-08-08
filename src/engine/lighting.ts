@@ -19,10 +19,31 @@ export const WEATHER_CYCLE_SECONDS = 45
 /** 天气三态：0 晴 / 1 阴 / 2 雨 */
 export type WeatherPhase = 0 | 1 | 2
 
+/**
+ * M23 方案 11：对局天气变体覆盖（URL `?weather=` 驱动）——
+ * 'auto'（缺省）：沿用三态时间循环（天气随累计秒数 45s 循环变化）；
+ * 'sunny'：强制晴天（恒 phase 0）；'rain'：强制雨天（恒 phase 2）；
+ * 'night'：强制夜晚（恒 phase 0 + 渲染锁定夜晚色板/车灯，与赛道 timeOfDay 无关）。
+ */
+export type WeatherOverride = 'auto' | 'sunny' | 'rain' | 'night'
+
 /** 天气循环 phase（审计 R6 重复逻辑收敛——单一真源）：按累计秒数算三态 0/1/2，各 45s 循环。
  *  renderer（渲染天气/雨滴）与 frame-update（雨声/雨天物理）共用同一公式，避免两处独立实现漂移 */
 export function weatherPhaseAt(timeSec: number): WeatherPhase {
   return (Math.floor(timeSec / WEATHER_CYCLE_SECONDS) % 3) as WeatherPhase
+}
+
+/**
+ * 按对局天气变体覆盖解析天气相位（M23 方案 11 单一真源）：
+ * override 为 'sunny'/'rain'/'night' 时锁定对应相位（night 无雨 → phase 0），
+ * 'auto' 回退到时间循环 weatherPhaseAt（与旧行为逐字节一致）。
+ * 渲染层（renderer 天气/雨滴）与物理层（frame-update 雨声/雨天物理）共用同一公式。
+ */
+export function resolveWeatherPhase(override: WeatherOverride, timeSec: number): WeatherPhase {
+  if (override === 'sunny') return 0
+  if (override === 'rain') return 2
+  if (override === 'night') return 0
+  return weatherPhaseAt(timeSec)
 }
 
 function hsl(h: number, s: number, l: number): string {

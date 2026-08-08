@@ -84,6 +84,7 @@ function makeCtx(over: Partial<FrameRenderContext> = {}): FrameRenderContext {
     collisionFlash: 0,
     steer1: 0,
     steer2: 0,
+    guideStrength: 0,
     ...over,
   }
 }
@@ -167,6 +168,46 @@ describe('比赛渲染分支', () => {
     renderFrame(0.05, ctx)
     const view = renderer.render.mock.calls[0][3] as RenderView
     expect(view.collisionFlash).toBe(0.8)
+  })
+
+  test('M28 方案 10：导航辅助线强度经 ctx 透传到 view（?guide=1 时 0.8）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const renderer = makeRendererStub()
+    const ctx = makeCtx({ phase: PHASE_RACING, splitMode: false, renderer, guideStrength: 0.8 })
+    ctx.race.player1.cameraZ = 123
+    ctx.race.player1.carState.position = 0.5
+    renderFrame(0.05, ctx)
+    const view = renderer.render.mock.calls[0][3] as RenderView
+    expect(view.guideStrength).toBe(0.8)
+    // 菜单预览缺省 0（不绘制）
+    const menuRenderer = makeRendererStub()
+    const menuCtx = makeCtx({ phase: PHASE_MENU, renderer: menuRenderer, guideStrength: 0.8 })
+    renderFrame(0.05, menuCtx)
+    const menuView = menuRenderer.render.mock.calls[0][3] as RenderView
+    expect(menuView.guideStrength).toBe(0)
+  })
+
+  test('M28 方案 9 深化：岔路分叉参数经 ctx 透传到 view（routeFork 非 null 时 active）', () => {
+    vi.stubGlobal('window', { innerWidth: 800 })
+    const renderer = makeRendererStub()
+    const routeFork = { active: true, leftName: '森林穿梭', rightName: '环岛巡回', leftOffset: -6, rightOffset: 6 }
+    const ctx = makeCtx({ phase: PHASE_RACING, splitMode: false, renderer, routeFork, routeForkAlpha: 0.4 })
+    ctx.race.player1.cameraZ = 123
+    ctx.race.player1.carState.position = 0.5
+    renderFrame(0.05, ctx)
+    const view = renderer.render.mock.calls[0][3] as RenderView
+    expect(view.routeFork?.active).toBe(true)
+    expect(view.routeFork?.leftName).toBe('森林穿梭')
+    expect(view.routeFork?.rightOffset).toBe(6)
+    // M31 三次打磨：routeForkAlpha 透传（淡入动画进度 0.4）
+    expect(view.routeForkAlpha).toBe(0.4)
+    // 缺省 routeFork → undefined（不绘制）；缺省 routeForkAlpha → 1（完全显示）
+    const plainRenderer = makeRendererStub()
+    const plainCtx = makeCtx({ phase: PHASE_RACING, splitMode: false, renderer: plainRenderer })
+    renderFrame(0.05, plainCtx)
+    const plainView = plainRenderer.render.mock.calls[0][3] as RenderView
+    expect(plainView.routeFork).toBeUndefined()
+    expect(plainView.routeForkAlpha).toBe(1)
   })
 
   test('热座 P2 回合单屏：渲染 player2 与 tracks[1]（P0 回归：不冻结在 P1）', () => {

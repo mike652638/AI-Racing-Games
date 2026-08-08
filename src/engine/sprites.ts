@@ -21,7 +21,7 @@ export interface Sprite {
   scale?: number
 }
 
-const ROAD_SIDE_OFFSET = 1.4
+const ROAD_SIDE_OFFSET = 1.55
 /** 路灯专用横向偏移（UX-10 修复 2026-08-05：1.4→1.8）——旧值在弯道路灯与路面边界相交，
  * 视觉上「路灯长在路面上」；外移后灯杆稳定落在路外，树/仙人掌/棕榈/雪堆仍用 ROAD_SIDE_OFFSET */
 const LAMP_SIDE_OFFSET = 1.8

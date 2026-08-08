@@ -129,12 +129,24 @@ export function drawSnowpile(
   ctx.fill()
 }
 
-/** 路灯：灯杆 + 发光灯头 */
+/** 路灯：灯杆 + 发光灯头 + 柔和光晕（2026-08-08 实测修复：补两层低 alpha 光晕圆，夜晚/黄昏氛围更自然；
+ *  光晕半径克制（灯头 2.6 倍）且随 hpx 缩放，近距不重新引入 MAX_LAMP_SCALE 防住的巨型黄斑；
+ *  用纯色圆而非径向渐变——避免每帧每路灯创建 gradient 对象的 GC 压力，也不污染 M16 vignette 的
+ *  createRadialGradient 计数断言） */
 export function drawLamp(ctx: CanvasRenderingContext2D, x: number, y: number, hpx: number): void {
   const poleW = Math.max(hpx * 0.06, 2)
   ctx.fillStyle = '#8a8a8a'
   ctx.fillRect(x - poleW / 2, y - hpx, poleW, hpx)
   const r = Math.max(hpx * 0.14, 2)
+  // 光晕：外圈淡光 + 内圈微光（逐层覆盖模拟渐变衰减）
+  ctx.fillStyle = 'rgba(255, 224, 138, 0.14)'
+  ctx.beginPath()
+  ctx.arc(x, y - hpx, r * 2.6, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255, 224, 138, 0.22)'
+  ctx.beginPath()
+  ctx.arc(x, y - hpx, r * 1.9, 0, Math.PI * 2)
+  ctx.fill()
   ctx.fillStyle = '#ffe08a'
   ctx.beginPath()
   ctx.arc(x, y - hpx, r * 1.6, 0, Math.PI * 2)

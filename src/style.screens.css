@@ -296,6 +296,8 @@
   align-items: center;
   justify-content: center;
   padding: 10px 0 calc(18px + env(safe-area-inset-bottom));
+  /* M29 菜单优化：gap 18px 让提示文字与开始按钮有足够间距避免按钮 hover 光晕覆盖提示 */
+  gap: 14px;
   /* M21 v2：顶部透明区 22% → 35%，末端暗色 0.7 → 0.55 */
   background: linear-gradient(180deg, transparent 0%, transparent 35%, rgba(11, 5, 24, 0.4) 70%, rgba(11, 5, 24, 0.55) 100%);
 }
@@ -543,6 +545,25 @@
  *  空星降低不透明度，难度一眼可辨；diff-N 色相编码保持不变 */
 .track-stars .stars-empty {
   opacity: 0.32;
+}
+
+/* M23 方案 7：赛道已得 S/A/B 奖牌徽章（buildTrackOptions 按存档追加，金色胶囊） */
+.track-medal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 200, 80, 0.55);
+  border-radius: 8px;
+  background: rgba(255, 200, 80, 0.12);
+  color: var(--accent, #ffd166);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .track-option:hover .track-num,
@@ -1038,9 +1059,9 @@
 
 #start-btn {
   /* 2026-08-06（P0-1）：移出 .menu-content 滚动容器后为正常流元素，
-   * 固定在 .menu-footer 底部层，无需 sticky/backdrop（不再覆盖滚动内容） */
-  margin-top: 8px;
-  margin-bottom: 4px;
+   * 固定在 .menu-footer 底部层，无需 sticky/backdrop（不再覆盖滚动内容）。
+   * M29 菜单优化：margin-top 由 .menu-footer 的 gap 控制（避免按钮 hover 时光晕覆盖上方提示） */
+  margin: 0;
   padding: 10px 36px;
   font-size: clamp(15px, 3.8vw, 20px);
   flex-shrink: 0;
@@ -1069,7 +1090,8 @@
 
 #start-screen .hint,
 #menu-hint-touch {
-  margin-top: 14px; /* 2026-08-05 P1-2：28px→14px，给底部提示文字更多空间避免被裁出视口 */
+  /* M29 菜单优化：margin 由 .menu-footer 的 gap 控制（避免按钮 hover 时光晕覆盖提示） */
+  margin: 0;
   font-size: var(--hint-fs);
   opacity: 0.85;
   animation: pulse 1.6s ease-in-out infinite;

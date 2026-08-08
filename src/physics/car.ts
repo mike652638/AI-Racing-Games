@@ -1,5 +1,10 @@
 /** BOOST 氮气加速倍率（加速度 ×0.6）与速度上限倍率（1.15×maxSpeed），自 game/constants 导入 */
-import { BOOST_ACCEL_MULT, BOOST_MAX_SPEED_MULT, OFF_ROAD_PUSHBACK } from '../shared/constants'
+import {
+  BOOST_ACCEL_MULT,
+  BOOST_MAX_SPEED_MULT,
+  OFF_ROAD_PUSHBACK,
+  PERFECT_BOOST_ACCEL_MULT,
+} from '../shared/constants'
 
 export interface CarConfig {
   maxSpeed: number
@@ -17,6 +22,8 @@ export interface CarInput {
   steer: number
   /** BOOST 激活（G4：Space/Enter 按键；可选，旧字面量零破坏） */
   boost?: boolean
+  /** 完美氮气（P0：激活瞬间 charge ≥ PERFECT_BOOST_MIN_CHARGE 时标记，加速度用更高倍率；可选） */
+  perfectBoost?: boolean
 }
 
 export interface CarState {
@@ -57,11 +64,10 @@ export function updateCar(
 
   // G4（G4）：BOOST 氮气——与油门叠加但突破 maxSpeed（上限 1.15×maxSpeed）；
   // boost 分支独立 clamp，throttle 分支先执行（maxSpeed 内），boost 在其后突破上限
+  // P0（P0）：完美氮气——激活瞬间 charge ≥ 阈值时加速度用更高倍率（PERFECT_BOOST_ACCEL_MULT）
   if (input.boost === true) {
-    state.speed = Math.min(
-      state.speed + config.acceleration * BOOST_ACCEL_MULT * dt,
-      config.maxSpeed * BOOST_MAX_SPEED_MULT,
-    )
+    const accelMult = input.perfectBoost === true ? PERFECT_BOOST_ACCEL_MULT : BOOST_ACCEL_MULT
+    state.speed = Math.min(state.speed + config.acceleration * accelMult * dt, config.maxSpeed * BOOST_MAX_SPEED_MULT)
   }
 
   // G3（G3）：雨天抓地力降 15%（有效转向率 ×0.85，转向不足）；wet=false 路径与旧版逐字节一致

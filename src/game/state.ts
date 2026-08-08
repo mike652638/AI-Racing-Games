@@ -22,6 +22,13 @@ export function createRaceState(): RaceState {
     phase: PHASE_MENU,
     countdownRemaining: 0,
     finishShown: false,
+    weatherOverride: 'auto',
+    routeStageId: null,
+    routeCumulativeTime: 0,
+    routeCumulativeDriftScore: 0,
+    routeStageCount: 0,
+    routeStageIndex: 0,
+    routeIsFinish: false,
   }
 }
 

@@ -20,6 +20,8 @@ export interface ModeStrategy {
   readonly hotseatMode: boolean
   /** 漂移挑战模式（限时刷分；与 split/hotseat 互斥） */
   readonly challengeMode: boolean
+  /** M28 方案 9：路线模式（OutRun 式分段递进 + 岔路；?route= 驱动，与 split/hotseat/challenge 互斥） */
+  readonly routeMode: boolean
   /**
    * 菜单提示文案（#menu-hint，Batch 3 格式 [操作说明] · [开始方式]）：
    * 分屏双键盘 / 热座轮流 / 挑战限时 / 默认单屏各一套。
@@ -41,8 +43,18 @@ export interface ModeStrategy {
   afterSelectP1Track(args: SelectTrackArgs): void
 }
 
-/** 输入路由上下文：摇杆与双键盘原始输入（由 GameLoop.frame 采集传入） */
+/** 四分区触控输入源（M21：分屏 P1 左半屏/P2 右半屏各自四分区，见 ui/touch-quadrant.ts） */
+export interface TouchQuadrantSource {
+  isP1Active(): boolean
+  getP1Input(): CarInput
+  isP2Active(): boolean
+  getP2Input(): CarInput
+}
+
+/** 输入路由上下文：四分区触控、摇杆与双键盘原始输入（由 GameLoop.frame 采集传入） */
 export interface InputRoutingContext {
+  /** 四分区触控源（分屏模式创建；非分屏 undefined 走摇杆/键盘） */
+  touchQuadrant?: TouchQuadrantSource
   joystickActive: boolean
   joystickInput: CarInput
   p1Input: CarInput
@@ -86,10 +98,21 @@ export function collectSteerInputs(ctx: InputRoutingContext, splitMode: boolean)
 /**
  * 输入路由公共实现：merge 为 true（单屏/热座/挑战）时合并双键盘为 input1 且 input2 零输入；
  * merge 为 false（分屏）时 input1 = P1、input2 = P2（保持独立）。摇杆 active 时优先取摇杆输入。
+ * M21：分屏四分区触控源存在时，各玩家半屏有触点即优先取四分区输入（P1 左半屏/P2 右半屏），
+ * 键盘仍作为同玩家回退（无触点时）；非分屏不提供 touchQuadrant，行为与旧版逐字节一致。
  */
 function routeInputs(ctx: InputRoutingContext, merge: boolean): { input1: CarInput; input2: CarInput } {
-  const input1 = ctx.joystickActive ? ctx.joystickInput : merge ? mergeCarInputs(ctx.p1Input, ctx.p2Input) : ctx.p1Input
-  const input2 = merge ? { throttle: 0, brake: false, steer: 0 } : ctx.p2Input
+  const tq = ctx.touchQuadrant
+  const tqActive1 = tq !== undefined && tq.isP1Active()
+  const tqActive2 = tq !== undefined && tq.isP2Active()
+  const input1 = tqActive1
+    ? tq.getP1Input()
+    : ctx.joystickActive
+      ? ctx.joystickInput
+      : merge
+        ? mergeCarInputs(ctx.p1Input, ctx.p2Input)
+        : ctx.p1Input
+  const input2 = merge ? { throttle: 0, brake: false, steer: 0 } : tqActive2 ? tq.getP2Input() : ctx.p2Input
   return { input1, input2 }
 }
 
@@ -180,6 +203,7 @@ const SINGLE: ModeStrategy = {
   splitMode: false,
   hotseatMode: false,
   challengeMode: false,
+  routeMode: false,
   menuHint: '空格键开始 · 1-9 / 方向键 切换赛道',
   getInputs(ctx) {
     return routeInputs(ctx, true)
@@ -209,6 +233,7 @@ const SPLIT: ModeStrategy = {
   splitMode: true,
   hotseatMode: false,
   challengeMode: false,
+  routeMode: false,
   menuHint: 'P1: 1-9 选赛道 · P2: Shift+1-9 选赛道 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, false)
@@ -238,6 +263,7 @@ const HOTSEAT: ModeStrategy = {
   splitMode: false,
   hotseatMode: true,
   challengeMode: false,
+  routeMode: false,
   menuHint: 'P1 先跑 · 完成按回车交棒 P2 · 双人同赛道 · 1-9 选赛道 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
@@ -267,6 +293,7 @@ const CHALLENGE: ModeStrategy = {
   splitMode: false,
   hotseatMode: false,
   challengeMode: true,
+  routeMode: false,
   menuHint: '60 秒限时刷分 · 目标 5000 · 空格键开始',
   getInputs(ctx) {
     return routeInputs(ctx, true)
@@ -284,11 +311,53 @@ const CHALLENGE: ModeStrategy = {
     updateBothPlayers(args)
   },
   shouldFinish(race, trackManager) {
-    // G1（G1）：挑战限时优先——raceTime 达限时即结束（不看圈数）；正常完赛（3 圈）先到时仍走完赛路径
-    return race.player1.raceTime >= CHALLENGE_SECONDS || finishByLaps(race, trackManager, false)
+    // G1（G1）：挑战限时优先——raceTime 达限时即结束（不看圈数）；正常完赛（3 圈）先到时仍走完赛路径。
+    // M23 方案 8：检查站时间奖励——限时 = CHALLENGE_SECONDS + 累计检查点奖励（通过检查点赚时间）
+    return (
+      race.player1.raceTime >= CHALLENGE_SECONDS + race.player1.challengeBonus ||
+      finishByLaps(race, trackManager, false)
+    )
   },
   afterSelectP1Track() {
     // 挑战为单屏模式，无双人同步
+  },
+}
+
+/**
+ * M28 方案 9：路线模式（?route=）——OutRun 式分段递进 + 岔路选择。
+ * 单屏合并输入（与 SINGLE 相同的输入路由/玩家更新）；完赛判定不在此做（GameLoop 负责
+ * 段末岔路切换与终点判定），故 shouldFinish 恒 false——由帧块之外 GameLoop 的
+ * routeStageAdvance 检测 cameraZ 超当前段圈长触发段切换或完赛。
+ * 此策略仅承载 routeMode 标志与菜单提示（避免改 write 既有策略的完赛语义）。
+ */
+const ROUTE: ModeStrategy = {
+  splitMode: false,
+  hotseatMode: false,
+  challengeMode: false,
+  routeMode: true,
+  menuHint: '路线模式 · 每段岔路二选一 · 空格键开始',
+  getInputs(ctx) {
+    return routeInputs(ctx, true)
+  },
+  updateActivePlayer(_input1, _input2, current) {
+    return current
+  },
+  shouldUpdateP2Traffic() {
+    return false
+  },
+  collisionIncludesP2() {
+    return false
+  },
+  updatePlayers(args) {
+    updateBothPlayers(args)
+  },
+  shouldFinish() {
+    // 路线模式完赛由 GameLoop 段切换逻辑驱动（routeStageAdvance 检测终点段圈满），
+    // 不经过 mode.shouldFinish——避免与既有环形圈数语义冲突
+    return false
+  },
+  afterSelectP1Track() {
+    // 路线模式单屏，无双人同步
   },
 }
 
@@ -297,6 +366,8 @@ export function createModeStrategy(params: {
   splitMode: boolean
   hotseatMode: boolean
   challengeMode: boolean
+  /** M28 方案 9：路线模式（?route=，与 split/hotseat/challenge 互斥） */
+  routeMode?: boolean
 }): ModeStrategy {
   if (params.splitMode) {
     return SPLIT
@@ -306,6 +377,9 @@ export function createModeStrategy(params: {
   }
   if (params.challengeMode) {
     return CHALLENGE
+  }
+  if (params.routeMode) {
+    return ROUTE
   }
   return SINGLE
 }

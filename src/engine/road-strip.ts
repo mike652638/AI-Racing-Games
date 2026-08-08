@@ -136,9 +136,11 @@ export function renderRoadStripToCanvas(strip: RoadStrip, options: RoadStripRend
     ctx.fillRect(centerX - roadHalf - sideHalf, y, sideHalf, pixelsPerSegment)
     ctx.fillRect(centerX + roadHalf, y, sideHalf, pixelsPerSegment)
     // 中心虚线（仅偶数段，烘焙进纹理后缓存路径不再单独绘制）
+    // M20 验证优化：x 坐标取整消除亚像素锯齿
     if (shouldDrawCenterLine(segIndex)) {
       ctx.fillStyle = CENTER_LINE_COLOR
-      ctx.fillRect(centerX - lineHalf, y, lineHalf * 2, pixelsPerSegment)
+      const lx = Math.round(centerX - lineHalf)
+      ctx.fillRect(lx, y, Math.max(1, Math.round(centerX + lineHalf) - lx), pixelsPerSegment)
     }
     // 颗粒噪点：路面范围内撒暗点（模拟沥青颗粒，2px 小矩形；不覆盖路缘/虚线；
     //   x/y 收窄到路面内边界（1.5px 矩形 + 安全余量），保证不越出纹理宽度）

@@ -1,5 +1,20 @@
 import { lapFromZ } from './lap'
-import { addDriftScore, addMatchResult, recordWin, type WinStats } from '../ui/save'
+import {
+  addDriftScore,
+  addMatchResult,
+  loadAchievements,
+  loadDaily,
+  recordWin,
+  saveDaily,
+  saveMedal,
+  unlockAchievement,
+  type WinStats,
+} from '../ui/save'
+import { MEDAL_BASE_SEC } from '../shared/constants'
+import { medalForTotalSec, type MedalGrade } from '../shared/medal'
+import { resolveWeatherPhase } from '../engine/lighting'
+import { evaluateAchievements, type AchievementId } from './achievements'
+import { markDailyFinished, rollDailyToToday, shouldCompleteDaily, todayDateString } from './daily'
 import type { ModeStrategy } from './mode-strategy'
 import type { RaceState } from './state'
 import type { TrackManager } from './track-manager'
@@ -24,6 +39,8 @@ export interface FinishAccountingArgs {
    * finishedP1/finishedP2/driftWinner 恒计算（applyPhaseToScreens 各阶段均需）。
    */
   record: boolean
+  /** M28 方案 14：每日挑战模式是否启用（?daily=1；缺省启用可配置关闭，与 record 同守卫） */
+  dailyModeEnabled?: boolean
 }
 
 /** 结算记账结果：双人完赛标记、漂移竞速胜者与最新胜场统计（非分胜负时为 null） */
@@ -40,6 +57,17 @@ export interface FinishAccountingResult {
    * 0 = 未入 TOP10 或未记录（record=false/零分/挤出榜外）。
    */
   driftRankP1: number
+  /**
+   * M23 方案 7：本次 P1 完赛结算判定的奖牌等级（S/A/B，按 bot 基准总用时门槛）。
+   * 仅 normal 完赛（非挑战）时判定并保存；未完赛/挑战模式为 null。
+   */
+  medalP1: MedalGrade | null
+  /** M23 方案 7：P2 完赛判定的奖牌等级（分屏/热座 P2 回合有效），否则 null */
+  medalP2: MedalGrade | null
+  /** M23 方案 6：本局新解锁的成就 id（仅 record=true 时检测；防重复解锁由 unlockAchievement 幂等兜底） */
+  newlyUnlockedAchievements: AchievementId[]
+  /** M28 方案 14：本局是否完成今日挑战（首次进入完赛且赛道匹配时 true；供 GameLoop 展示结算与菜单刷新） */
+  dailyDoneToday: boolean
 }
 
 /**
@@ -52,9 +80,16 @@ export interface FinishAccountingResult {
  */
 export function accountFinish(args: FinishAccountingArgs): FinishAccountingResult {
   const { race, trackManager, mode, hotseatPlayer, prevP1Time, record } = args
+  // M28 方案 14：每日挑战模式（缺省启用；完赛时检测今日赛道完成并累计 streak）
+  const dailyModeEnabled = args.dailyModeEnabled !== false
 
-  // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）
-  const finishedP1 = lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
+  // 完赛标记：按各玩家本世界圈长/总圈数计算（单屏时 P2 恒 false；FINISHED 时 cameraZ 已随帧推进可靠）。
+  // M28 方案 9：路线模式完赛——终点阶段跑满 1 圈（lapFromZ > 1）即完赛（每段独立赛道，
+  // 不按各段 def.laps 判定——GameLoop 段切换会把 cameraZ 保持在段内推进）。
+  const routeMode = mode.routeMode
+  const finishedP1 = routeMode
+    ? race.routeIsFinish && lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > 1
+    : lapFromZ(race.player1.cameraZ, trackManager.getLapLength(0)) > trackManager.getTotalLaps(0)
   const finishedP2 =
     (mode.splitMode || mode.hotseatMode) &&
     lapFromZ(race.player2.cameraZ, trackManager.getLapLength(1)) > trackManager.getTotalLaps(1)
@@ -66,9 +101,72 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
         : 'P2'
       : null
 
+  // M23 方案 7：奖牌判定——按各玩家世界赛道 bot 基准总用时门槛（仅 normal 完赛，
+  // 挑战模式无圈数概念不判；分屏/热座 P2 按玩家2 世界赛道判定）。
+  // 判定在 record 块内执行（首次进入完赛）并写入存档（只升不降）。
+  let medalP1: MedalGrade | null = null
+  let medalP2: MedalGrade | null = null
+  // M23 方案 6：本局新解锁成就列表（record 分支内填充）
+  const newlyUnlockedAchievements: AchievementId[] = []
+  // M28 方案 14：本局是否完成今日挑战（record 分支内填充；默认 false）
+  let dailyDoneToday = false
+
   let winStats: WinStats | null = null
   let driftRankP1 = 0
   if (record) {
+    // M28 方案 9：路线模式完赛仅累计跨段时间/得分（结算展示），不写漂移榜/奖牌/胜场——
+    // 每段不同赛道，单赛道语义的榜单与奖牌不适用；成就在 record 块末尾仍评估（天气/完赛类）
+    if (mode.routeMode) {
+      race.routeCumulativeTime += race.player1.raceTime
+      race.routeCumulativeDriftScore += Math.round(race.player1.driftState.score + race.player1.nearMissScore)
+      // 成就评估复用下方公共块（提前 return 会在注释下方，保留结构）
+      const alreadyUnlocked = loadAchievements()
+      for (const id of evaluateAchievements(
+        {
+          race,
+          trackManager,
+          medalP1: null,
+          finishedP1,
+          wet: resolveWeatherPhase(race.weatherOverride, race.player1.raceTime) === 2,
+        },
+        alreadyUnlocked,
+      )) {
+        if (unlockAchievement(id)) {
+          newlyUnlockedAchievements.push(id)
+        }
+      }
+      return {
+        finishedP1,
+        finishedP2,
+        driftWinner,
+        winStats,
+        driftRankP1,
+        medalP1,
+        medalP2,
+        newlyUnlockedAchievements,
+        dailyDoneToday,
+      }
+    }
+    if (finishedP1 && !mode.challengeMode) {
+      const base1 = MEDAL_BASE_SEC[trackManager.getTrackId(0)]
+      if (base1 !== undefined) {
+        const grade = medalForTotalSec(base1, race.player1.raceTime)
+        if (grade !== null) {
+          saveMedal(trackManager.getTrackId(0), grade)
+          medalP1 = grade
+        }
+      }
+    }
+    if (finishedP2 && (mode.splitMode || mode.hotseatMode)) {
+      const base2 = MEDAL_BASE_SEC[trackManager.getTrackId(1)]
+      if (base2 !== undefined) {
+        const grade = medalForTotalSec(base2, race.player2.raceTime)
+        if (grade !== null) {
+          saveMedal(trackManager.getTrackId(1), grade)
+          medalP2 = grade
+        }
+      }
+    }
     // 胜场统计：仅首次进入完赛时记录（finishShown 守卫防 ESC 重入重复计数）——
     // 热座 round 2 按 P1/P2 用时比较（平手不记）、分屏双完赛复用 driftWinner、单人恒 null；
     // 漂移 TOP10 同守卫：各完赛玩家正分记录（热座 round 1 只记 P1、round 2 只记 P2，天然不重复）
@@ -117,7 +215,53 @@ export function accountFinish(args: FinishAccountingArgs): FinishAccountingResul
         trackId: trackManager.getTrackId(0),
       })
     }
+    // M23 方案 6：成就检测与解锁（首次进入完赛时评估；unlockAchievement 幂等兜底防重复）
+    // M23 方案 11：wet 判定走 resolveWeatherPhase 单一真源（对局天气变体覆盖）
+    const alreadyUnlocked = loadAchievements()
+    for (const id of evaluateAchievements(
+      {
+        race,
+        trackManager,
+        medalP1,
+        finishedP1,
+        wet: resolveWeatherPhase(race.weatherOverride, race.player1.raceTime) === 2,
+      },
+      alreadyUnlocked,
+    )) {
+      if (unlockAchievement(id)) {
+        newlyUnlockedAchievements.push(id)
+      }
+    }
+    // M28 方案 14：每日挑战完成判定——今日赛道 + P1 完赛即完成（roll 到今日→判定→完成→存档）。
+    // 分屏 P2 也判定（P2 世界赛道 == 今日赛道且 P2 完赛）；返回 dailyDoneToday 供结算/菜单刷新。
+    const today = todayDateString()
+    const daily = rollDailyToToday(loadDaily(), today)
+    saveDaily(daily) // 即使未完成也确保日期已滚动（跨日首次进入即刷新今日赛道）
+    if (shouldCompleteDaily(daily, finishedP1, trackManager.getTrackId(0), dailyModeEnabled)) {
+      const done = markDailyFinished(daily)
+      saveDaily(done)
+      dailyDoneToday = true
+    } else if (
+      dailyModeEnabled &&
+      (mode.splitMode || mode.hotseatMode) &&
+      finishedP2 &&
+      trackManager.getTrackId(1) === daily.trackId
+    ) {
+      const done = markDailyFinished(daily)
+      saveDaily(done)
+      dailyDoneToday = true
+    }
   }
 
-  return { finishedP1, finishedP2, driftWinner, winStats, driftRankP1 }
+  return {
+    finishedP1,
+    finishedP2,
+    driftWinner,
+    winStats,
+    driftRankP1,
+    medalP1,
+    medalP2,
+    newlyUnlockedAchievements,
+    dailyDoneToday,
+  }
 }

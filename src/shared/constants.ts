@@ -30,6 +30,69 @@ export const BOOST_CHARGE_RATE = 0.3
 /** BOOST 消耗速率（激活期间 charge/秒，G4） */
 export const BOOST_DRAIN_RATE = 0.5
 
+// —— P0 可玩性（2026-08-07：near-miss 贴身超车 / 完美氮气 / 漂移小喷）——
+
+/** near-miss 横向近身容差（offset 单位，> TRAFFIC_X_TOL 碰撞容差 0.55——低于该值会先判碰撞） */
+export const NEAR_MISS_X_TOL = 0.9
+/** near-miss 纵向触发距离（世界单位）：车在玩家前方该距离内视为接近 */
+export const NEAR_MISS_Z_DIST = 200
+/** near-miss 触发冷却（秒），防同辆车连续触发刷分 */
+export const NEAR_MISS_COOLDOWN = 0.6
+/** near-miss 基础得分（× 当前连击倍率，clamp 到 DRIFT_SCORE_MAX） */
+export const NEAR_MISS_SCORE = 100
+/** near-miss 蓄能增量（每次触发 boostCharge += 该值，封顶 1） */
+export const NEAR_MISS_CHARGE = 0.1
+
+/** 完美氮气触发阈值：激活 BOOST 时 charge ≥ 该值即本次为完美氮气（加速更强） */
+export const PERFECT_BOOST_MIN_CHARGE = 0.8
+/** 完美氮气加速度倍率（BOOST_ACCEL_MULT 0.6 × 1.2 = 0.72，比普通快 20%） */
+export const PERFECT_BOOST_ACCEL_MULT = 0.72
+
+/** 漂移小喷（Mini-Turbo）蓝火触发阈值：释放时 charge ≥ 该值触发短喷（0.4s） */
+export const MINI_TURBO_CHARGE_SHORT = 0.4
+/** 漂移小喷橙火触发阈值：释放时 charge ≥ 该值触发长喷（0.8s） */
+export const MINI_TURBO_CHARGE_LONG = 0.7
+/** 漂移小喷短喷时长（秒，蓝火） */
+export const MINI_TURBO_SHORT_SECONDS = 0.4
+/** 漂移小喷长喷时长（秒，橙火） */
+export const MINI_TURBO_LONG_SECONDS = 0.8
+/** 漂移小喷加速度倍率（相对 config.acceleration，不突破 maxSpeed） */
+export const MINI_TURBO_ACCEL_MULT = 1.0
+
+// —— M23 可玩性 v2（2026-08-07：赛道 S/A/B 奖牌 / 成就解锁 / 挑战检查站）——
+
+/**
+ * 奖牌金（S）门槛系数：玩家总用时 ≤ bot 基准总用时 × 该系数 → S 级。
+ * bot 基准总用时来自 tests/bot 9 赛道矩阵实测（getTrackDef(id).medalBaseSec）。
+ */
+export const MEDAL_GOLD_MULT = 1.0
+/** 奖牌银（A）门槛系数：总用时 ≤ bot 基准 × 1.15 → A 级 */
+export const MEDAL_SILVER_MULT = 1.15
+/** 奖牌铜（B）门槛系数：总用时 ≤ bot 基准 × 1.3 → B 级（更慢不获牌） */
+export const MEDAL_BRONZE_MULT = 1.3
+
+/** 挑战模式检查点奖励时长（秒，M23：每通过一个检查点剩余时间 +该值，检查站制时间奖励） */
+export const CHALLENGE_CHECKPOINT_BONUS = 2
+/** 挑战模式每圈检查点数（按赛道单圈长度等分位置生成，M23） */
+export const CHALLENGE_CHECKPOINTS_PER_LAP = 2
+
+/**
+ * 各赛道 bot 基准总用时（秒，M23 奖牌判定基准）：来自 tests/bot 9 赛道矩阵实测
+ * （2026-08-07，avgSpeed 按各赛道直道/弯道分布，总用时含全部圈数）。
+ * 玩家总用时 ≤ base × MEDAL_GOLD_MULT/SILVER_MULT/BRONZE_MULT 对应 S/A/B 奖牌。
+ */
+export const MEDAL_BASE_SEC: Record<string, number> = {
+  classic: 76.017,
+  highway: 100.233,
+  's-curve': 44.883,
+  island: 52.167,
+  canyon: 56.467,
+  desert: 71.967,
+  forest: 34.767,
+  coast: 54.983,
+  alpine: 43.867,
+}
+
 /** 碰撞速度惩罚因子（速度 ×0.5） */
 export const COLLISION_SPEED_FACTOR = 0.5
 /** 碰撞冷却时长（秒），冷却期内不重复触发 */

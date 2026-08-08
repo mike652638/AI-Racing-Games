@@ -30,11 +30,13 @@ describe('player state', () => {
     p.raceTime = 10
     p.carState.speed = 500
     p.collisionCooldown = 0.7
+    p.trafficRubber = 1.1
     resetPlayerState(p)
     expect(p.cameraZ).toBe(0)
     expect(p.raceTime).toBe(0)
     expect(p.carState.speed).toBe(0)
     expect(p.collisionCooldown).toBe(0)
     expect(p.driftState.smoke).toEqual([])
+    expect(p.trafficRubber).toBe(1)
   })
 })

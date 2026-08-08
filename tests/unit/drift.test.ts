@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift, type DriftState } from '../../src/physics/drift'
 import { createCarConfig } from '../../src/physics/car'
-import { DRIFT_SCORE_MAX } from '../../src/shared/constants'
+import {
+  DRIFT_SCORE_MAX,
+  MINI_TURBO_CHARGE_SHORT,
+  MINI_TURBO_LONG_SECONDS,
+  MINI_TURBO_SHORT_SECONDS,
+} from '../../src/shared/constants'
 
 const DT = 1 / 60
 
@@ -13,6 +18,8 @@ const idleDrift = (): DriftState => ({
   score: 0,
   combo: 0,
   comboTimer: 0,
+  turbo: 0,
+  turboLevel: 0,
 })
 
 describe('漂移状态机', () => {
@@ -104,6 +111,8 @@ describe('漂移对物理的影响', () => {
       score: 0,
       combo: 0,
       comboTimer: 0,
+      turbo: 0,
+      turboLevel: 0,
     })
     expect(active).toBeCloseTo(cfg.turnRate * 1.5, 10)
     const idle = effectiveTurnRate(cfg, {
@@ -114,16 +123,38 @@ describe('漂移对物理的影响', () => {
       score: 0,
       combo: 0,
       comboTimer: 0,
+      turbo: 0,
+      turboLevel: 0,
     })
     expect(idle).toBe(cfg.turnRate)
   })
 
   test('active 时速度有损耗因子', () => {
     expect(
-      driftSpeedFactor({ charge: 1, active: true, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }),
+      driftSpeedFactor({
+        charge: 1,
+        active: true,
+        lastSmoke: 0,
+        smoke: [],
+        score: 0,
+        combo: 0,
+        comboTimer: 0,
+        turbo: 0,
+        turboLevel: 0,
+      }),
     ).toBeCloseTo(0.985, 10)
     expect(
-      driftSpeedFactor({ charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }),
+      driftSpeedFactor({
+        charge: 0,
+        active: false,
+        lastSmoke: 0,
+        smoke: [],
+        score: 0,
+        combo: 0,
+        comboTimer: 0,
+        turbo: 0,
+        turboLevel: 0,
+      }),
     ).toBe(1)
   })
 })
@@ -141,6 +172,8 @@ describe('漂移得分', () => {
     score: 0,
     combo: 0,
     comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
   })
 
   test('漂移中按速度累计得分', () => {
@@ -185,6 +218,8 @@ describe('updateDrift 纯函数性', () => {
       score: 10,
       combo: 0,
       comboTimer: 0,
+      turbo: 0,
+      turboLevel: 0,
     }
     const before = JSON.parse(JSON.stringify(drift)) as DriftState
     const next = updateDrift(0.1, input, state, cfg, drift, 100)
@@ -212,6 +247,8 @@ describe('漂移连击与得分上限', () => {
     score: 0,
     combo,
     comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
   })
 
   /** 持续漂移 frames 帧后返回状态（含 30 帧 charge 激活预热） */
@@ -279,6 +316,8 @@ describe('scoreMultiplier 加成（H1）', () => {
     score: 0,
     combo,
     comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
   })
 
   test('scoreMultiplier=1.5 时得分 = 基准 ×1.5（挑战加成透传）', () => {
@@ -293,5 +332,65 @@ describe('scoreMultiplier 加成（H1）', () => {
     const a = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0)
     const b = updateDrift(1, steerInput, state, cfg, activeDrift(0), 0, 1)
     expect(a.score).toBeCloseTo(b.score, 6)
+  })
+})
+
+describe('漂移小喷 Mini-Turbo（P0）', () => {
+  const cfg = createCarConfig({ maxSpeed: 6000 })
+  const state = { position: 0.5, speed: 6000 }
+  const steerInput = { throttle: 0, brake: false, steer: 1 }
+  const idleInput = { throttle: 0, brake: false, steer: 0 }
+  /** 已激活（active=true）漂移态：charge 略高于激活阈值（确保下一帧松转向即释放），peakCharge 记录段内峰值 */
+  const nearReleaseDrift = (peak: number): DriftState => ({
+    charge: 0.26, // 略高于 DRIFT_CHARGE_THRESHOLD=0.25，松转向一帧衰减（2/s × dt）即跌破 → active 翻转
+    active: true,
+    lastSmoke: 0,
+    smoke: [],
+    score: 0,
+    combo: 2,
+    comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
+    peakCharge: peak,
+  })
+
+  test('释放漂移且峰值蓄力 ≥ 长喷阈值 → 橙火长喷（turboLevel=2，时长 = MINI_TURBO_LONG_SECONDS）', () => {
+    const next = updateDrift(DT, idleInput, state, cfg, nearReleaseDrift(1), 0)
+    expect(next.active).toBe(false)
+    expect(next.turboLevel).toBe(2)
+    expect(next.turbo).toBeCloseTo(MINI_TURBO_LONG_SECONDS, 6)
+  })
+
+  test('释放漂移且峰值蓄力仅达短喷阈值 → 蓝火短喷（turboLevel=1，时长 = MINI_TURBO_SHORT_SECONDS）', () => {
+    const next = updateDrift(DT, idleInput, state, cfg, nearReleaseDrift(MINI_TURBO_CHARGE_SHORT), 0)
+    expect(next.active).toBe(false)
+    expect(next.turboLevel).toBe(1)
+    expect(next.turbo).toBeCloseTo(MINI_TURBO_SHORT_SECONDS, 6)
+  })
+
+  test('峰值蓄力不足短喷阈值 → 不触发小喷（turbo=0）', () => {
+    const next = updateDrift(DT, idleInput, state, cfg, nearReleaseDrift(MINI_TURBO_CHARGE_SHORT - 0.01), 0)
+    expect(next.active).toBe(false)
+    expect(next.turbo).toBe(0)
+    expect(next.turboLevel).toBe(0)
+  })
+
+  test('漂移继续（active 保持）→ 不触发小喷（turbo 保持 0）', () => {
+    const next = updateDrift(DT, steerInput, state, cfg, nearReleaseDrift(1), 0)
+    expect(next.active).toBe(true)
+    expect(next.turbo).toBe(0)
+    expect(next.turboLevel).toBe(0)
+  })
+
+  test('小喷时长每帧递减，耗尽后 turboLevel 归零', () => {
+    const next = updateDrift(DT, idleInput, state, cfg, nearReleaseDrift(1), 0)
+    expect(next.turbo).toBeGreaterThan(0)
+    // 连续释放态帧：turbo 递减直至 0
+    let drift = next
+    for (let i = 0; i < Math.ceil(MINI_TURBO_LONG_SECONDS / DT) + 2; i++) {
+      drift = updateDrift(DT, idleInput, state, cfg, drift, 0)
+    }
+    expect(drift.turbo).toBe(0)
+    expect(drift.turboLevel).toBe(0)
   })
 })

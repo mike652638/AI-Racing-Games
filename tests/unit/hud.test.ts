@@ -348,3 +348,84 @@ describe('hud 挑战计时器类型兼容（G1）', () => {
     expect(el.challengeTimer).toEqual({ hidden: false, textContent: '剩余 60.0s' })
   })
 })
+
+describe('M27：碰撞与 NEAR MISS 计数合并展示（hudCollision）', () => {
+  /** 在既有 mock 基础上补 hudCollision 字段（可选访问） */
+  const withCollision = (): HudElements => {
+    const element = () => ({ hidden: true, textContent: '' })
+    return {
+      ...createMockHudElements(),
+      hudCollision: element() as HTMLDivElement,
+    } as unknown as HudElements
+  }
+
+  it('两者均为 0 时隐藏（常态无噪音）', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudCollision!.hidden).toBe(true)
+  })
+
+  it('仅碰撞 >0 时显示「碰撞 ×N」（无超车）', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    race.collisionCount = 3
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudCollision!.hidden).toBe(false)
+    expect(elements.hudCollision!.textContent).toBe('碰撞 ×3')
+  })
+
+  it('仅 near-miss >0 时显示「超车 ×M」', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    race.player1.nearMissCount = 5
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudCollision!.hidden).toBe(false)
+    expect(elements.hudCollision!.textContent).toBe('超车 ×5')
+  })
+
+  it('两者均 >0 时合并显示「碰撞 ×N · 超车 ×M」', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    race.collisionCount = 2
+    race.player1.nearMissCount = 7
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudCollision!.textContent).toBe('碰撞 ×2 · 超车 ×7')
+  })
+
+  it('热座 P2 回合显示 P2 的 near-miss 计数', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    race.player1.nearMissCount = 7
+    race.player2.nearMissCount = 9
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, 2)
+    expect(elements.hudCollision!.textContent).toBe('超车 ×9')
+  })
+
+  it('菜单阶段隐藏（即使有计数）', () => {
+    const elements = withCollision()
+    const race = createRaceState()
+    race.collisionCount = 2
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'menu', null, null)
+    expect(elements.hudCollision!.hidden).toBe(true)
+  })
+})
+
+describe('M28 方案 9：路线模式 HUD STAGE 指示', () => {
+  it('路线模式显示 STAGE x/y（替代 LAP x/y）', () => {
+    const elements = createMockHudElements()
+    const race = createRaceState()
+    race.routeStageId = 'a1'
+    race.routeStageCount = 4
+    race.routeStageIndex = 2
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudLap.textContent).toBe('STAGE 2/4')
+  })
+
+  it('非路线模式（routeStageId null）维持 LAP x/y', () => {
+    const elements = createMockHudElements()
+    const race = createRaceState()
+    updateHud(elements, race, createCarConfig(), null, false, TRACKS, 'racing', null, null)
+    expect(elements.hudLap.textContent).toContain('LAP')
+  })
+})

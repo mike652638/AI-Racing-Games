@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { updateLighting } from '../../src/engine/lighting'
+import { resolveWeatherPhase, updateLighting, weatherPhaseAt, WEATHER_CYCLE_SECONDS } from '../../src/engine/lighting'
 
 describe('updateLighting', () => {
   it('returns valid hsl colors at time 0 (night)', () => {
@@ -109,5 +109,38 @@ describe('updateLighting', () => {
     const day = updateLighting(45, false, false, false)
     const night = updateLighting(45, false, false, true)
     expect(night.skyTop).not.toBe(day.skyTop)
+  })
+})
+
+describe('M23 方案 11：resolveWeatherPhase 天气变体覆盖', () => {
+  it('auto 回退到时间循环（与 weatherPhaseAt 一致）', () => {
+    for (const t of [0, 30, 46, 90, 91, 135, 136, 180]) {
+      expect(resolveWeatherPhase('auto', t)).toBe(weatherPhaseAt(t))
+    }
+  })
+
+  it('sunny 恒晴（phase 0）——覆盖任意时间点', () => {
+    for (const t of [0, 46, 90, 136, 180]) {
+      expect(resolveWeatherPhase('sunny', t)).toBe(0)
+    }
+  })
+
+  it('rain 恒雨（phase 2）', () => {
+    for (const t of [0, 46, 90, 136, 180]) {
+      expect(resolveWeatherPhase('rain', t)).toBe(2)
+    }
+  })
+
+  it('night 恒无雨（phase 0）', () => {
+    for (const t of [0, 46, 90, 136, 180]) {
+      expect(resolveWeatherPhase('night', t)).toBe(0)
+    }
+  })
+
+  it('覆盖后时间循环边界不再影响相位（跨 45s 切换点仍锁定）', () => {
+    const boundary = WEATHER_CYCLE_SECONDS * 2 // 恰好雨段开始
+    expect(weatherPhaseAt(boundary)).toBe(2)
+    expect(resolveWeatherPhase('sunny', boundary)).toBe(0)
+    expect(resolveWeatherPhase('night', boundary)).toBe(0)
   })
 })

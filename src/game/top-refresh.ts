@@ -1,8 +1,28 @@
 import { getTrackDef, TRACK_DEFS } from '../engine/tracks'
 import { formatTime } from '../ui/format'
-import { loadBestTimeFor, loadDriftTop, loadMatchTop } from '../ui/save'
-import { BEST_EMPTY_HINT, DRIFT_EMPTY_HINT, MATCH_EMPTY_HINT } from '../ui/copy'
+import {
+  achievementProgress,
+  loadAchievements,
+  loadBestTimeFor,
+  loadDaily,
+  loadMedal,
+  pruneDriftTop,
+  pruneMatchTop,
+  saveDaily,
+} from '../ui/save'
+import {
+  ACHIEVEMENTS,
+  BEST_EMPTY_HINT,
+  DAILY_PROGRESS_PREFIX,
+  DRIFT_EMPTY_HINT,
+  MATCH_EMPTY_HINT,
+  MEDAL_LABEL,
+} from '../ui/copy'
 import { COMBO_MULTIPLIER_STEP } from '../shared/constants'
+import { rollDailyToToday, todayDateString } from './daily'
+
+/** M27 优化：当前正式赛道 id 白名单（惰性清理榜单中旧版本废弃/被篡改的 trackId 条目） */
+const VALID_TRACK_IDS: ReadonlySet<string> = new Set(TRACK_DEFS.map((def) => def.id))
 
 /**
  * 菜单排行榜 DOM 刷新（Task D 拆分自 game-loop.ts）：
@@ -55,7 +75,8 @@ export function refreshDriftTop(): void {
   if (!el) {
     return
   }
-  const top = loadDriftTop().slice(0, isCardExpanded(el) ? 10 : 5)
+  // M27 优化：惰性清理无效 trackId 条目（返回清理后榜单；无无效条目时零写回）
+  const top = pruneDriftTop(VALID_TRACK_IDS).slice(0, isCardExpanded(el) ? 10 : 5)
   el.textContent =
     top.length === 0
       ? `暂无漂移记录\n${DRIFT_EMPTY_HINT}`
@@ -99,7 +120,10 @@ export function refreshBestSummary(): void {
     // M20：去掉「·」分隔符，与漂移/对局榜单统一紧凑单行格式——
     // 单行"1. 经典赛道  P1 0:49.899  P2 0:51.335" 在 340px 宽屏卡片内不换行
     const p2 = t2 !== null ? `  P2 ${formatTime(t2)}` : ''
-    lines.push(`${rank}. ${def.name}  P1 ${p1}${p2}`)
+    // M23 方案 7：赛道已得奖牌（S/A/B）在赛道名后展示（如 "1. 经典赛道 S  P1 0:49.899"）
+    const medal = loadMedal(def.id)
+    const medalMark = medal ? ` ${MEDAL_LABEL[medal]}` : ''
+    lines.push(`${rank}. ${def.name}${medalMark}  P1 ${p1}${p2}`)
   })
   const visible = isCardExpanded(el) ? lines : lines.slice(0, 5)
   el.textContent = visible.length > 0 ? visible.join('\n') : `暂无最佳成绩\n${BEST_EMPTY_HINT}`
@@ -117,7 +141,8 @@ export function refreshMatchTop(): void {
   if (!el) {
     return
   }
-  const top = loadMatchTop().slice(0, isCardExpanded(el) ? 10 : 5)
+  // M27 优化：惰性清理无效 trackId 条目（返回清理后榜单；无无效条目时零写回）
+  const top = pruneMatchTop(VALID_TRACK_IDS).slice(0, isCardExpanded(el) ? 10 : 5)
   el.textContent =
     top.length === 0
       ? `暂无对局记录\n${MATCH_EMPTY_HINT}`
@@ -131,4 +156,42 @@ export function refreshMatchTop(): void {
           .join('\n')
   syncScrollable(el)
   syncClipped(el)
+}
+
+/**
+ * 刷新菜单成就进度（#achievement-progress，M23 方案 6）：
+ * 显示「成就 X/N」+ 已解锁成就名称列表（title 提示悬停可见）。
+ */
+export function refreshAchievementProgress(): void {
+  const el = document.getElementById('achievement-progress')
+  if (!el) {
+    return
+  }
+  const { unlocked, total } = achievementProgress()
+  const names = [...loadAchievements()].map((id) => ACHIEVEMENTS[id]?.name ?? id).join(' / ')
+  el.textContent = `成就 ${unlocked}/${total}`
+  if (unlocked > 0) {
+    el.title = `已解锁：${names}`
+  } else {
+    el.title = '完成目标解锁成就徽章'
+  }
+}
+
+/**
+ * 刷新菜单每日挑战进度（#daily-progress，M28 方案 14）：
+ * 显示「今日挑战 · <赛道名> · 已完成/未完成 · 连续 N 天」。
+ * 跨日自动滚动今日赛道并回写（rollDailyToToday），title 悬停展示详情。
+ */
+export function refreshDailyProgress(): void {
+  const el = document.getElementById('daily-progress')
+  if (!el) {
+    return
+  }
+  const today = todayDateString()
+  const daily = rollDailyToToday(loadDaily(), today)
+  saveDaily(daily) // 跨日滚动持久化（同日期无写回副作用）
+  const trackName = getTrackDef(daily.trackId)?.name ?? daily.trackId
+  const status = daily.done ? '已完成' : '未完成'
+  el.textContent = `${DAILY_PROGRESS_PREFIX} · ${trackName} · ${status} · 连续 ${daily.streak} 天`
+  el.title = `今日挑战：在「${trackName}」完赛即可完成；连续签到 ${daily.streak} 天`
 }

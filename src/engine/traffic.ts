@@ -27,6 +27,22 @@ export const TRAFFIC_X_TOL = 0.55
 /** 车流基础巡航速度 */
 export const TRAFFIC_CRUISE_SPEED = 2400
 /**
+ * M23 方案 13：车流橡皮筋动态难度（？traffic=dynamic，缺省启用）——
+ * 车流巡航速度随玩家速度平滑调整：玩家快 → 车流提速（保持超车挑战），玩家慢 → 车流减速（便于追赶）。
+ * 系数钳位范围与平滑响应速率（speedFactor 每秒向目标收敛比例）。
+ */
+export const TRAFFIC_RUBBER_MIN = 0.85
+export const TRAFFIC_RUBBER_MAX = 1.15
+export const TRAFFIC_RUBBER_SMOOTH = 1.2
+/**
+ * 玩家速度到车流橡皮筋目标系数的线性映射（归一化到 maxSpeed，clamp 到 [MIN, MAX]）：
+ * 玩家全速 → 车流提速至 MAX（保持挑战）；玩家低速/静止 → 车流减速至 MIN（起步/追赶友好）。
+ */
+export function trafficRubberTarget(playerSpeed: number, maxSpeed: number): number {
+  const t = Math.max(0, Math.min(1, playerSpeed / maxSpeed))
+  return TRAFFIC_RUBBER_MIN + t * (TRAFFIC_RUBBER_MAX - TRAFFIC_RUBBER_MIN)
+}
+/**
  * 出生安全窗口（世界单位，2026-08-05 运行时实测修复）：玩家出生点（z=0）前方该窗口内不生成车流，
  * 避免开局即「碰撞 ×1」/静止时被连续撞击（见 docs/reports/research_report_runtime_visual_auto.md 问题 1）。
  * 仅游戏运行时（track-context）启用；createTraffic 缺省 0 保持旧行为与 bot 基线确定性不变。
@@ -86,9 +102,12 @@ export function updateTraffic(
   dt: number,
   lapLength: number,
   player?: { z: number; x: number },
+  speedFactor = 1,
 ): void {
   for (const car of traffic) {
-    car.z = (car.z + car.speed * dt) % lapLength
+    // M23 方案 13：橡皮筋动态难度——speedFactor 缺省 1 时行为与旧版逐字节一致
+    // （simulate/bot 确定性不破坏）；传入时车流按系数提速/减速（避让/恢复逻辑不受影响）
+    car.z = (car.z + car.speed * speedFactor * dt) % lapLength
     if (!player) {
       continue
     }

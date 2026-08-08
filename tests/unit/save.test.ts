@@ -20,6 +20,19 @@ import {
   loadMatchTop,
   MATCH_TOP_KEY,
   SAVE_VERSION,
+  medalKeyFor,
+  loadMedal,
+  saveMedal,
+  ACHIEVEMENTS_KEY,
+  ACHIEVEMENT_ID_LIST,
+  loadAchievements,
+  unlockAchievement,
+  achievementProgress,
+  pruneDriftTop,
+  pruneMatchTop,
+  DAILY_KEY,
+  loadDaily,
+  saveDaily,
   type MatchEntry,
 } from '../../src/ui/save'
 
@@ -409,5 +422,170 @@ describe('版本化存档（R3：v 信封写入 + 旧裸格式兼容 + 迁移）
     expect(loadMatchTop(s)).toEqual([])
     s.setItem(winsKeyFor('split'), JSON.stringify({ v: SAVE_VERSION, data: { p1: 'x' } }))
     expect(loadWins('split', s)).toEqual({ p1: 0, p2: 0, streak: 0, streakPlayer: null })
+  })
+})
+
+describe('M27 优化：pruneDriftTop/pruneMatchTop 惰性清理无效 trackId', () => {
+  it('有无效 trackId 时清理并写回（返回清理后榜单）', () => {
+    const s = fakeStorage()
+    const valid = new Set(['classic', 'highway'])
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 100, time: 30 }, s)
+    // 模拟旧版本废弃赛道 id 残留
+    const stale = JSON.parse(s.getItem(DRIFT_TOP_KEY)!)
+    const data = (stale.data as unknown[]).concat([{ player: 'P1', trackId: 'old-track', score: 999, time: 10 }])
+    s.setItem(DRIFT_TOP_KEY, JSON.stringify({ v: SAVE_VERSION, data }))
+    const pruned = pruneDriftTop(valid, s)
+    expect(pruned).toHaveLength(1)
+    expect(pruned[0].trackId).toBe('classic')
+    // 写回清理后的榜单
+    const written = JSON.parse(s.getItem(DRIFT_TOP_KEY)!)
+    expect((written.data as unknown[]).map((e) => (e as { trackId: string }).trackId)).toEqual(['classic'])
+  })
+
+  it('全有效时零写回（返回原榜单）', () => {
+    const s = fakeStorage()
+    const valid = new Set(['classic'])
+    addDriftScore({ player: 'P1', trackId: 'classic', score: 100, time: 30 }, s)
+    const rawBefore = s.getItem(DRIFT_TOP_KEY)
+    const pruned = pruneDriftTop(valid, s)
+    expect(pruned).toHaveLength(1)
+    expect(s.getItem(DRIFT_TOP_KEY)).toBe(rawBefore) // 无无效条目不重写
+  })
+
+  it('match-top 同样清理无效 trackId（保留有效条目与顺序）', () => {
+    const s = fakeStorage()
+    const valid = new Set(['classic'])
+    s.setItem(
+      MATCH_TOP_KEY,
+      JSON.stringify({
+        v: SAVE_VERSION,
+        data: [
+          { winner: 'P1', p1Score: 10, p2Score: 5, trackId: 'classic' },
+          { winner: 'P2', p1Score: 8, p2Score: 20, trackId: 'removed-track' },
+        ],
+      }),
+    )
+    const pruned = pruneMatchTop(valid, s)
+    expect(pruned).toHaveLength(1)
+    expect(pruned[0].trackId).toBe('classic')
+  })
+
+  it('storage 不可用安全降级（返回空/内存结果不崩溃）', () => {
+    expect(pruneDriftTop(new Set(['classic']), null)).toEqual([])
+    expect(pruneMatchTop(new Set(['classic']), null)).toEqual([])
+  })
+})
+
+describe('M23 方案 7：赛道 S/A/B 奖牌存档', () => {
+  it('无存档时 loadMedal 返回 null', () => {
+    expect(loadMedal('classic', fakeStorage())).toBeNull()
+  })
+
+  it('首次 saveMedal 写入并返回 true，loadMedal 可读回', () => {
+    const s = fakeStorage()
+    expect(saveMedal('classic', 'S', s)).toBe(true)
+    expect(loadMedal('classic', s)).toBe('S')
+    expect(s.getItem(medalKeyFor('classic'))).toBe('S')
+  })
+
+  it('同档/更低档不覆盖（只升不降：S > A > B）', () => {
+    const s = fakeStorage()
+    saveMedal('classic', 'S', s)
+    expect(saveMedal('classic', 'A', s)).toBe(false)
+    expect(saveMedal('classic', 'S', s)).toBe(false)
+    expect(loadMedal('classic', s)).toBe('S')
+
+    // A 之上升 S 允许
+    const s2 = fakeStorage()
+    saveMedal('highway', 'B', s2)
+    expect(saveMedal('highway', 'S', s2)).toBe(true)
+    expect(loadMedal('highway', s2)).toBe('S')
+  })
+
+  it('无效存档值/JSON 损坏回退 null', () => {
+    const s = fakeStorage()
+    s.setItem(medalKeyFor('classic'), 'X')
+    expect(loadMedal('classic', s)).toBeNull()
+    s.setItem(medalKeyFor('classic'), 's')
+    expect(loadMedal('classic', s)).toBeNull()
+  })
+
+  it('storage 不可用安全降级（返回内存结果、不持久化）', () => {
+    expect(loadMedal('classic', null)).toBeNull()
+    expect(saveMedal('classic', 'S', null)).toBe(false)
+  })
+
+  it('各赛道奖牌 key 独立（不互相串扰）', () => {
+    const s = fakeStorage()
+    saveMedal('classic', 'S', s)
+    expect(loadMedal('highway', s)).toBeNull()
+  })
+})
+
+describe('M23 方案 6：成就解锁存档', () => {
+  it('无存档时 loadAchievements 返回空集', () => {
+    expect(loadAchievements(fakeStorage()).size).toBe(0)
+  })
+
+  it('unlockAchievement 首次解锁返回 true，幂等重复返回 false', () => {
+    const s = fakeStorage()
+    expect(unlockAchievement('first-boost', s)).toBe(true)
+    expect(unlockAchievement('first-boost', s)).toBe(false)
+    expect([...loadAchievements(s)]).toEqual(['first-boost'])
+  })
+
+  it('多个成就不重复、JSON 损坏回退空集', () => {
+    const s = fakeStorage()
+    unlockAchievement('first-boost', s)
+    unlockAchievement('combo-5', s)
+    const set = loadAchievements(s)
+    expect(set.size).toBe(2)
+    expect(set.has('first-boost')).toBe(true)
+    expect(set.has('combo-5')).toBe(true)
+    s.setItem(ACHIEVEMENTS_KEY, '{broken')
+    expect(loadAchievements(s).size).toBe(0)
+  })
+
+  it('achievementProgress 返回已解锁/总数', () => {
+    const s = fakeStorage()
+    expect(achievementProgress(s)).toEqual({ unlocked: 0, total: ACHIEVEMENT_ID_LIST.length })
+    unlockAchievement('first-boost', s)
+    expect(achievementProgress(s).unlocked).toBe(1)
+  })
+
+  it('storage 不可用安全降级', () => {
+    expect(loadAchievements(null).size).toBe(0)
+    expect(unlockAchievement('first-boost', null)).toBe(false)
+  })
+})
+
+describe('M28 方案 14：每日挑战存档', () => {
+  it('无存档时 loadDaily 返回 null；saveDaily 后可读回', () => {
+    const s = fakeStorage()
+    expect(loadDaily(s)).toBeNull()
+    saveDaily({ date: '2026-08-08', trackId: 'classic', done: true, streak: 3 }, s)
+    expect(loadDaily(s)).toEqual({ date: '2026-08-08', trackId: 'classic', done: true, streak: 3 })
+  })
+
+  it('字段校验：缺 date/trackId 回退 null；done/streak 非法回退默认', () => {
+    const s = fakeStorage()
+    s.setItem(DAILY_KEY, JSON.stringify({ v: 1, data: { trackId: 'classic', done: true } }))
+    expect(loadDaily(s)).toBeNull()
+    s.setItem(
+      DAILY_KEY,
+      JSON.stringify({ v: 1, data: { date: '2026-08-08', trackId: 'classic', done: 'x', streak: -2 } }),
+    )
+    expect(loadDaily(s)).toEqual({ date: '2026-08-08', trackId: 'classic', done: false, streak: 0 })
+  })
+
+  it('JSON 损坏回退 null', () => {
+    const s = fakeStorage()
+    s.setItem(DAILY_KEY, '{broken')
+    expect(loadDaily(s)).toBeNull()
+  })
+
+  it('storage 不可用安全降级', () => {
+    expect(loadDaily(null)).toBeNull()
+    saveDaily({ date: '2026-08-08', trackId: 'classic', done: true, streak: 1 }, null) // 不抛错
   })
 })

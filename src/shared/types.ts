@@ -12,6 +12,7 @@ import type { Segment } from '../engine/track'
 import type { Sprite } from '../engine/sprites'
 import type { TrackDef } from '../engine/tracks'
 import type { TrafficCar } from '../engine/traffic'
+import type { WeatherOverride } from '../engine/lighting'
 import type { PlayerState } from '../game/player-state'
 import type { Phase } from './phase'
 
@@ -74,4 +75,26 @@ export interface RaceState {
   countdownRemaining: number
   /** 结算面板是否已填充（避免重复写入记录） */
   finishShown: boolean
+  /**
+   * M23 方案 11：对局天气变体覆盖（URL `?weather=` 驱动；'auto' 缺省沿用三态时间循环）。
+   * 渲染（renderer 天气/雨滴 + 夜晚色板）、物理（雨天 wet）、雨声与成就判定共用同一真源。
+   */
+  weatherOverride: WeatherOverride
+  /**
+   * M28 方案 9：路线模式（OutRun 式分段递进 + 岔路）当前阶段 id。
+   * null = 非路线模式（单屏/分屏/热座/挑战沿用环形赛道跑圈）。
+   * 路线模式下每段复用一条赛道（TrackManager 已选），玩家跑完该段 1 圈
+   * （lapFromZ > totalLaps，totalLaps 由 GameLoop 段切换时强制 1）→ 段末岔路选择。
+   */
+  routeStageId: string | null
+  /** M28 方案 9：路线模式累计用时（秒）——段末累加当前段 raceTime，跨段持续累计（结算总用时） */
+  routeCumulativeTime: number
+  /** M28 方案 9：路线模式累计漂移得分（跨段持续累计，结算展示） */
+  routeCumulativeDriftScore: number
+  /** M28 方案 9：路线阶段总数（STAGE 指示 Y；startGame 设置，段切换不变） */
+  routeStageCount: number
+  /** M28 方案 9：当前阶段序号（STAGE 指示 X，从 1 起；段切换更新） */
+  routeStageIndex: number
+  /** M28 方案 9：当前阶段是否为终点（完赛判定：终点段跑满 1 圈即完赛；段切换更新） */
+  routeIsFinish: boolean
 }

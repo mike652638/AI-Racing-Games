@@ -1,4 +1,6 @@
 /** 最佳圈速存档（按赛道 ID 分 key，localStorage 不可用时安全降级；分屏 P2 用 -p2 后缀独立存档） */
+import type { MedalGrade } from '../shared/medal'
+import type { DailyState } from '../game/daily'
 
 const BEST_TIME_PREFIX = 'outrun-pseudo3d-best-'
 const BEST_DRIFT_PREFIX = 'outrun-pseudo3d-best-drift-'
@@ -10,6 +12,15 @@ export const WIN_STATS_PREFIX = 'outrun-pseudo3d-wins-'
 export const DRIFT_TOP_KEY = 'outrun-pseudo3d-drift-top'
 /** 排行榜最大条目数 */
 export const DRIFT_TOP_MAX = 10
+
+/** 赛道 S/A/B 奖牌存档 key 前缀（M23 方案 7：按赛道 id 分 key，只升不降） */
+export const MEDAL_PREFIX = 'outrun-pseudo3d-medal-'
+
+/** 成就解锁存档 key（M23 方案 6：id 数组，只增不减） */
+export const ACHIEVEMENTS_KEY = 'outrun-pseudo3d-achievements'
+
+/** 每日挑战存档 key（M28 方案 14：date/trackId/done/streak 信封，跨日轮换） */
+export const DAILY_KEY = 'outrun-pseudo3d-daily'
 
 /** 分屏漂移对局记录 TOP10 存档 key（最近 10 局，新局在头部） */
 export const MATCH_TOP_KEY = 'outrun-pseudo3d-match-top'
@@ -335,6 +346,36 @@ export function loadMatchTop(storage: Storage | null = getStorage()): MatchEntry
   return parseVersioned(storage, MATCH_TOP_KEY, migrateMatchTop) ?? []
 }
 
+/**
+ * M27 优化：惰性清理漂移榜单中的无效 trackId 条目（旧版本废弃赛道/被篡改的存档）——
+ * 仅当发现无效条目时才写回清理后的榜单（避免每次读取都写 localStorage），返回清理后的榜单供调用方直接渲染。
+ * validTrackIds 由调用方（game/top-refresh，已依赖 engine/tracks）传入，save 层不引入 engine 依赖。
+ */
+export function pruneDriftTop(
+  validTrackIds: ReadonlySet<string>,
+  storage: Storage | null = getStorage(),
+): DriftEntry[] {
+  const top = loadDriftTop(storage)
+  const pruned = top.filter((e) => validTrackIds.has(e.trackId))
+  if (pruned.length !== top.length) {
+    writeVersioned(storage, DRIFT_TOP_KEY, pruned)
+  }
+  return pruned
+}
+
+/** M27 优化：惰性清理对局记录中的无效 trackId 条目（同 pruneDriftTop 语义，仅发现无效条目时写回） */
+export function pruneMatchTop(
+  validTrackIds: ReadonlySet<string>,
+  storage: Storage | null = getStorage(),
+): MatchEntry[] {
+  const top = loadMatchTop(storage)
+  const pruned = top.filter((e) => validTrackIds.has(e.trackId))
+  if (pruned.length !== top.length) {
+    writeVersioned(storage, MATCH_TOP_KEY, pruned)
+  }
+  return pruned
+}
+
 /** 插入一局对局记录（最近 10 局语义）：新局插入数组头部（unshift）→ 截断 MATCH_TOP_MAX → 写回。
  *  entered = 新条目是否留在榜内（被挤出时为 false）；storage 不可用时仅返回内存榜单。 */
 export function addMatchResult(
@@ -346,4 +387,116 @@ export function addMatchResult(
   const truncated = top.slice(0, MATCH_TOP_MAX)
   writeVersioned(storage, MATCH_TOP_KEY, truncated)
   return { top: truncated, entered: truncated.includes(entry) }
+}
+
+// —— M23 方案 7：赛道 S/A/B 奖牌存档（按赛道 id 分 key，只升不降）——
+
+/** 生成赛道奖牌存档 key */
+export function medalKeyFor(trackId: string): string {
+  return MEDAL_PREFIX + trackId
+}
+
+/** 读取赛道奖牌等级；无存档/损坏返回 null */
+export function loadMedal(trackId: string, storage: Storage | null = getStorage()): MedalGrade | null {
+  if (!storage) {
+    return null
+  }
+  const raw = storage.getItem(medalKeyFor(trackId))
+  return raw === 'S' || raw === 'A' || raw === 'B' ? raw : null
+}
+
+/** 写入赛道奖牌等级；仅当更高档（S > A > B）时写入，返回是否升级 */
+export function saveMedal(trackId: string, grade: MedalGrade, storage: Storage | null = getStorage()): boolean {
+  if (!storage) {
+    return false
+  }
+  const current = loadMedal(trackId, storage)
+  // 仅升级：新档位不高于当前档位（同档或更低）则不覆盖（返回 false）
+  if (current !== null && gradeRank(grade) <= gradeRank(current)) {
+    return false
+  }
+  storage.setItem(medalKeyFor(trackId), grade)
+  return true
+}
+
+/** 奖牌等级权重：S=3 > A=2 > B=1（供只升不降比较） */
+function gradeRank(grade: MedalGrade): number {
+  return grade === 'S' ? 3 : grade === 'A' ? 2 : 1
+}
+
+// —— M23 方案 6：成就解锁存档（id 数组，只增不减）——
+
+/** 成就数组迁移解析：非数组/元素非字符串过滤，返回唯一 id 列表 */
+function migrateAchievements(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) {
+    return null
+  }
+  return [...new Set(raw.filter((e): e is string => typeof e === 'string'))]
+}
+
+/** 读取已解锁成就 id 集合（JSON 损坏/storage 不可用回退空集） */
+export function loadAchievements(storage: Storage | null = getStorage()): Set<string> {
+  return new Set(parseVersioned(storage, ACHIEVEMENTS_KEY, migrateAchievements) ?? [])
+}
+
+/** 解锁一个成就（幂等：已解锁返回 false）；返回是否本次新解锁。
+ *  storage 不可用时不持久化并返回 false（与 saveMedal 等写入 API 降级口径一致，
+ *  避免结算检测误报解锁但实际未存档）。 */
+export function unlockAchievement(id: string, storage: Storage | null = getStorage()): boolean {
+  if (!storage) {
+    return false
+  }
+  const unlocked = loadAchievements(storage)
+  if (unlocked.has(id)) {
+    return false
+  }
+  unlocked.add(id)
+  writeVersioned(storage, ACHIEVEMENTS_KEY, [...unlocked])
+  return true
+}
+
+/** 已解锁成就数量（供菜单「成就进度 X/N」展示） */
+export function achievementProgress(storage: Storage | null = getStorage()): { unlocked: number; total: number } {
+  return { unlocked: loadAchievements(storage).size, total: ACHIEVEMENT_ID_LIST.length }
+}
+
+/** 全部成就 id（与 copy.ts ACHIEVEMENTS 一一对应；总数供进度展示） */
+export const ACHIEVEMENT_ID_LIST: readonly string[] = [
+  'first-boost',
+  'perfect-boost',
+  'combo-5',
+  'near-miss-3',
+  'medal-s',
+  'rain-finish',
+  'night-finish',
+  'drift-score-2000',
+]
+
+// —— M28 方案 14：每日挑战存档（date/trackId/done/streak 信封）——
+
+/** 每日挑战存档迁移解析：字段校验（date 字符串、trackId 字符串、done/streak 数值），非法回退 null */
+function migrateDaily(raw: unknown): DailyState | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null
+  }
+  const o = raw as { date?: unknown; trackId?: unknown; done?: unknown; streak?: unknown }
+  if (typeof o.date !== 'string' || typeof o.trackId !== 'string') {
+    return null
+  }
+  return {
+    date: o.date,
+    trackId: o.trackId,
+    done: o.done === true,
+    streak: typeof o.streak === 'number' && Number.isFinite(o.streak) && o.streak > 0 ? o.streak : 0,
+  }
+}
+
+/** 读取每日挑战存档（JSON 损坏/storage 不可用回退 null；日期迁移到今日由 daily.ts rollDailyToToday 处理） */
+export function loadDaily(storage: Storage | null = getStorage()): DailyState | null {
+  return parseVersioned(storage, DAILY_KEY, migrateDaily)
+}
+
+/** 写入每日挑战存档（版本化信封；storage 不可用安全跳过） */
+export function saveDaily(state: DailyState, storage: Storage | null = getStorage()): void {
+  writeVersioned(storage, DAILY_KEY, state)
 }

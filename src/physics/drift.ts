@@ -4,6 +4,10 @@ import {
   DRIFT_SCORE_MAX,
   DRIFT_SPEED_FACTOR,
   DRIFT_STEER_THRESHOLD,
+  MINI_TURBO_CHARGE_LONG,
+  MINI_TURBO_CHARGE_SHORT,
+  MINI_TURBO_LONG_SECONDS,
+  MINI_TURBO_SHORT_SECONDS,
   SMOKE_LIFETIME,
 } from '../shared/constants'
 import type { CarConfig, CarInput, CarState } from './car'
@@ -16,6 +20,9 @@ export interface SmokeParticle {
   /** 存活时间（秒） */
   t: number
 }
+
+/** 漂移小喷（Mini-Turbo）火花等级：0 = 无 / 1 = 蓝火（短喷）/ 2 = 橙火（长喷） */
+export type TurboLevel = 0 | 1 | 2
 
 export interface DriftState {
   /** 漂移蓄力值（秒） */
@@ -30,11 +37,33 @@ export interface DriftState {
   combo: number
   /** 连击计时器（秒，仅 active 期间累积） */
   comboTimer: number
+  /** 漂移小喷剩余时长（秒，>0 时玩家物理层施加额外加速；释放漂移边沿触发） */
+  turbo: number
+  /** 本次小喷火花等级（1 蓝短喷 / 2 橙长喷，释放时按 peakCharge 档位设置） */
+  turboLevel: TurboLevel
+  /**
+   * 漂移期间蓄力峰值（秒，0-1）：active 期间取当前 charge 的最大值；
+   * 释放漂移边沿按该值判定小喷档位——直接读当前 charge 会因松转向后的衰减而误判为低档，
+   * 峰值蓄力才能正确反映"这段漂移攒了多少"（Mario Kart 火花等级同语义）。
+   * 可选字段（旧手工构造缺省视为 0，不触发小喷）；createDriftState 显式初始化 0。
+   */
+  peakCharge?: number
 }
 
-/** 新建初始漂移状态（含归零得分） */
+/** 新建初始漂移状态（含归零得分与小喷状态） */
 export function createDriftState(): DriftState {
-  return { charge: 0, active: false, lastSmoke: 0, smoke: [], score: 0, combo: 0, comboTimer: 0 }
+  return {
+    charge: 0,
+    active: false,
+    lastSmoke: 0,
+    smoke: [],
+    score: 0,
+    combo: 0,
+    comboTimer: 0,
+    turbo: 0,
+    turboLevel: 0,
+    peakCharge: 0,
+  }
 }
 
 const SPEED_RATIO_THRESHOLD = 0.5
@@ -73,6 +102,13 @@ export function updateDrift(
   scoreMultiplier = 1,
 ): DriftState {
   const next: DriftState = { ...drift }
+  // 小喷计时：每帧递减（释放触发后持续，归零自动停止；释放帧由下方边沿逻辑覆盖新值）
+  if (next.turbo > 0) {
+    next.turbo = Math.max(0, next.turbo - dt)
+    if (next.turbo === 0) {
+      next.turboLevel = 0
+    }
+  }
   const charging =
     Math.abs(input.steer) > DRIFT_STEER_THRESHOLD && state.speed > config.maxSpeed * SPEED_RATIO_THRESHOLD
 
@@ -97,10 +133,28 @@ export function updateDrift(
   if (next.active && !drift.active) {
     next.combo = 0
     next.comboTimer = 0
+    next.peakCharge = 0 // 新漂移段重置峰值蓄力
   }
   if (!next.active && drift.active) {
     next.combo = 0
     next.comboTimer = 0
+    // 漂移小喷（Mini-Turbo）：释放漂移边沿按本段蓄力峰值（peakCharge）档位触发一次短时加速——
+    // 峰值 ≥ MINI_TURBO_CHARGE_LONG → 橙火长喷，≥ SHORT → 蓝火短喷；不足不触发。
+    // 用峰值而非当前 charge 的原因：松转向后 charge 开始衰减，边沿帧的 charge 已偏低，
+    // 直接读它会把长时间漂移误判为低档；峰值正确反映"这段漂移攒了多少"（Mario Kart 火花等级同语义）。
+    const peak = drift.peakCharge ?? 0
+    if (peak >= MINI_TURBO_CHARGE_LONG) {
+      next.turbo = MINI_TURBO_LONG_SECONDS
+      next.turboLevel = 2
+    } else if (peak >= MINI_TURBO_CHARGE_SHORT) {
+      next.turbo = MINI_TURBO_SHORT_SECONDS
+      next.turboLevel = 1
+    }
+    next.peakCharge = 0
+  }
+  // 峰值蓄力维护：active 期间取当前 charge 的最大值（在释放边沿判定前累积）
+  if (next.active) {
+    next.peakCharge = Math.max(next.peakCharge ?? 0, next.charge)
   }
 
   next.lastSmoke += dt

@@ -28,7 +28,7 @@ import {
 import { drawPlayerCar } from './player-car'
 import type { TrafficCar } from './traffic'
 import type { SmokeParticle } from '../physics/drift'
-import { updateLighting, weatherPhaseAt, type LightingEnvironment } from './lighting'
+import { resolveWeatherPhase, updateLighting, type LightingEnvironment, type WeatherOverride } from './lighting'
 import { mulberry32 } from './scenery'
 import { getEnvironmentProfile } from './environment'
 import { DRAW_DISTANCE } from './road-geometry'
@@ -36,11 +36,21 @@ import { projectSmoke } from './smoke-render'
 import { renderRoadStripToCanvas, shadeColor, type RoadStrip } from './road-strip'
 import { projectTraffic } from './traffic-render'
 // 渲染关注点拆分模块（2026-08-05 renderer 瘦身：景物形状/屏幕特效/车流/地形/道路渲染各自独立）
-import { drawBoostVignette, drawCollisionVignette, drawSpeedLines } from './screen-effects'
+import {
+  drawBoostVignette,
+  drawCollisionVignette,
+  drawCollisionWhiteFlash,
+  drawDriftPopup,
+  drawMiniTurboFlash,
+  drawNearMissPulse,
+  drawPerfectBoostFlash,
+  drawSpeedLines,
+} from './screen-effects'
 import { NO_STRIP, renderRoadSurface, drawDistanceFog, type RoadSurfaceResources } from './road-surface'
 import { drawSingleTraffic } from './traffic-draw'
 import { drawCactus, drawLamp, drawPalm, drawSnowpile, drawTree } from './sprite-draw'
 import { drawTerrain } from './terrain-draw'
+import { drawGuideLine, drawRouteFork, type RouteFork } from './guide-line'
 
 export { DRAW_DISTANCE, EDGE_WIDTH, ROAD_HALF_WIDTH } from './road-geometry'
 
@@ -78,6 +88,22 @@ export interface RenderView {
   night?: boolean
   /** M17 环境场景（赛道级）：驱动天空/草地色相与远山配色；缺省 plains 与旧版一致 */
   environment?: LightingEnvironment
+  /** M23 方案 11：对局天气变体覆盖（'auto' 缺省沿用三态时间循环；'sunny'/'rain'/'night' 锁定变体） */
+  weatherOverride?: WeatherOverride
+  /** M23 方案 12：near-miss 速度线脉冲（0-1，frame-update 触发/衰减后写回；渲染段消费） */
+  nearMissPulse?: number
+  /** M23 方案 12：完美氮气金色闪光（0-1，frame-update 触发/衰减后写回；渲染段消费） */
+  perfectBoostFlash?: number
+  /** M23 方案 12：漂移小喷蓝色闪光（0-1，frame-update 触发/衰减后写回；渲染段消费） */
+  miniTurboFlash?: number
+  /** M23 方案 12：漂移得分浮动飘字（帧更新生成/推进；渲染段在玩家车辆上方绘制） */
+  driftPopup?: { t: number; amount: number } | null
+  /** M28 方案 10：导航辅助线强度（0-1，?guide=1 开启；0 关闭不绘制，零 e2e 影响）。缺省 undefined 等价关闭 */
+  guideStrength?: number
+  /** M28 方案 9 深化：岔路选择分叉渲染参数（active 时绘制左/右分叉引导带；缺省 undefined 等价关闭） */
+  routeFork?: RouteFork
+  /** M28 方案 9 三次打磨：分叉淡入动画进度（0-1，缺省 1 完全显示；淡入期间 <1） */
+  routeForkAlpha?: number
   /** BOOST 尾焰粒子（H2：game 层维护、渲染层投影，缺省无粒子） */
   boostParticles?: BoostParticle[]
   /** M8：当前玩家速度比（speed / maxSpeed），用于速度线 alpha 与显示阈值 */
@@ -423,11 +449,13 @@ export class Renderer {
       this.mountainsNight = this.buildMountains(this.opts.width, env.mountainFarNight, env.mountainNearNight)
     }
     // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
-    // R6 收敛：phase 判定走 lighting.weatherPhaseAt 单一真源（与 frame-update 雨声/雨天物理同公式）
-    const phase = weatherPhaseAt(timeSec)
+    // R6 收敛：phase 判定走 lighting.resolveWeatherPhase 单一真源——M23 方案 11 支持对局天气变体
+    // 覆盖（view.weatherOverride 'sunny'/'rain'/'night' 锁定变体；'auto' 回退三态循环，与旧行为一致）
+    const phase = resolveWeatherPhase(view?.weatherOverride ?? 'auto', timeSec)
     const overcast = phase === 1
     const raining = phase === 2
-    // 夜晚模式（赛道级）：view.night 缺省 false；夜晚锁定色板 + 深色远山 + 车灯
+    // 夜晚模式：view.night（赛道级 timeOfDay === 'night' 或 M23 变体 'night' 强制）缺省 false；
+    // 夜晚锁定色板 + 深色远山 + 车灯
     const night = view?.night ?? false
     // M17：环境（缺省 plains 与旧版一致）驱动天空/草地色相
     const environment = view?.environment ?? 'plains'
@@ -462,12 +490,24 @@ export class Renderer {
       roadStrips: this.roadStrips,
     }
     renderRoadSurface(ctx, opts, this.camera, roadResources, v.track, baseIndex, baseZ, cameraZ, maxK, raining)
+    // M28 方案 10：导航辅助线——沿道路中心线投影的青色引导线（?guide=1 开启），
+    // 画在路面之上、车流/景物之下（贴路面引导，被前方车辆正确遮挡）；strength 0 时零绘制。
+    // 2026-08-08 实测修复：原在 drawWorldObjects 之后绘制导致引导线穿透前方车流车身（z-order）
+    if ((v.guideStrength ?? 0) > 0) {
+      drawGuideLine(ctx, opts, this.camera, v.track, v.curvePrefixSum, v.guideStrength ?? 0)
+    }
     // 景物 + 车流合并景深绘制（2026-08-05 z-order 修复）：旧版先画全部景物再画全部车流，
     // 远处车永远覆盖近处树/路灯（不合常理）；改为按 z 降序交错绘制，近者正确遮挡远者
     this.drawWorldObjects(cameraZ, opts, v, maxK, night)
     // 距离大气透视（2026-08-05 道路平滑化）：远端路面/景物/车流渐融天空雾色，
     // 消除远端密集分段条纹与平板感；画在世界物体之上、烟雾/玩家车之下（近处不受影响）
     drawDistanceFog(ctx, opts, colors.skyBottom)
+    // M28 方案 9 深化：岔路选择分叉渲染——左/右两条分叉引导带（routeFork.active 时绘制，
+    // 与 #route-choice 覆盖层同屏，视觉「前方分叉路」；非 active 零绘制不影响 e2e）。
+    // M28 方案 9 三次打磨：forkAlpha 逐帧淡入（routeForkAlpha 0→1，淡入期间分叉渐显）
+    if (v.routeFork?.active === true) {
+      drawRouteFork(ctx, opts, this.camera, v.track, v.curvePrefixSum, v.routeFork, v.routeForkAlpha ?? 1)
+    }
     if (!renderOpts?.skipSmoke) {
       this.drawSmoke(smoke, cameraZ, opts)
     }
@@ -497,10 +537,22 @@ export class Renderer {
       this.drawRain(timeSec, opts)
     }
     // M8：速度线（高速感）与 BOOST 金色 vignette（激活时）——最上层轻量特效
-    drawSpeedLines(ctx, opts, v.speedRatio ?? 0)
+    // M29 方案 12 二次打磨：BOOST 激活时速度线更长更亮 + 金色叠加（v.boosting 透传）
+    drawSpeedLines(ctx, opts, v.speedRatio ?? 0, v.boosting ?? false)
     drawBoostVignette(ctx, opts, v.boosting ?? false)
     // M16：碰撞红色 vignette——碰撞后屏幕边缘红闪，强度随速度比衰减
     drawCollisionVignette(ctx, opts, v.collisionFlash)
+    // M31 方案 12 三次打磨：碰撞白色闪帧——碰撞瞬间全屏白闪叠加红色 vignette（增强撞击感）
+    drawCollisionWhiteFlash(ctx, opts, v.collisionFlash)
+    // M23 方案 12：Game Feel 触发式强化——near-miss 脉冲线 / 完美氮气金闪 / 小喷蓝闪
+    // （均触发式短效，非触发帧 pulse/flash<=0 直接返回不绘制，不影响 e2e 天空像素断言）
+    drawNearMissPulse(ctx, opts, v.nearMissPulse)
+    drawPerfectBoostFlash(ctx, opts, v.perfectBoostFlash)
+    drawMiniTurboFlash(ctx, opts, v.miniTurboFlash)
+    // M23 方案 12：漂移得分浮动飘字（玩家车辆上方上浮渐隐；分屏用 viewX/viewW 定位本区域）
+    if (v.driftPopup) {
+      drawDriftPopup(ctx, opts, v.driftPopup, 0, opts.width)
+    }
   }
 
   /** 雨滴 overlay：双幅 drawImage 平铺离屏雨丝（最上层特效，忽略投影；
@@ -608,7 +660,13 @@ export class Renderer {
     }
   }
 
-  /** 单个景物投影绘制：中心线取相机相对累计曲率（与路面同坐标系），投影失败（相机后方）跳过 */
+  /** 夜间景物可见度提升因子：sprite 原色在 night=true 时调亮，避免与深暗背景融合 */
+  private static readonly NIGHT_SPRITE_BRIGHTEN = 1.25
+
+  private brightenForNight(color: string | undefined, night: boolean): string | undefined {
+    if (!night || color === undefined) return color
+    return shadeColor(color, Renderer.NIGHT_SPRITE_BRIGHTEN)
+  }
   private drawSpriteProjected(sprite: Sprite, opts: ProjectionOptions, v: RenderView, camCurve: number): void {
     const centerX = curveOffsetAtZ(v.track, v.curvePrefixSum, sprite.z) - camCurve
     const cx = centerX - this.camera.x
@@ -632,6 +690,7 @@ export class Renderer {
       sprite.kind,
       sprite.height * clampSpriteScale(bottom.scale, scaleLimit) * opts.height * 0.5,
     )
+    const night = v.night ?? false
     switch (sprite.kind) {
       case 'lamp':
         drawLamp(this.ctx, bottom.x, bottom.y, hpx)
@@ -639,8 +698,8 @@ export class Renderer {
       case 'cactus': {
         // 仙人掌：矮柱 + 双臂，颜色随环境（沙漠灰绿）；scale 控制远处小仙人掌尺寸。
         // M18：按投影 scale 远近两档明暗——远档 shadeColor×0.8 偏暗冷（降饱和感）、近档原色；
-        // treeColor 缺省时透传 undefined（drawCactus 内部回退默认色）
-        const baseColor = sprite.treeColor
+        // M20 验证优化：夜间整体调亮，避免与深暗背景融合
+        const baseColor = this.brightenForNight(sprite.treeColor, night)
         const cactusColor =
           baseColor !== undefined && bottom.scale < CACTUS_SHADE_SCALE_THRESHOLD
             ? shadeColor(baseColor, CACTUS_SHADE_FACTOR)
@@ -650,16 +709,38 @@ export class Renderer {
       }
       case 'palm':
         // 棕榈：弯曲树干 + 扇形冠（热带海岛/海岸）；rotation 随机化弯曲方向
-        drawPalm(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight, sprite.rotation)
+        drawPalm(
+          this.ctx,
+          bottom.x,
+          bottom.y,
+          hpx,
+          this.brightenForNight(sprite.treeColor, night),
+          this.brightenForNight(sprite.treeColorLight, night),
+          sprite.rotation,
+        )
         break
       case 'snowpile':
         // 雪堆：圆顶 + 树冠覆雪（山岳冷色）
-        drawSnowpile(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+        drawSnowpile(
+          this.ctx,
+          bottom.x,
+          bottom.y,
+          hpx,
+          this.brightenForNight(sprite.treeColor, night),
+          this.brightenForNight(sprite.treeColorLight, night),
+        )
         break
       case 'tree':
       default:
         // M17：环境树色由 sprite 携带（createRoadsideSprites 按 environment 注入），缺省回退内置色
-        drawTree(this.ctx, bottom.x, bottom.y, hpx, sprite.treeColor, sprite.treeColorLight)
+        drawTree(
+          this.ctx,
+          bottom.x,
+          bottom.y,
+          hpx,
+          this.brightenForNight(sprite.treeColor, night),
+          this.brightenForNight(sprite.treeColorLight, night),
+        )
         break
     }
   }

@@ -176,4 +176,21 @@ describe('BOOST 氮气加速（G4）', () => {
     updateCar(1, { throttle: 1, brake: false, steer: 0, boost: true }, s2, config)
     expect(s2.speed).toBeCloseTo(115, 6)
   })
+
+  it('完美氮气（perfectBoost=true）加速度倍率更高（0.72 vs 0.6）', () => {
+    // 同一速度起点：普通 boost 与 perfect boost 单帧增量不同（加速度倍率差 20%）
+    const s1 = state(0, 0)
+    const s2 = state(0, 0)
+    updateCar(1, { throttle: 0, brake: false, steer: 0, boost: true }, s1, config)
+    updateCar(1, { throttle: 0, brake: false, steer: 0, boost: true, perfectBoost: true }, s2, config)
+    expect(s2.speed).toBeGreaterThan(s1.speed)
+    expect(s1.speed).toBeCloseTo(config.acceleration * 0.6, 6)
+    expect(s2.speed).toBeCloseTo(config.acceleration * 0.72, 6)
+  })
+
+  it('perfectBoost 不影响速度上限（仍钳制 1.15×maxSpeed）', () => {
+    const s = state(0, 115)
+    updateCar(1, { throttle: 0, brake: false, steer: 0, boost: true, perfectBoost: true }, s, config)
+    expect(s.speed).toBeCloseTo(115, 6)
+  })
 })

@@ -99,8 +99,8 @@ export class Minimap {
     this.roundRectPath(ctx, 0, 0, w, h, 10)
     ctx.fill()
 
-    // 赛道轨迹线（半透明白）
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
+    // 赛道轨迹线（半透明白；M20 验证后从 0.35 提升到 0.45，改善暗色环境可见度）
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)'
     ctx.lineWidth = 3
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'

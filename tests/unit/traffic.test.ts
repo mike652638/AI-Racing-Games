@@ -2,7 +2,10 @@ import { describe, expect, test } from 'vitest'
 import {
   collideWithPlayer,
   createTraffic,
+  TRAFFIC_RUBBER_MAX,
+  TRAFFIC_RUBBER_MIN,
   TRAFFIC_SPAWN_SAFE_ZONE,
+  trafficRubberTarget,
   updateTraffic,
   type TrafficCar,
 } from '../../src/engine/traffic'
@@ -85,6 +88,44 @@ describe('updateTraffic', () => {
     const car: TrafficCar = { z: 19800, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0, cruiseOffset: 0.7 }
     updateTraffic([car], 1, 20000)
     expect(car.z).toBeCloseTo(1000, 6)
+  })
+  test('M23 方案 13：speedFactor 缺省 1 与旧版逐字节一致（确定性零破坏）', () => {
+    const car: TrafficCar = { z: 100, offset: 0.6, speed: 1200, colorIndex: 0, shiftDir: 0, cruiseOffset: 0.6 }
+    updateTraffic([car], 0.5, 20000)
+    expect(car.z).toBeCloseTo(700, 6)
+    expect(car.offset).toBe(0.6)
+  })
+  test('M23 方案 13：speedFactor 传参加速推进（z = speed * factor * dt）', () => {
+    const car: TrafficCar = { z: 100, offset: 0.7, speed: 1200, colorIndex: 0, shiftDir: 0, cruiseOffset: 0.7 }
+    updateTraffic([car], 0.5, 20000, undefined, 1.2)
+    expect(car.z).toBeCloseTo(820, 6)
+  })
+  test('M23 方案 13：speedFactor 不影响避让/恢复逻辑（offset 与 shiftDir 同旧行为）', () => {
+    const car: TrafficCar = { z: 100, offset: 0.6, speed: 1200, colorIndex: 0, shiftDir: 0, cruiseOffset: 0.6 }
+    const player = { z: 0, x: 0.5 }
+    updateTraffic([car], 0.05, 20000, player, 1.15)
+    // 避让：target=-0.85，步进 0.8*0.05=0.04/帧
+    expect(car.offset).toBeCloseTo(0.56, 6)
+    expect(car.shiftDir).toBe(-1)
+  })
+})
+
+describe('M23 方案 13：trafficRubberTarget 橡皮筋目标系数', () => {
+  test('玩家全速（speed=maxSpeed）→ 车流提速至 MAX', () => {
+    expect(trafficRubberTarget(6000, 6000)).toBe(TRAFFIC_RUBBER_MAX)
+  })
+  test('玩家静止（speed=0）→ 车流减速至 MIN', () => {
+    expect(trafficRubberTarget(0, 6000)).toBe(TRAFFIC_RUBBER_MIN)
+  })
+  test('玩家半速 → 线性中值', () => {
+    const mid = TRAFFIC_RUBBER_MIN + 0.5 * (TRAFFIC_RUBBER_MAX - TRAFFIC_RUBBER_MIN)
+    expect(trafficRubberTarget(3000, 6000)).toBeCloseTo(mid, 6)
+  })
+  test('speed 超 maxSpeed 钳位到 MAX（不越界）', () => {
+    expect(trafficRubberTarget(99999, 6000)).toBe(TRAFFIC_RUBBER_MAX)
+  })
+  test('speed 为负钳位到 MIN（不越界）', () => {
+    expect(trafficRubberTarget(-100, 6000)).toBe(TRAFFIC_RUBBER_MIN)
   })
 })
 

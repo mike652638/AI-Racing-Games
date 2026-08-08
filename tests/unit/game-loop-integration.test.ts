@@ -74,7 +74,12 @@ function createAudioNode(): {
   connect: () => unknown
   type: string
   buffer: unknown
-  frequency: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void }
+  frequency: {
+    value: number
+    setTargetAtTime: () => void
+    setValueAtTime: () => void
+    linearRampToValueAtTime: () => void
+  }
   detune: { value: number }
   Q: { value: number }
   gain: {
@@ -82,6 +87,7 @@ function createAudioNode(): {
     setTargetAtTime: () => void
     setValueAtTime: () => void
     exponentialRampToValueAtTime: () => void
+    linearRampToValueAtTime: () => void
   }
   start: () => void
   stop: () => void
@@ -90,7 +96,12 @@ function createAudioNode(): {
     connect: (): unknown => node,
     type: '',
     buffer: null,
-    frequency: { value: 0, setTargetAtTime: (): void => undefined, setValueAtTime: (): void => undefined },
+    frequency: {
+      value: 0,
+      setTargetAtTime: (): void => undefined,
+      setValueAtTime: (): void => undefined,
+      linearRampToValueAtTime: (): void => undefined,
+    },
     detune: { value: 0 },
     Q: { value: 1 },
     gain: {
@@ -98,6 +109,7 @@ function createAudioNode(): {
       setTargetAtTime: (): void => undefined,
       setValueAtTime: (): void => undefined,
       exponentialRampToValueAtTime: (): void => undefined,
+      linearRampToValueAtTime: (): void => undefined,
     },
     start: (): void => undefined,
     stop: (): void => undefined,
@@ -107,9 +119,13 @@ function createAudioNode(): {
 
 interface Environment {
   fireKey: (code: string, shiftKey?: boolean) => void
+  /** P0：触发键盘松开事件（分屏测试开始后松开 Space 防 boost 恒激活） */
+  fireKeyUp: (code: string) => void
   driveFrames: (count: number) => void
   /** 驱动帧直到完赛（phase=finished）提前终止；maxFrames 仅为安全上限（2026-08-05 抗负载脆弱性） */
   driveUntilFinished: (maxFrames: number) => void
+  /** 驱动帧直到 routeChoosing=true（路线模式段末岔路触发）；maxFrames 安全上限 */
+  driveUntilChoice: (maxFrames: number) => void
   phase: () => Phase | undefined
   debugValue: (key: string) => unknown
   /** requestAnimationFrame 累计调度次数（完赛链断修复回归：ensureLoop 重启计数，2026-08-05） */
@@ -229,7 +245,11 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     createBufferSource = (): unknown => ({
       buffer: null,
       loop: false,
-      connect: (): void => undefined,
+      connect: (): { connect: (t: unknown) => { connect: (t: unknown) => void } } => ({
+        connect: (): { connect: (t: unknown) => void } => ({
+          connect: (): void => undefined,
+        }),
+      }),
       start: (): void => undefined,
       stop: (): void => undefined,
     })
@@ -252,6 +272,10 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
   /** 触发键盘事件；shiftKey 供分屏 P2 键位（Shift+1-5）测试，默认 false 兼容既有用例 */
   const fireKey = (code: string, shiftKey = false): void => {
     for (const cb of listeners.get('keydown') ?? []) cb({ code, shiftKey })
+  }
+  /** 触发键盘松开事件（P0：分屏测试开始后松开 Space 防 boost 恒激活——真实玩家按空格开始后会松开） */
+  const fireKeyUp = (code: string): void => {
+    for (const cb of listeners.get('keyup') ?? []) cb({ code, shiftKey: false })
   }
   /** 驱动 GameLoop 帧回调：固定 50ms/帧（dt 恒 0.05，虚拟时钟保证与机器负载无关） */
   const driveFrames = (count: number): void => {
@@ -276,6 +300,15 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
       if (phase() === PHASE_FINISHED) break
     }
   }
+  /** 驱动帧直到 routeChoosing=true（路线模式段末岔路触发；maxFrames 安全上限） */
+  const driveUntilChoice = (maxFrames: number): void => {
+    const frame = rafCallbacks[0] as FrameRequestCallback
+    for (let i = 0; i < maxFrames; i++) {
+      now += 50
+      frame(now)
+      if (debugValue('routeChoosing') === true) break
+    }
+  }
   /** 读取 window.__gameDebug 任意字段（installDebugHook 注入的运行时状态） */
   const debugValue = (key: string): unknown =>
     (windowStub as unknown as { __gameDebug?: Record<string, unknown> }).__gameDebug?.[key]
@@ -288,8 +321,10 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
 
   return {
     fireKey,
+    fireKeyUp,
     driveFrames,
     driveUntilFinished,
+    driveUntilChoice,
     phase,
     debugValue,
     rafCount: () => rafCallbacks.length,
@@ -594,6 +629,9 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       // 两玩家速度轨迹同步、两世界车流同 seed 同步推进 → 双完赛必然同一帧触发，
       // 首次 PHASE_FINISHED 填充时双方均已完成（driftWinner 按双完赛计算）。
       splitEnv.fireKey('Space')
+      // P0：开始后松开 Space（真实玩家按空格开始后松手）——测试环境 fireKey 只触发 keydown，
+      // 不松开会导致 P1 boost 键恒激活：near-miss 蓄能后 charge>0 意外触发 BOOST 加速、打破双人同步
+      splitEnv.fireKeyUp('Space')
       splitEnv.fireKey('KeyW')
       splitEnv.fireKey('ArrowUp')
       splitEnv.driveUntilFinished(700)
@@ -630,6 +668,9 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       splitEnv.fireKey('Digit7', true)
       // KeyW 驱动 P1、ArrowUp 驱动 P2 全油门零转向 → 双完赛
       splitEnv.fireKey('Space')
+      // P0：开始后松开 Space（真实玩家按空格开始后松手）——测试环境 fireKey 只触发 keydown，
+      // 不松开会导致 P1 boost 键恒激活：near-miss 蓄能后 charge>0 意外触发 BOOST 加速、打破双人同步
+      splitEnv.fireKeyUp('Space')
       splitEnv.fireKey('KeyW')
       splitEnv.fireKey('ArrowUp')
       splitEnv.driveUntilFinished(700)
@@ -1013,6 +1054,123 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     env.driveFrames(1000) // raceTime ≈ 150s → phase 0（晴）
     expect(env.debugValue('rainPlaying')).toBe(false)
   })
+
+  it('M23 方案 11：?weather=rain 固定雨天——开局 weatherOverride=rain，晴段雨声仍播放', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?weather=rain')
+    new GameLoop()
+    expect(env.debugValue('weatherMode')).toBe('rain')
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_RACING)
+    expect(env.debugValue('weatherOverride')).toBe('rain')
+    // 驱动 60 帧（raceTime ≈ 3s，时间循环仍晴段）——override 强制雨 → rainPlaying=true
+    env.driveFrames(60)
+    expect(env.debugValue('rainPlaying')).toBe(true)
+    // 继续驱动至时间循环雨段（raceTime ≈ 100s）——雨声保持
+    env.driveFrames(1900)
+    expect(env.debugValue('rainPlaying')).toBe(true)
+  })
+
+  it('M23 方案 11：?weather=sunny 固定晴天——雨段雨声不播放', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?weather=sunny')
+    new GameLoop()
+    env.fireKey('Enter')
+    expect(env.debugValue('weatherOverride')).toBe('sunny')
+    env.driveFrames(2000) // raceTime ≈ 100s → 时间循环雨段，但 override 强制晴
+    expect(env.debugValue('rainPlaying')).toBe(false)
+  })
+
+  it('M23 方案 11：?weather=random 骰子三选一——开局 override ∈ {sunny,rain,night}', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?weather=random')
+    new GameLoop()
+    expect(env.debugValue('weatherMode')).toBe('random')
+    env.fireKey('Enter')
+    const override = env.debugValue('weatherOverride')
+    expect(['sunny', 'rain', 'night']).toContain(override)
+  })
+
+  it('M23 方案 11：菜单天气徽章——?weather=night 显示「天气：夜晚」，auto 隐藏', () => {
+    // 每个 stubEnvironment 独立覆盖全局 document/window，故拆两次构造断言（不可混用同一测试内两个 env）
+    const weatherEnv = stubEnvironment('?weather=night')
+    new GameLoop()
+    const badge = weatherEnv.getElement('menu-weather-badge')
+    expect(badge.hidden).toBe(false)
+    expect(badge.textContent).toBe('天气：夜晚')
+  })
+
+  it('M23 方案 11：菜单天气徽章——默认（无 weather 参数）auto 模式隐藏', () => {
+    env = stubEnvironment('')
+    new GameLoop()
+    expect(env.getElement('menu-weather-badge').hidden).toBe(true)
+  })
+
+  it(
+    'M23 方案 13：缺省（无 traffic 参数）→ 车流橡皮筋开启，起步低速车流减速（trafficRubber<1）',
+    { timeout: SIM_TIMEOUT },
+    () => {
+      env = stubEnvironment('')
+      new GameLoop()
+      expect(env.debugValue('trafficDynamic')).toBe(true)
+      env.fireKey('Enter')
+      // 跨过起步倒计时冻结窗口（约 3.5s ≈ 70 帧，期间车流不推进/rubber 不更新）后，
+      // 起步静止 → 目标 MIN；再驱动数帧 rubber 收敛 < 1
+      env.driveFrames(80)
+      const rubber = env.debugValue('trafficRubber')
+      expect(rubber).toBeGreaterThanOrEqual(0.85)
+      expect(rubber).toBeLessThan(1)
+    },
+  )
+
+  it(
+    'M23 方案 13：?traffic=static → 车流固定速度（trafficDynamic=false，trafficRubber 恒 1）',
+    { timeout: SIM_TIMEOUT },
+    () => {
+      env = stubEnvironment('?traffic=static')
+      new GameLoop()
+      expect(env.debugValue('trafficDynamic')).toBe(false)
+      env.fireKey('Enter')
+      env.driveFrames(80)
+      expect(env.debugValue('trafficRubber')).toBe(1)
+    },
+  )
+
+  it('M23 方案 13：?traffic=dynamic 显式开启，全速行驶车流提速（trafficRubber>1）', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?traffic=dynamic')
+    new GameLoop()
+    expect(env.debugValue('trafficDynamic')).toBe(true)
+    env.fireKey('Enter')
+    env.fireKey('KeyW') // 全油门加速
+    env.driveFrames(300) // 跨过倒计时 + 加速至全速
+    expect(env.debugValue('trafficRubber')).toBeGreaterThan(1)
+  })
+
+  it('M28 方案 10：?guide=1 → guideStrength=0.8，缺省 0 关闭', () => {
+    const guideEnv = stubEnvironment('?guide=1')
+    new GameLoop()
+    expect(guideEnv.debugValue('guideStrength')).toBe(0.8)
+    // 缺省（无 guide 参数）→ 0
+    env = stubEnvironment('')
+    new GameLoop()
+    expect(env.debugValue('guideStrength')).toBe(0)
+  })
+
+  it('M28 方案 14：菜单每日挑战进度展示今日赛道与状态', () => {
+    env = stubEnvironment('')
+    new GameLoop()
+    const daily = env.debugValue('dailyState') as { date: string; trackId: string; done: boolean; streak: number }
+    expect(daily.date).toMatch(/^\d{4}-\d{2}-\d{2}$/) // YYYY-MM-DD
+    expect(daily.trackId.length).toBeGreaterThan(0)
+    expect(daily.done).toBe(false)
+    const el = env.getElement('daily-progress')
+    expect(el.textContent).toContain('今日挑战')
+    expect(el.textContent).toContain('连续 0 天')
+  })
+
+  it('M28 方案 14：?daily=0 关闭每日挑战（菜单不展示进度）', () => {
+    env = stubEnvironment('?daily=0')
+    new GameLoop()
+    const el = env.getElement('daily-progress')
+    expect(el.textContent).toBe('')
+  })
 })
 
 /**
@@ -1166,5 +1324,84 @@ describe('C+E 竖屏兼容（2026-08-05）：旋转遮罩可跳过 + portrait-mo
     // 点击「竖屏继续」仍能正常激活 portrait-mode（记忆失败仅影响下次会话重弹遮罩）
     env.fireElementEvent('rotate-play-portrait', 'click')
     expect(env.getBody().classList.toggle).toHaveBeenCalledWith('portrait-mode', true)
+  })
+})
+
+describe('M28 方案 9：路线模式（?route=）', () => {
+  const SIM_TIMEOUT = 30000
+  let env: Environment
+
+  beforeEach(() => {
+    env = stubEnvironment()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('?route=1 构造：mode-badge 显示路线名，route 模式徽章可见', () => {
+    const routeEnv = stubEnvironment('?route=1')
+    new GameLoop()
+    const badge = routeEnv.getElement('menu-mode-badge')
+    expect(badge.hidden).toBe(false)
+    expect(badge.textContent).toContain('路线模式')
+    expect(badge.textContent).toContain('经典之旅')
+  })
+
+  it('?route=classic-tour 按 id 解析：徽章显示对应路线名', () => {
+    const routeEnv = stubEnvironment('?route=classic-tour')
+    new GameLoop()
+    const badge = routeEnv.getElement('menu-mode-badge')
+    expect(badge.textContent).toContain('经典之旅')
+  })
+
+  it('?route= 无效 id 回退不启用（routeMode=false，徽章隐藏）', () => {
+    env = stubEnvironment('?route=not-a-route')
+    new GameLoop()
+    expect(env.getElement('menu-mode-badge').hidden).toBe(true)
+  })
+
+  it('?route=3 对应极限之旅（3 段岔路 + 终点 = 4 阶段）', () => {
+    const routeEnv = stubEnvironment('?route=3')
+    new GameLoop()
+    const badge = routeEnv.getElement('menu-mode-badge')
+    expect(badge.textContent).toContain('极限之旅')
+    expect(badge.textContent).toContain('4 段岔路')
+  })
+
+  it('startGame 初始化起始段：routeStageId/routeStageCount/routeStageIndex 置位', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?route=1')
+    new GameLoop()
+    env.fireKey('Enter')
+    expect(env.phase()).toBe(PHASE_RACING)
+    // 起始段 'a1'（经典之旅）、4 阶段、序号 1、非终点
+    expect(env.debugValue('routeStageId')).toBe('a1')
+    expect(env.debugValue('routeStageCount')).toBe(4)
+    expect(env.debugValue('routeStageIndex')).toBe(1)
+    expect(env.debugValue('routeIsFinish')).toBe(false)
+    expect(env.debugValue('routeChoosing')).toBe(false)
+    env.driveFrames(10)
+    expect(env.phase()).toBe(PHASE_RACING)
+  })
+
+  it('M31 方案 9 三次打磨：分叉淡入动画——初始 0、逐帧递增至 1', { timeout: SIM_TIMEOUT }, () => {
+    env = stubEnvironment('?route=1')
+    new GameLoop()
+    expect(env.debugValue('routeChoosing')).toBe(false)
+    // 跑完第一段触发岔路选择（经典赛道 1 圈，约 35s ≈ 700 帧；1400 帧安全上限）
+    env.fireKey('Enter')
+    env.fireKey('KeyW')
+    env.driveUntilChoice(1400)
+    expect(env.debugValue('routeChoosing')).toBe(true)
+    // 触发帧的帧循环已推进一次（dt×3.5 ≈ 0.175）：淡入刚开始（远小于 1）
+    const alphaAtStart = env.debugValue('routeForkAlpha') as number
+    expect(alphaAtStart).toBeGreaterThan(0)
+    expect(alphaAtStart).toBeLessThan(1)
+    // 淡入推进：30 帧后达到 1（约 0.3s ≈ 6 帧）
+    env.driveFrames(30)
+    expect(env.debugValue('routeForkAlpha')).toBe(1)
+    // 选择右路后清零
+    env.fireKey('KeyD')
+    expect(env.debugValue('routeChoosing')).toBe(false)
+    expect(env.debugValue('routeForkAlpha')).toBe(0)
   })
 })

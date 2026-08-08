@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { accountFinish, type FinishAccountingResult } from '../../src/game/finish-accounting'
 import { createModeStrategy, type ModeStrategy } from '../../src/game/mode-strategy'
 import { createRaceState, type RaceState } from '../../src/game/state'
-import { addDriftScore, addMatchResult, recordWin } from '../../src/ui/save'
+import { addDriftScore, addMatchResult, loadDaily, recordWin, saveDaily } from '../../src/ui/save'
 import type { TrackManager } from '../../src/game/track-manager'
 
 // 记账写入全部替换为 vi.fn（真实实现会写 localStorage）：断言"是否调用/调用参数"，
@@ -13,6 +13,14 @@ vi.mock('../../src/ui/save', () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addDriftScore: vi.fn((entry: any) => ({ top: [entry], entered: true })),
   addMatchResult: vi.fn(),
+  // M23 方案 7：奖牌存档 mock（真实实现会写 localStorage）
+  saveMedal: vi.fn(() => true),
+  // M23 方案 6：成就存档 mock（真实实现会写 localStorage）
+  loadAchievements: vi.fn(() => new Set<string>()),
+  unlockAchievement: vi.fn(() => true),
+  // M28 方案 14：每日挑战存档 mock（真实实现会写 localStorage）；默认返回今日未完成状态
+  loadDaily: vi.fn(() => null),
+  saveDaily: vi.fn(),
 }))
 
 /** 圈长 1000 × 3 圈、P1 赛道 classic / P2 赛道 highway 的 TrackManager 替身 */
@@ -78,6 +86,9 @@ beforeEach(() => {
 const mockedRecordWin = vi.mocked(recordWin)
 const mockedAddDriftScore = vi.mocked(addDriftScore)
 const mockedAddMatchResult = vi.mocked(addMatchResult)
+/** M28 方案 14：每日挑战存档 mock（测试内可注入可控状态） */
+const mockedLoadDaily = vi.mocked(loadDaily)
+const mockedSaveDaily = vi.mocked(saveDaily)
 
 describe('完赛标记 finishedP1/finishedP2', () => {
   test('SINGLE：P1 超圈完赛、P2 恒未完赛（即便 P2 cameraZ 超圈）', () => {
@@ -288,5 +299,99 @@ describe('F-3 driftRankP1 漂移榜名次（2026-08-05 审计）', () => {
     }))
     const r = call(makeRace({ p1CameraZ: 4000, p1Score: 100 }), SINGLE, { record: true })
     expect(r.driftRankP1).toBe(2)
+  })
+})
+
+describe('M28 方案 9：路线模式完赛判定与记账', () => {
+  const ROUTE = createModeStrategy({ splitMode: false, hotseatMode: false, challengeMode: false, routeMode: true })
+
+  test('终点段跑满 1 圈（routeIsFinish + lap>1）→ finishedP1=true；非终点段 → false', () => {
+    const finish = makeRace({ p1CameraZ: 1500 }) // lap 2 > 1
+    finish.routeStageId = 'c1'
+    finish.routeIsFinish = true
+    finish.routeStageCount = 4
+    finish.routeStageIndex = 4
+    expect(call(finish, ROUTE).finishedP1).toBe(true)
+
+    const mid = makeRace({ p1CameraZ: 1500 })
+    mid.routeStageId = 'a1'
+    mid.routeIsFinish = false
+    expect(call(mid, ROUTE).finishedP1).toBe(false)
+  })
+
+  test('非终点段即便 lap 超 1 圈也不完赛（段切换由 GameLoop 驱动）', () => {
+    const mid = makeRace({ p1CameraZ: 99999 })
+    mid.routeStageId = 'a1'
+    mid.routeIsFinish = false
+    expect(call(mid, ROUTE).finishedP1).toBe(false)
+  })
+
+  test('终点段但未跑满 1 圈 → 未完赛', () => {
+    const finish = makeRace({ p1CameraZ: 999 }) // lap 1 未完
+    finish.routeStageId = 'c1'
+    finish.routeIsFinish = true
+    expect(call(finish, ROUTE).finishedP1).toBe(false)
+  })
+
+  test('record=true 时累计跨段时间/得分，且不写漂移榜/奖牌/胜场', () => {
+    const race = makeRace({ p1CameraZ: 1500, p1Score: 200, p1RaceTime: 30 })
+    race.player1.nearMissScore = 50
+    race.routeStageId = 'c1'
+    race.routeIsFinish = true
+    race.routeCumulativeTime = 60 // 前段累计
+    race.routeCumulativeDriftScore = 100
+    const r = call(race, ROUTE, { record: true })
+    // 累计：前段 60 + 本段 30 = 90；得分 100 + (200 + 50) = 350
+    expect(race.routeCumulativeTime).toBe(90)
+    expect(race.routeCumulativeDriftScore).toBe(350)
+    expect(r.driftRankP1).toBe(0)
+    expect(r.winStats).toBeNull()
+    expect(mockedAddDriftScore).not.toHaveBeenCalled()
+    expect(mockedAddMatchResult).not.toHaveBeenCalled()
+  })
+})
+
+describe('M28 方案 14：每日挑战完成判定', () => {
+  /** 注入 daily 存档 mock 返回可控状态 */
+  const withDaily = (daily: { date: string; trackId: string; done: boolean; streak: number }): void => {
+    mockedLoadDaily.mockReturnValue(daily)
+  }
+
+  test('今日赛道 + P1 完赛 + record=true → dailyDoneToday=true', () => {
+    withDaily({ date: '2026-08-08', trackId: 'classic', done: false, streak: 0 })
+    const race = makeRace({ p1CameraZ: 4000 }) // 完赛
+    const r = call(race, SINGLE, { record: true })
+    expect(r.dailyDoneToday).toBe(true)
+    expect(mockedSaveDaily).toHaveBeenCalled()
+  })
+
+  test('赛道不匹配 → dailyDoneToday=false', () => {
+    withDaily({ date: '2026-08-08', trackId: 'highway', done: false, streak: 0 })
+    const race = makeRace({ p1CameraZ: 4000 }) // P1 赛道 classic ≠ 今日 highway
+    const r = call(race, SINGLE, { record: true })
+    expect(r.dailyDoneToday).toBe(false)
+  })
+
+  test('未完赛 → dailyDoneToday=false', () => {
+    withDaily({ date: '2026-08-08', trackId: 'classic', done: false, streak: 0 })
+    const race = makeRace({ p1CameraZ: 2999 }) // 未完赛
+    const r = call(race, SINGLE, { record: true })
+    expect(r.dailyDoneToday).toBe(false)
+  })
+
+  test('已完成的今日挑战 → 不再重复完成（幂等）', () => {
+    withDaily({ date: '2026-08-08', trackId: 'classic', done: true, streak: 4 })
+    const race = makeRace({ p1CameraZ: 4000 })
+    const r = call(race, SINGLE, { record: true })
+    expect(r.dailyDoneToday).toBe(false)
+    expect(mockedSaveDaily).not.toHaveBeenCalledWith(expect.objectContaining({ done: false }))
+  })
+
+  test('record=false → 不执行 daily 判定（纯展示调用）', () => {
+    withDaily({ date: '2026-08-08', trackId: 'classic', done: false, streak: 0 })
+    const race = makeRace({ p1CameraZ: 4000 })
+    const r = call(race, SINGLE, { record: false })
+    expect(r.dailyDoneToday).toBe(false)
+    expect(mockedSaveDaily).not.toHaveBeenCalled()
   })
 })

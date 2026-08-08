@@ -275,6 +275,32 @@ describe('updateBoostCharge（G4）', () => {
     expect(drain.charge).toBe(0)
     expect(drain.boost).toBe(true)
   })
+
+  test('完美氮气（P0）：激活边沿且 charge ≥ PERFECT_BOOST_MIN_CHARGE → perfect=true', () => {
+    // 0.85 ≥ 0.8，且 prevBoostActive=false（本帧激活边沿）
+    const r = updateBoostCharge(0.85, DT, true, false, false)
+    expect(r.boost).toBe(true)
+    expect(r.perfect).toBe(true)
+  })
+
+  test('完美氮气：charge 未达阈值 → perfect=false', () => {
+    const r = updateBoostCharge(0.5, DT, true, false, false)
+    expect(r.boost).toBe(true)
+    expect(r.perfect).toBe(false)
+  })
+
+  test('完美氮气：非激活边沿（上一帧已激活）→ perfect=false', () => {
+    // boost 持续帧：prevBoostActive=true → 不再判定 perfect（本次激活段的 perfect 由帧块基于 boostPerfect 保持）
+    const r = updateBoostCharge(0.85, DT, true, false, true)
+    expect(r.boost).toBe(true)
+    expect(r.perfect).toBe(false)
+  })
+
+  test('完美氮气：charge 达标但未按 boost → 不激活也不 perfect', () => {
+    const r = updateBoostCharge(0.85, DT, false, false, false)
+    expect(r.boost).toBe(false)
+    expect(r.perfect).toBe(false)
+  })
 })
 
 describe('PerformanceConfig（Task 8）', () => {

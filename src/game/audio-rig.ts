@@ -1,4 +1,12 @@
-import { BoostSound, CollisionSound, DriftSound, EngineSound, RainSound, TireSound } from '../audio/engine'
+import {
+  BoostSound,
+  CollisionSound,
+  DriftSound,
+  EngineSound,
+  NearMissSound,
+  RainSound,
+  TireSound,
+} from '../audio/engine'
 import { MusicPlayer } from '../audio/music'
 
 /**
@@ -18,6 +26,7 @@ export interface AudioRig {
   rainSound: RainSound
   collisionSound: CollisionSound
   boostSound: BoostSound
+  nearMissSound: NearMissSound
   driftSound: DriftSound
   tireSound: TireSound
 }
@@ -45,10 +54,11 @@ export function createAudioRig(ctx: AudioContext, volume: number, musicVolume: n
     sfxGain,
     engineSound,
     music,
-    // F4：雨声环境音与碰撞冲击音走音效分轨；H2：BOOST 氮气音效；M15：漂移摩擦/胎噪
+    // F4：雨声环境音与碰撞冲击音走音效分轨；H2：BOOST 氮气音效；P0：near-miss 贴身超车音效；M15：漂移摩擦/胎噪
     rainSound: new RainSound(ctx, sfxGain),
     collisionSound: new CollisionSound(ctx, sfxGain),
     boostSound: new BoostSound(ctx, sfxGain),
+    nearMissSound: new NearMissSound(ctx, sfxGain),
     driftSound: new DriftSound(ctx, sfxGain),
     tireSound: new TireSound(ctx, sfxGain),
   }

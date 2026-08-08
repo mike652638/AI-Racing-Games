@@ -62,7 +62,9 @@
       <div id="hud-time">0:00.000</div>
       <div id="drift-indicator" hidden>DRIFT! +<span id="drift-score-value">0</span></div>
       <div id="drift-combo" hidden>COMBO x1.00</div>
-      <div id="hud-collision" hidden>碰撞 ×0</div>
+      <!-- M27：碰撞与 NEAR MISS 计数合并展示（碰撞 ×N · 超车 ×M；任一项 >0 时由 updateHud 点亮） -->
+      <div id="hud-collision" hidden></div>
+      <div id="near-miss" hidden aria-hidden="true">NEAR MISS!</div>
       <div id="challenge-timer" hidden></div>
       <div id="challenge-score" hidden></div>
       <canvas id="hud-minimap" width="110" height="110" hidden></canvas>
@@ -76,6 +78,8 @@
       <div id="hud-lap-2">LAP 1/3</div>
       <div id="hud-time-2">0:00.000</div>
       <div id="hud-best-2" hidden>BEST 0:00.000</div>
+      <!-- 2026-08-08 实测修复：分屏 P2 独立 BOOST 条（frame-update 按 splitMode 更新 P2 蓄能） -->
+      <div id="boost-bar-2" hidden><div class="boost-fill"></div><span>BOOST</span></div>
     </div>
     <div id="rotate-hint">
       <div class="rotate-icon">⟳</div>
@@ -105,6 +109,7 @@
         </div>
         <p class="title-sub" aria-hidden="true">经典街机竞速 OUTRUN · 伪 3D 复刻</p>
         <div id="menu-mode-badge" hidden></div>
+        <div id="menu-weather-badge" hidden></div>
         <div id="track-select">
           <div class="track-option selected" id="track-option-0" tabindex="0" role="button" aria-pressed="true" aria-label="选择赛道 1：经典赛道">
             <span class="track-num" aria-hidden="true">1</span>
@@ -206,21 +211,39 @@
               <div class="lb-card-body" id="match-top">暂无对局记录</div>
             </div>
           </div>
+          <!-- M23 方案 6：成就进度（X/N，GameLoop 构造与回菜单时刷新） -->
+          <p class="achievement-progress" id="achievement-progress"></p>
+          <!-- M28 方案 14：每日挑战进度（今日赛道/完成状态/连续天数，GameLoop 构造与回菜单时刷新） -->
+          <p class="daily-progress" id="daily-progress"></p>
         </section>
       </div>
       <!-- 2026-08-06（菜单专项测试报告 P0-1）：开始按钮+提示移出 .menu-content 滚动容器，
            独立为 .menu-footer 固定底部层——根治 sticky 按钮吸底覆盖榜单卡的问题，
            同时保证内容超高滚动时主 CTA 始终保底可见 -->
       <div class="menu-footer">
-        <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
+        <!-- M29 菜单优化：操作提示移到开始按钮上方，避免按钮 hover 时光晕向下扩散覆盖提示 -->
         <p class="hint" id="menu-hint">空格键开始 · 1-9 / 方向键 切换赛道</p>
         <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 点击榜单可展开</p>
+        <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
       </div>
     </div>
     <!-- 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（放在 #start-screen 外面，避免被父元素 hidden 连带隐藏） -->
     <div id="countdown-overlay" hidden aria-live="polite">
       <div class="countdown-number"></div>
       <div class="countdown-hints"></div>
+    </div>
+    <!-- M28 方案 9：路线模式段末岔路选择覆盖层（跑完当前段 1 圈后显示，A/D 或 ←/→ 二选一；
+         选择后切换到下一段赛道，GameLoop 帧循环按 race.routeStageId 维护进度） -->
+    <div id="route-choice" hidden aria-live="polite">
+      <div class="route-choice-title"></div>
+      <div class="route-choice-stage"></div>
+      <div class="route-choice-options">
+        <button type="button" id="route-choice-left" class="route-choice-btn route-left" aria-label="选择左路"></button>
+        <button type="button" id="route-choice-right" class="route-choice-btn route-right" aria-label="选择右路"></button>
+      </div>
+      <!-- M28 方案 9 三次打磨：岔路阶段预览（下一段赛道难度星级 + 环境名；beginRouteChoice 填充） -->
+      <p class="route-choice-preview" id="route-choice-preview"></p>
+      <p class="route-choice-hint">按 A / D 或 ← / → 选择路线</p>
     </div>
     <div id="finish-screen" hidden>
       <div class="finish-bg" aria-hidden="true">
@@ -246,6 +269,10 @@
         <div class="finish-line finish-laps" id="finish-laps-2" hidden></div>
         <div class="finish-line finish-banner" id="finish-drift-winner" hidden></div>
         <div class="finish-line finish-stats" id="finish-wins" hidden></div>
+        <!-- M23 方案 6：结算新解锁成就展示（本局达成且首次解锁的成就徽章行，默认隐藏） -->
+        <div class="finish-line finish-achievements" id="finish-achievements" hidden></div>
+        <!-- M28 方案 14：结算今日挑战完成展示（本局完成每日挑战时显示，默认隐藏） -->
+        <div class="finish-line finish-daily" id="finish-daily" hidden></div>
         <div class="finish-line finish-hint" id="finish-hint" hidden></div>
         <button id="finish-restart-btn" class="btn-primary" type="button">回主菜单</button>
         <p class="hint finish-line finish-restart" id="finish-restart-hint">按 R 重新开始</p>

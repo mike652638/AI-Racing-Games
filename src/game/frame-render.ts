@@ -1,11 +1,31 @@
 import type { BoostParticle, Renderer, RenderOptions } from '../engine/renderer'
+import type { RouteFork } from '../engine/guide-line'
 import type { CarConfig } from '../physics/car'
 import { advancePreviewCameraZ, viewFor } from './frame-pure'
 import { PHASE_MENU, PHASE_RACING, type Phase } from './phase'
 import type { RaceState } from './state'
+import type { PlayerState } from './player-state'
 import type { TrackManager } from './track-manager'
 import { updateHud, type HudElements } from '../ui/hud'
 import { Minimap } from '../ui/minimap'
+
+/**
+ * M23 方案 12：Game Feel 特效透传辅助——从玩家状态抽取渲染段消费的触发式特效
+ * （near-miss 脉冲 / 完美氮气金闪 / 小喷蓝闪 / 漂移得分飘字），构造 viewFor 第 9 尾参。
+ */
+function gameFeelFor(player: PlayerState): {
+  nearMissPulse: number
+  perfectBoostFlash: number
+  miniTurboFlash: number
+  driftPopup: { t: number; amount: number; combo?: number } | null
+} {
+  return {
+    nearMissPulse: player.nearMissPulse,
+    perfectBoostFlash: player.perfectBoostFlash,
+    miniTurboFlash: player.miniTurboFlash,
+    driftPopup: player.driftPopup,
+  }
+}
 
 /**
  * 每帧渲染段纯函数（Task E 抽取自 game-loop.ts frame 方法「渲染段」）：
@@ -42,6 +62,12 @@ export interface FrameRenderContext {
   steer1: number
   /** 玩家实时转向输入（-1..1，P2；单屏/热座/菜单阶段传 0） */
   steer2: number
+  /** M28 方案 10：导航辅助线强度（0-1，?guide=1 开启；菜单预览缺省 0 不绘制） */
+  guideStrength: number
+  /** M28 方案 9 深化：岔路选择分叉渲染参数（routeChoosing 时由 GameLoop 计算传入；缺省 null 不绘制） */
+  routeFork?: RouteFork | null
+  /** M28 方案 9 三次打磨：分叉淡入动画进度（0-1，GameLoop 逐帧推进；缺省 0 完全透明） */
+  routeForkAlpha?: number
 }
 
 /** 每帧渲染段的结果：写回 GameLoop 的小地图引用（可能已重建） */
@@ -86,13 +112,33 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
     ctx.previewCameraZ[1] = advancePreviewCameraZ(ctx.previewCameraZ[1], dt, trackManager.getLapLength(1))
     // 相机横向小幅摆动，让预览即使在直道也有动感（以 P1 预览位置为准）
     renderer.setCameraX(Math.sin(ctx.previewCameraZ[0] * 0.001) * 0.3)
+    // M23 方案 11：菜单预览同步对局天气变体（rain/night 变体下预览即可预览雨丝/夜晚色板）
     if (ctx.splitMode) {
-      renderer.renderRegion(ctx.previewCameraZ[0], 0, w / 2, [], 0, viewFor(race.tracks[0]))
-      renderer.renderRegion(ctx.previewCameraZ[1], w / 2, w / 2, [], 0, viewFor(race.tracks[1]))
+      renderer.renderRegion(
+        ctx.previewCameraZ[0],
+        0,
+        w / 2,
+        [],
+        0,
+        viewFor(race.tracks[0], undefined, 0, false, 0, 0, undefined, race.weatherOverride),
+      )
+      renderer.renderRegion(
+        ctx.previewCameraZ[1],
+        w / 2,
+        w / 2,
+        [],
+        0,
+        viewFor(race.tracks[1], undefined, 0, false, 0, 0, undefined, race.weatherOverride),
+      )
       // 交界处深色分隔线：覆盖两区域近处路缘石交错瑕疵（标准分屏做法）
       renderer.drawDivider(w / 2)
     } else {
-      renderer.render(ctx.previewCameraZ[0], [], 0, viewFor(race.tracks[0]))
+      renderer.render(
+        ctx.previewCameraZ[0],
+        [],
+        0,
+        viewFor(race.tracks[0], undefined, 0, false, 0, 0, undefined, race.weatherOverride),
+      )
     }
   } else if (ctx.splitMode) {
     renderer.setCameraX(race.player1.carState.position)
@@ -102,7 +148,20 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player1.driftState.smoke,
       race.player1.raceTime,
-      viewFor(race.tracks[0], ctx.boostParticles, p1SpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
+      viewFor(
+        race.tracks[0],
+        ctx.boostParticles,
+        p1SpeedRatio,
+        boosting,
+        ctx.steer1,
+        ctx.collisionFlash,
+        undefined,
+        race.weatherOverride,
+        gameFeelFor(race.player1),
+        ctx.guideStrength,
+        ctx.routeFork ?? undefined,
+        ctx.routeForkAlpha ?? 1,
+      ),
       countdownOpts,
     )
     renderer.setCameraX(race.player2.carState.position)
@@ -112,7 +171,20 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       w / 2,
       race.player2.driftState.smoke,
       race.player2.raceTime,
-      viewFor(race.tracks[1], ctx.boostParticles, p2SpeedRatio, boosting, ctx.steer2, ctx.collisionFlash, 2),
+      viewFor(
+        race.tracks[1],
+        ctx.boostParticles,
+        p2SpeedRatio,
+        boosting,
+        ctx.steer2,
+        ctx.collisionFlash,
+        2,
+        race.weatherOverride,
+        gameFeelFor(race.player2),
+        ctx.guideStrength,
+        ctx.routeFork ?? undefined,
+        ctx.routeForkAlpha ?? 1,
+      ),
       countdownOpts,
     )
     // 交界处深色分隔线：两区域各自独立投影，近处路面宽度远超区域宽度被硬裁，
@@ -130,7 +202,20 @@ export function renderFrame(dt: number, ctx: FrameRenderContext): FrameRenderRes
       activePlayer.cameraZ,
       activePlayer.driftState.smoke,
       activePlayer.raceTime,
-      viewFor(activeTrack, ctx.boostParticles, activeSpeedRatio, boosting, ctx.steer1, ctx.collisionFlash),
+      viewFor(
+        activeTrack,
+        ctx.boostParticles,
+        activeSpeedRatio,
+        boosting,
+        ctx.steer1,
+        ctx.collisionFlash,
+        undefined,
+        race.weatherOverride,
+        gameFeelFor(activePlayer),
+        ctx.guideStrength,
+        ctx.routeFork ?? undefined,
+        ctx.routeForkAlpha ?? 1,
+      ),
       countdownOpts,
     )
   }
