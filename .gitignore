@@ -11,6 +11,10 @@ shots/
 # 结论已固化为 docs/reports/research_report_menu_testing_2026-08-06.md 等报告，截图不再入库）
 docs/menu-test/
 
+# 运行实测截图产物（2026-08-08 小米 13 Ultra 横屏专项 + 可玩性实测，agent-browser/Playwright 截图，
+# 结论已固化为 docs/reports/research_report_*.md 报告，截图不再入库）
+tests/screenshots/
+
 # IDE 上传图片目录（参考截图，非源码）
 image/
 
@@ -53,6 +57,11 @@ tests/visual/
 # 本地环境变量（可含部署密钥，不入库）
 .env
 .env.local
+
+# dev server 进程 PID 与测试输出临时文件（2026-08-08 添加）
+dev-server.pid
+vitest-*.txt
+vitest-gl.json
 
 # CodeBuddy 工作记忆与本地截图/临时输出（非源码）
 .codebuddy/

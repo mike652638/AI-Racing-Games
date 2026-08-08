@@ -9,7 +9,7 @@ Playwright 视觉回归目录（M16 引入）。通过 `npm run test:e2e`（`pla
 - **三 project 视口矩阵**：`desktop`（1280×720）、`mobile-landscape`（812×375）与 `large-screen`（1920×1080，M20 新增）各跑一遍全部用例；跨视口不适用的断言用 `test.skip` 条件守卫（如硬编码 720/1080/375 边界、移动端断言桌面跳过、桌面断言移动端跳过、大屏内容居中仅大屏跑），保证每个用例只在语义正确的视口下生效。
 - **DOM 几何断言**：`menuBoxes()` 通过 `page.evaluate` 读取 `.track-option`/`.title-main`/`.title-sub`/`#start-btn` 的 `getBoundingClientRect()`，以「矩形重叠检测」断言标题不叠影、按钮在视口内——直接锚定 P1-1/P1-2 修复，比截图比对更稳定（2026-08-06：`.menu-sun` 光晕元素已移除，原「光晕不遮挡卡片」用例改为「`.menu-sun` 不存在」回归断言）。
 - **canvas 像素级断言**：天空条纹用例用 `getImageData` 逐行扫描天空区域（画布上 35% 高度内）相邻像素 RGB 分量差的最大值，断言 `< 60`（修复前接近满量程 255），从渲染输出层面锚定 P0-1。
-- **文案同源断言**：倒计时提示用例读取 `#countdown-overlay .countdown-hints p` 全部文本，断言与 `src/ui/copy.ts` 常量逐字一致（`['WASD / 方向键 驾驶', '空格 氮气加速', '高速急转 自动漂移']`），防 README/运行时文案漂移。
+- **文案同源断言**：倒计时提示用例读取 `#countdown-overlay .countdown-hints p` 全部文本，断言与 `src/ui/copy.ts` 常量逐字一致（`['WASD / 方向键 驾驶', '空格 氮气加速', '高速急转 自动漂移']`），防 README/运行时文案漂移；**2026-08-08 触屏适配**——e2e 桌面/移动 project 均为无触屏媒体特性环境走键盘文案；触屏三态（键盘/单屏触屏 `COUNTDOWN_HINTS_TOUCH`/分屏触屏 `COUNTDOWN_HINTS_TOUCH_SPLIT`）由小米 13 Ultra 横屏专项 Playwright 脚本（matchMedia 触屏桩 + maxTouchPoints=10）实测断言。
 - **真实指针命中**：暂停按钮用例通过 Playwright `click`（真实指针命中）验证 `#pause-btn` 的 `pointer-events: auto` 覆写有效（防 #hud 的 `pointer-events:none` 被继承导致按钮点不动），并端到端走「点击 → 暂停屏 → 继续 → 恢复」流程。
 - **debug 钩子断言**：起步碰撞用例读取 `window.__gameDebug.collisions`（installDebugHook 注入的运行时状态），断言开赛 3.5s 内零碰撞——锚定 `TRAFFIC_SPAWN_SAFE_ZONE` 出生窗口排除 + `RACE_START_GRACE` 起步保护期修复。
 - **动画时序处理**：等待倒计时（3×800ms + 500ms 隐藏延迟）后再断言 RACING 阶段元素；移动端菜单断言前 `waitForTimeout(1_200)` 等待入场动画（content-fade-in 0.9s translateY）结束，避免布局偏移误判。
