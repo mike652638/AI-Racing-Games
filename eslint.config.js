@@ -17,8 +17,9 @@ export default tseslint.config(
     },
   },
   {
-    // bot CLI 脚本与视觉采集脚本（rt4-capture.mjs）依赖 console.log 输出报告/进度，属合理用法，豁免
-    files: ['tests/**/*.ts', 'tests/**/*.mjs'],
+    // bot CLI 脚本、视觉采集脚本（rt4-capture.mjs）与部署脚本（deploy-cloudbase.mjs）
+    // 依赖 console.log 输出报告/进度，属合理用法，豁免
+    files: ['tests/**/*.ts', 'tests/**/*.mjs', 'scripts/**/*.mjs'],
     rules: {
       'no-console': 'off',
     },

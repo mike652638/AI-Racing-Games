@@ -16,18 +16,27 @@ npm run preview    # 预览生产构建
 线上地址：<https://joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com/ai-racing-games/>
 
 ```bash
-npm run build                              # 类型检查 + 生产构建（dist/）
-# 将 dist/ 下全部文件上传至 CloudBase 静态托管 bucket 的 ai-racing-games/ 目录
-# （CloudBase AI 工具 uploadFiles：localPath=dist/xxx → cloudPath=ai-racing-games/xxx）
+npm run build       # 类型检查 + 生产构建（dist/）
+npm run deploy      # 上传 dist/ 至 CloudBase 静态托管 ai-racing-games/
+```
+
+部署脚本 `scripts/deploy-cloudbase.mjs` 基于官方 `@cloudbase/manager-node` 静态托管 API 逐文件上传（等价原「CloudBase AI 工具 uploadFiles」语义：localPath=dist/xxx → cloudPath=ai-racing-games/xxx），认证信息全部来自环境变量，**脚本不读写任何凭据文件**：
+
+```powershell
+$env:TCB_ENV_ID = 'joyful-d6glfqzna80c9f036'            # 云开发环境 ID
+$env:TENCENTCLOUD_SECRETID = '<你的 SecretId>'          # 腾讯云 API 密钥（控制台 cam/capi 获取）
+$env:TENCENTCLOUD_SECRETKEY = '<你的 SecretKey>'
+npm run deploy       # 也可指定目录：node scripts/deploy-cloudbase.mjs <localDir> <cloudPrefix>
 ```
 
 部署要点：
 
 - `vite.config.ts` 已设置 `base: './'`（相对路径）——静态托管部署在子目录 `ai-racing-games/` 下，绝对路径资源引用（`/assets/xxx`）会 404，相对路径任意子目录均可用
-- `index.html` 含 no-cache meta；发布后用 `?v=<date>` 加随机参数访问可绕过浏览器/CDN 缓存验证新版本
+- 上传内容含 PWA 全套（`sw.js`/`manifest.webmanifest`/图标）与微信分享卡 `share-card-v2.png`（og:image 引用完整 URL）；旧版本 hashed 资源残留不影响访问，可按需在控制台清理
+- `index.html` 含 no-cache meta；发布后用 `?v=<date>` 加随机参数访问可绕过浏览器/CDN 缓存验证新版本；菜单底部版本标签（copy.ts `APP_VERSION`）可直观确认线上版本
 - PWA `manifest` 的 `start_url`/`scope` 已用相对路径 `./`，与子目录部署兼容
 - CloudBase 环境：`joyful-d6glfqzna80c9f036`（ap-shanghai，静态托管域名 `joyful-d6glfqzna80c9f036-1252524693.tcloudbaseapp.com`）
-- 微信分享卡 `share-card-v2.png` 一并部署（og:image 引用完整 URL）
+- 安全：密钥仅注入当前终端会话环境变量，勿写入 `.env`/代码并入库；长期密钥建议用后轮换，或使用子账号临时密钥
 
 ## 测试与验证
 
