@@ -25,13 +25,13 @@ OutRun 伪 3D 复刻项目 —— 用于测试 OpenCode Win11 Desktop IDE v1.18.
 src/
   engine/       # 渲染层：伪3D投影、路面分段/几何、赛道数据（tracks.ts）、景物/精灵/车流/烟雾渲染、road-strip 离屏缓存、光照、环境配置（environment.ts）、玩家车渲染；景物形状（sprite-draw）、屏幕特效（screen-effects）、车流绘制（traffic-draw）、地形装饰（terrain-draw）、道路渲染（road-surface）为 2026-08-05 从 renderer.ts 拆分的关注点模块
   physics/      # 车辆运动学（car）、漂移（drift）、双人按键映射（input）
-  game/         # 游戏核心（29 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
-  shared/       # 独立共享层（2026-08-05 解环 game↔ui）：常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源，engine/physics/ui 直接导入
+  game/         # 游戏核心（38 文件）：GameLoop 主循环、帧更新/渲染纯函数、模式策略、结算统计、阶段 FSM、赛道上下文、碰撞、碰撞反馈（collision-feedback.ts）、圈数、音量、TOP 刷新、M34 下沉模块（game-params/menu-setup/route-choice/boost-feedback/track-cards/pause-controls）（constants/phase/phase-logic/lap 为 src/shared 的 re-export 兼容层）
+  shared/       # 独立共享层（2026-08-05 解环 game↔ui）：常量（constants）、阶段（phase/phase-logic）、圈数（lap）唯一真源，engine/physics/ui 直接导入；M34 加 timer（unrefSafeTimeout）
   ai/           # bot 决策器（bot）、圈速模拟器（simulate）
   ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）（阶段常量/类型直接导入 shared/phase；原 gamestate 兼容层 2026-08-05 已删除）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（56 文件 937 用例；连同 tests/bench 冒烟合计 57 文件 938 用例）
+  unit/         # Vitest 单测（63 文件 997 用例；连同 tests/bench 冒烟合计 64 文件 998 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
@@ -41,7 +41,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 架构要点
 
-- **纯函数领域层**：frame-update / frame-render / finish-accounting / frame-pure 为无副作用纯函数（状态进、状态/渲染指令出），game-loop.ts 仅做编排（M15 938→719 行，2026-08-06 实测 973 行）；mode-strategy 以策略对象封装单屏/分屏/挑战等模式的差异，避免大 if 分支。
+- **纯函数领域层**：frame-update / frame-render / finish-accounting / frame-pure 为无副作用纯函数（状态进、状态/渲染指令出），game-loop.ts 仅做编排（M15 938→719 行，2026-08-06 实测 973 行，M34 第二轮瘦身 1490→1133 行——game-params/menu-setup/route-choice/boost-feedback/track-cards/pause-controls 六模块下沉）；mode-strategy 以策略对象封装单屏/分屏/挑战等模式的差异，避免大 if 分支。
 - **常量唯一真源**：src/shared/constants 为全局共享常量层（如 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE；2026-08-05 由 game/constants 提升至独立共享层），engine/physics/ui 均直接导入，game 层保留 re-export 兼容层，无循环初始化问题。
 - **确定性生成**：赛道、车流等由确定性随机种子生成，9 赛道 bot 矩阵回归（0 违规）可复现。
 - **依赖方向（2026-08-05 已解环）**：原 game↔ui 受限双向环已消除——game/ 对 ui/ 为运行级调用（hud/screens/joystick/save/minimap）；ui/ 对 game/ 仅剩 **import type（RaceState/TrackContext，编译期擦除）**，其运行时依赖（常量 DRIFT_SCORE_MAX、CHALLENGE_TARGET_SCORE 与 phase/phase-logic/lap）已全部提升至 src/shared 并由 ui 直接导入；engine/physics 亦改直接依赖 src/shared/constants。依赖方向单向：engine/physics → shared；ui → shared + physics(type) + game(type only)；game → engine/physics/ui/shared。若未来进一步消除 ui 对 game 的类型级依赖（RaceState/TrackContext 类型提升），可 100% 解耦。
@@ -72,6 +72,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 22. **M21**：菜单沉浸感优化与部署修复（2026-08-07）——菜单修复批次（竖屏标题重叠归零/hover 预览联动/竖屏榜单默认收起/320 字号收敛/按钮 hover 光晕/榜单对比度）、赛道预览背景层（宽屏全屏赛道 SVG 背景 + 响应式降级 + 中央/背景双写联动）、菜单响应式布局修复（审计驱动：低高度桌面分支/移动横屏紧凑化/竖屏 rotate-hint 上移）、菜单整体感优化（#start-screen 背景叠加割裂修复）、静态托管子路径部署修复（vite base 相对路径 './'）；**M21 收尾（2026-08-08）**：部署可见版本号（copy.ts `APP_VERSION`/`APP_VERSION_DATE` + index.html meta app-version + `#app-version` 菜单标签 + `.version-tag` 样式 + copy.test 版本断言 4 用例）（✅ typecheck + lint + format:check + 938 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 40 通过 0 失败 + 8 视口条件跳过）
 23. **M22-M33**（2026-08-07/08 可玩性提升与实测修复系列，一次提交合并）：M22 near-miss 贴身超车/完美氮气/漂移小喷；M23 S/A/B 奖牌/8 项成就/挑战检查站；M24 随机天气变体 `?weather=`；M25 车流橡皮筋 `?traffic=`；M26 Game Feel 强化（飘字/脉冲线/闪光）；M27 运行时实测修复批次；M28/M28-b/M31/M32 OutRun 式路线模式 `?route=` 与导航引导线 `?guide=1`；M29 每日挑战 `?daily=`；M30 BOOST 速度线强化与飘字 combo 联动；M33 2026-08-08 运行实测修复 5 项（引导线 z-order/岔路提示间距/路灯双层光晕/分屏 P2 独立 BOOST 条/倒计时触屏提示适配）。各里程碑明细与验证记录见 README 里程碑表（✅ 每项经 typecheck + lint + test + bot + build + e2e 验证）
+24. **M34**：game-loop 第二轮瘦身（2026-08-15，1490→1133 行）——六组逻辑下沉为带单测的兄弟模块：`game-params.ts`（URL 模式解析纯函数：互斥判定/weather/traffic/guide/daily/route 解析集中）、`menu-setup.ts`（菜单静态装饰装配 applyMenuChrome，getElement 注入式）、`route-choice.ts`（路线模式集中化：initRouteRun/openRouteChoice/selectRouteBranch/routeAdvanceAction/advanceRouteForkAlpha/hideRouteChoiceOverlay——逻辑原散落 startGame/beginRouteChoice/chooseRouteBranch/frame/applyPhase 五处，收敛为单一真源）、`boost-feedback.ts`（BOOST 未蓄能红闪纯状态机 + 300ms 冷却窗口）、`track-cards.ts`（赛道卡构建 + nextGridTrackIndex 网格导航纯函数）、`pause-controls.ts`（三音量 slider/按钮/加载态注入式绑定）；另加 `shared/timer.ts` unrefSafeTimeout（收敛两处重复 unref 兼容 setTimeout）、`ui/screens.ts` applyPauseBranding（暂停标题按玩家标注 + 赛道名）/revealRacingTouchHint（触屏引导下沉）、`top-refresh.ts` refreshMenuBoard（构造器与回菜单两处同源刷新消重）；applyPhase 由 159 行瘦至 ~90 行；新增 7 个单测文件 60 用例（game-params 11/menu-setup 8/route-choice 17/screens-pause 5/boost-feedback 5/track-cards 7/pause-controls 7），行为逐字节等价（game-loop-integration 全链路回归锁定）；对外 API（initGame/re-export 兼容层）不变（✅ typecheck + lint + 998 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 40 通过 0 失败 + 8 视口条件跳过）
 
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
@@ -84,7 +85,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，57 文件 938 用例，含 tests/bench 冒烟），失败即修复
+- `/test`：`npm test`（vitest run，64 文件 998 用例，含 tests/bench 冒烟），失败即修复
 - `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375 + 大屏 1920×1080；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）

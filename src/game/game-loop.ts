@@ -1,34 +1,15 @@
 import { Renderer, type BoostParticle } from '../engine/renderer'
 import { createRoadsideSprites } from '../engine/sprites'
-import { getTrackDef, TRACK_DEFS } from '../engine/tracks'
-import {
-  getRouteDef,
-  getRouteStage,
-  ROUTE_DEFS,
-  routeBranches,
-  routeStageCount,
-  routeStageIndex,
-  type RouteDef,
-  type RouteStageDef,
-} from '../engine/routes'
+import { TRACK_DEFS } from '../engine/tracks'
+import { type RouteDef } from '../engine/routes'
 import { createCarConfig, type CarConfig } from '../physics/car'
 import { type HudElements } from '../ui/hud'
 import { JoystickUI, detectTouchPrimaryInput } from '../ui/joystick'
 import { TouchQuadrantInput } from '../ui/touch-quadrant'
 import { Minimap } from '../ui/minimap'
-import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
-import { loadBestTime, loadBestTimeFor, loadDaily, loadMedal } from '../ui/save'
-import {
-  COUNTDOWN_HINTS,
-  APP_VERSION,
-  APP_VERSION_DATE,
-  COUNTDOWN_HINTS_TOUCH,
-  COUNTDOWN_HINTS_TOUCH_SPLIT,
-  MEDAL_LABEL,
-  RACING_TOUCH_HINT,
-  SPLIT_TOUCH_HINT,
-  WEATHER_MODE_LABEL,
-} from '../ui/copy'
+import { applyPhaseToScreens, applyPauseBranding, revealRacingTouchHint, type ScreenElements } from '../ui/screens'
+import { loadBestTime, loadBestTimeFor, loadDaily } from '../ui/save'
+import { COUNTDOWN_HINTS, COUNTDOWN_HINTS_TOUCH, COUNTDOWN_HINTS_TOUCH_SPLIT } from '../ui/copy'
 import { rollDailyToToday, todayDateString } from './daily'
 import { createAudioRig, destroyAudioRig, type AudioRig } from './audio-rig'
 import type {
@@ -49,19 +30,26 @@ import { createRaceState, resetRaceState, type RaceState } from './state'
 import { refreshTraffic } from './track-context'
 import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
+import { parseGameParams } from './game-params'
+import { applyMenuChrome } from './menu-setup'
+import {
+  advanceRouteForkAlpha,
+  hideRouteChoiceOverlay,
+  initRouteRun,
+  openRouteChoice,
+  routeAdvanceAction,
+  selectRouteBranch,
+} from './route-choice'
+import { maybeTriggerBoostDeniedFlash } from './boost-feedback'
+import { buildTrackCards, nextGridTrackIndex } from './track-cards'
+import { bindPauseControls, setStartBtnLoading } from './pause-controls'
 import { lapFromZ } from './lap'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from './phase'
 import { nextPhase, togglePause } from './phase-logic'
-import { CHALLENGE_SECONDS, CHALLENGE_TARGET_SCORE, RACE_COUNTDOWN_SECONDS } from './constants'
+import { CHALLENGE_SECONDS, RACE_COUNTDOWN_SECONDS } from './constants'
 import type { WeatherOverride } from '../engine/lighting'
 import type { RouteFork } from '../engine/guide-line'
-import {
-  refreshAchievementProgress,
-  refreshBestSummary,
-  refreshDailyProgress,
-  refreshDriftTop,
-  refreshMatchTop,
-} from './top-refresh'
+import { refreshBestSummary, refreshDriftTop, refreshMatchTop, refreshMenuBoard } from './top-refresh'
 // rt4 批次：DOM 交互工具模块（监听清理经 onCleanup 契约登记）
 import { bindLeaderboardCards } from './leaderboard-cards'
 import { bindPortraitMode } from './portrait-mode'
@@ -71,16 +59,7 @@ import { accountFinish } from './finish-accounting'
 import { updateFrame } from './frame-update'
 import { renderFrame } from './frame-render'
 import { collectSteerInputs, createModeStrategy, type ModeStrategy } from './mode-strategy'
-import {
-  clampAndSyncGain,
-  loadMusicVolumeFromStorage,
-  loadSfxVolumeFromStorage,
-  loadVolumeFromStorage,
-  MUSIC_VOLUME_KEY,
-  persistVolume,
-  SFX_VOLUME_KEY,
-  VOLUME_KEY,
-} from './volume'
+import { loadMusicVolumeFromStorage, loadSfxVolumeFromStorage, loadVolumeFromStorage } from './volume'
 // Task D（Task D）：纯函数/常量/类型迁移至 frame-pure.ts——import 供本模块内部使用，
 // 同名 re-export 保持外部 'game-loop' import 路径与导出签名不变（isolatedModules：type 用 export type）
 import {
@@ -118,15 +97,8 @@ const MODIFIER_KEYS = [
   'MetaRight',
 ]
 
-/** 菜单方向键选赛道（3x3 网格：左右 ±1、上下 ±3） */
+/** 菜单方向键选赛道（3x3 网格导航方向键） */
 const ARROW_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
-
-/** 赛道难度星级文案（下标即难度；纯星级，title/aria-label 各自加"难度："前缀，2026-08-05 D-2 修复重复前缀） */
-const DIFFICULTY_HINT: Record<number, string> = {
-  1: '★☆☆',
-  2: '★★☆',
-  3: '★★★',
-}
 
 /**
  * 游戏主循环：迁移自 main.ts 的全部运行时职责——DOM 引用、初始化、
@@ -264,37 +236,18 @@ export class GameLoop {
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
-    const params = new URLSearchParams(window.location.search)
-    this.splitMode = params.has('split')
-    // Task 8（Task 8）：性能模式——显式降级渲染负载（?perf=1），与分屏不互斥（共存时性能档优先）
-    this._perfMode = params.has('perf')
-    this.hotseatMode = params.has('hotseat') && !this.splitMode
-    // G1（G1）：挑战模式——限时刷分（60 秒收束），与分屏/热座互斥
-    this.challengeMode = params.has('challenge') && !this.splitMode && !this.hotseatMode
-    // M23 方案 11：对局天气模式——?weather=random 每局骰子 / 固定变体 / 缺省 auto 时间循环
-    const weatherParam = params.get('weather')
-    this.weatherMode =
-      weatherParam === 'random' || weatherParam === 'sunny' || weatherParam === 'rain' || weatherParam === 'night'
-        ? weatherParam
-        : 'auto'
-    // M23 方案 13：车流橡皮筋动态难度——?traffic=static 关闭（固定车流速度，simulate/bot 确定性不变），
-    // 缺省 dynamic（运行时按玩家速度平滑调整车流巡航速度）
-    this.trafficDynamic = params.get('traffic') !== 'static'
-    // M28 方案 10：导航辅助线——?guide=1 开启（强度固定 0.8，新手辅助线亮度），缺省/0 关闭
-    this.guideStrength = params.get('guide') === '1' ? 0.8 : 0
-    // M28 方案 14：每日挑战——缺省启用；?daily=0 显式关闭（菜单进度/结算判定一并关闭）
-    this.dailyModeEnabled = params.get('daily') !== '0'
-    // M28 方案 9：路线模式——?route=<id|1|2|3>（数字为 ROUTE_DEFS 下标 1 基；缺省/无效 → null 不启用）。
-    // 与 split/hotseat/challenge 互斥（challenge 判定已排除 route 场景不冲突，此处显式 route 优先）。
-    const routeParam = params.get('route')
-    this.routeId =
-      routeParam !== null && !this.splitMode && !this.hotseatMode
-        ? (getRouteDef(routeParam)?.id ??
-          (routeParam === '1' || routeParam === '2' || routeParam === '3'
-            ? ROUTE_DEFS[Number(routeParam) - 1].id
-            : null))
-        : null
-    // Task E（Task E）：模式策略——互斥且 split 优先的判定已在上方完成，此处只接收已解析标志
+    // M34：URL 模式参数解析下沉 game-params.ts 纯函数（互斥判定与缺省回退集中于此，单测直接覆盖）
+    const params = parseGameParams(new URLSearchParams(window.location.search))
+    this.splitMode = params.splitMode
+    this._perfMode = params.perfMode
+    this.hotseatMode = params.hotseatMode
+    this.challengeMode = params.challengeMode
+    this.weatherMode = params.weatherMode
+    this.trafficDynamic = params.trafficDynamic
+    this.guideStrength = params.guideStrength
+    this.dailyModeEnabled = params.dailyModeEnabled
+    this.routeId = params.routeId
+    // Task E（Task E）：模式策略——互斥且 split 优先的判定已在 game-params 完成，此处只接收已解析标志
     this.mode = createModeStrategy({
       splitMode: this.splitMode,
       hotseatMode: this.hotseatMode,
@@ -305,55 +258,14 @@ export class GameLoop {
     this.volume = loadVolumeFromStorage()
     this.musicVolume = loadMusicVolumeFromStorage()
     this.sfxVolume = loadSfxVolumeFromStorage()
-    // 模式菜单提示（#menu-hint 由 index.html 提供）：文案下沉至 mode.menuHint（分屏/热座/挑战/单屏各一套）
-    const menuHint = document.getElementById('menu-hint')
-    if (menuHint) {
-      menuHint.textContent = this.mode.menuHint
-    }
-    // UX-3 修复（2026-08-05）：菜单模式徽章——分屏/热座/挑战模式显式标识，避免用户误认为单屏；
-    // 单屏模式保持隐藏（默认玩法无需标注）
-    const modeBadge = document.getElementById('menu-mode-badge')
-    if (modeBadge) {
-      if (this.mode.splitMode) {
-        modeBadge.hidden = false
-        modeBadge.textContent = '分屏模式 · 双人同屏'
-        modeBadge.className = 'mode-badge mode-split'
-      } else if (this.mode.hotseatMode) {
-        modeBadge.hidden = false
-        modeBadge.textContent = '热座模式 · 回合轮流'
-        modeBadge.className = 'mode-badge mode-hotseat'
-      } else if (this.mode.challengeMode) {
-        modeBadge.hidden = false
-        // M20 P3-4：徽章文案补目标分（CHALLENGE_TARGET_SCORE 真源 src/shared/constants）
-        modeBadge.textContent = `挑战模式 · ${CHALLENGE_SECONDS} 秒刷分 · 目标 ${CHALLENGE_TARGET_SCORE}`
-        modeBadge.className = 'mode-badge mode-challenge'
-      } else if (this.mode.routeMode && this.routeId !== null) {
-        // M28 方案 9：路线模式徽章——显示路线名 + 阶段数（3 条预设路线之一）
-        modeBadge.hidden = false
-        const route = getRouteDef(this.routeId)
-        modeBadge.textContent = `路线模式 · ${route?.name ?? '未知路线'} · ${routeStageCount(route ?? ROUTE_DEFS[0])} 段岔路`
-        modeBadge.className = 'mode-badge mode-route'
-      } else {
-        modeBadge.hidden = true
-      }
-    }
-    // M23 方案 11：菜单天气徽章——?weather=random/固定变体显式标识当前天气模式；
-    // auto（默认时间循环）保持隐藏（默认玩法无需标注，仿 mode-badge 语义）
-    const weatherBadge = document.getElementById('menu-weather-badge')
-    if (weatherBadge) {
-      const label = WEATHER_MODE_LABEL[this.weatherMode]
-      if (label !== undefined && this.weatherMode !== 'auto') {
-        weatherBadge.hidden = false
-        weatherBadge.textContent = `天气：${label}`
-        weatherBadge.className = 'mode-badge weather-badge'
-      } else {
-        weatherBadge.hidden = true
-      }
-    }
-    // UX-8 修复：分屏模式为 body 加类，启用 HUD P1/P2 侧标签（.hud-side-tag，CSS 控制显隐）
-    if (this.mode.splitMode && typeof document.body?.classList?.add === 'function') {
-      document.body.classList.add('split-mode')
-    }
+    // M34：菜单静态装饰装配（menu-hint/模式徽章/天气徽章/body 类/touch-hint/版本号）下沉 menu-setup.ts
+    applyMenuChrome({
+      mode: this.mode,
+      weatherMode: this.weatherMode,
+      routeId: this.routeId,
+      getElement: (id) => document.getElementById(id),
+      body: typeof document === 'object' ? document.body : null,
+    })
 
     this.canvas = $('game') as HTMLCanvasElement
 
@@ -366,10 +278,33 @@ export class GameLoop {
     }
     this.screenElements = collectScreenElements($)
     // P6（P6）：暂停菜单控件事件——音量 slider input → clamp+gain 同步+持久化；按钮 click → 阶段切换
-    // （Task D：闭包内联 volume.ts 纯函数，masterGain 未惰性创建时仅 clamp；元素缺失守卫式绑定）
-    this.bindPauseControls()
-    // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）
-    const trackOptions = this.buildTrackOptions($)
+    //（M34 下沉 pause-controls.ts bindPauseControls：元素/gain/音量 setter 经参数注入）
+    bindPauseControls({
+      screenElements: this.screenElements,
+      hudElements: this.hudElements,
+      getElement: (id) => document.getElementById(id),
+      onCleanup: (fn) => this.onCleanup(fn),
+      getPhase: () => this.phase,
+      applyPhase: (phase) => this.applyPhase(phase),
+      chooseRouteBranch: (dir) => this.chooseRouteBranch(dir),
+      getGain: (track) => (track === 'master' ? this.masterGain : track === 'music' ? this.musicGain : this.sfxGain),
+      setVolume: (track, v) => {
+        if (track === 'master') this.volume = v
+        else if (track === 'music') this.musicVolume = v
+        else this.sfxVolume = v
+        return v
+      },
+    })
+    // 赛道选项元素：按 TRACK_DEFS 数量动态构建（新增赛道只需 append 定义与对应 HTML 按钮）；
+    // M34 下沉 track-cards.ts buildTrackCards（星级/奖牌 DOM 构建与四类监听，回调注入式传递）
+    const trackOptions = buildTrackCards({
+      getElement: (id) => document.getElementById(id),
+      isMenuPhase: () => this.phase === PHASE_MENU,
+      onSelect: (i) => this.selectP1Track(i),
+      getPreviewIndex: () => this.previewTrackIndex,
+      onCleanup: (fn) => this.onCleanup(fn),
+      applyPreview: applyTrackPreview,
+    })
 
     // 赛道管理（依赖 resetRace 回调，均在构造完成后才使用）
     this.trackManager = new TrackManager({
@@ -407,168 +342,27 @@ export class GameLoop {
     // 赛道主题背景色（初始赛道 0）
     updateMenuBackground(0)
 
-    // M-9（菜单审计）：#touch-hint 文案改由 copy.ts 同源填充（原 index.html 硬编码已与
-    // RACING_TOUCH_HINT 漂移且无测试保护）；元素缺失时安全跳过。
-    // 2026-08-08 分屏文案修复：分屏不常驻右下角摇杆（U-4），统一摇杆文案误导
-    const touchHint = $('touch-hint')
-    if (touchHint) touchHint.textContent = this.mode.splitMode ? SPLIT_TOUCH_HINT : RACING_TOUCH_HINT
-
-    // 2026-08-08：菜单底部版本号（#app-version）由 copy.ts 填充，便于确认线上部署版本
-    //（APP_VERSION 已含 v 前缀，勿重复拼接）
-    const versionTag = $('app-version')
-    if (versionTag) versionTag.textContent = `${APP_VERSION} · ${APP_VERSION_DATE}`
-
     this.installDebugSinks()
 
     // C+E 竖屏兼容（2026-08-05）：「竖屏继续 / 横屏体验」按钮与 portrait-mode 状态
     bindPortraitMode((fn) => this.onCleanup(fn))
 
+    // M34：菜单板块整体刷新（漂移榜/BEST/对局榜/成就/每日进度；与回菜单共用 refreshMenuBoard）
+    refreshMenuBoard(this.dailyModeEnabled)
+    this.ensureLoop()
+
     // S 修复 S3：全局监听经清理函数登记（destroy() 时移除）
     window.addEventListener('keydown', this.onKeyDown)
     this.onCleanup(() => window.removeEventListener('keydown', this.onKeyDown))
     this.bindGlobalEvents()
-    // Task D：排行榜刷新迁移至 top-refresh.ts 独立函数（无 this 依赖）
-    refreshDriftTop()
-    refreshBestSummary()
-    refreshMatchTop()
-    // M23 方案 6：菜单成就进度刷新（构造时）
-    refreshAchievementProgress()
-    // M28 方案 14：菜单每日挑战进度刷新（构造时，含跨日滚动；?daily=0 关闭时清空元素）
-    if (this.dailyModeEnabled) {
-      refreshDailyProgress()
-    } else {
-      const dailyEl = document.getElementById('daily-progress')
-      if (dailyEl) dailyEl.textContent = ''
-    }
+    // M34：菜单板块整体刷新（漂移榜/BEST/对局榜/成就/每日进度；与回菜单共用 refreshMenuBoard）
+    refreshMenuBoard(this.dailyModeEnabled)
     this.ensureLoop()
-  }
-
-  /** 绑定暂停菜单控件事件：三个音量 slider + 重开/继续/触屏暂停按钮（守卫式，缺失元素跳过） */
-  private bindPauseControls(): void {
-    // 主音量 / 音乐分轨 / 音效分轨（P6 总控 + G7 分轨独立调节，仿 pauseVolume 模式）
-    this.bindVolumeSlider(
-      this.screenElements.pauseVolume,
-      'pause-volume-value',
-      VOLUME_KEY,
-      () => this.masterGain,
-      (v) => (this.volume = v),
-    )
-    this.bindVolumeSlider(
-      this.screenElements.pauseMusicVolume,
-      'pause-music-volume-value',
-      MUSIC_VOLUME_KEY,
-      () => this.musicGain,
-      (v) => (this.musicVolume = v),
-    )
-    this.bindVolumeSlider(
-      this.screenElements.pauseSfxVolume,
-      'pause-sfx-volume-value',
-      SFX_VOLUME_KEY,
-      () => this.sfxGain,
-      (v) => (this.sfxVolume = v),
-    )
-    this.bindPhaseButton(this.screenElements.pauseRestart, () => this.applyPhase(PHASE_MENU))
-    this.bindPhaseButton(this.screenElements.pauseQuit, () => this.applyPhase(PHASE_MENU))
-    // M19：结算屏返回主菜单按钮（触屏/鼠标可用）
-    this.bindPhaseButton(this.screenElements.finishRestartBtn, () => this.applyPhase(PHASE_MENU))
-    // M28 方案 9：岔路选择按钮（触屏/鼠标点击选择左右路线；守卫式绑定缺失元素跳过——
-    // 测试 stub 的 getElementById 对未知 id 返回通用 stub，addEventListener 缺失时跳过）
-    const routeLeftBtn = document.getElementById('route-choice-left')
-    const routeRightBtn = document.getElementById('route-choice-right')
-    if (routeLeftBtn && typeof routeLeftBtn.addEventListener === 'function') {
-      routeLeftBtn.addEventListener('click', () => this.chooseRouteBranch('left'))
-    }
-    if (routeRightBtn && typeof routeRightBtn.addEventListener === 'function') {
-      routeRightBtn.addEventListener('click', () => this.chooseRouteBranch('right'))
-    }
-    // F3（F3）：触屏暂停/恢复入口——#pause-btn 悬浮按钮进入暂停、#pause-resume「继续」按钮恢复
-    this.bindPhaseButton(this.hudElements.pauseBtn, () => this.applyPhase(togglePause(this.phase)))
-    this.bindPhaseButton(this.screenElements.pauseResume, () => this.applyPhase(togglePause(this.phase)))
   }
 
   /** 登记清理函数（destroy() 时执行；绑定监听/定时器一律经此登记，S3） */
   private onCleanup(fn: () => void): void {
     this.cleanups.push(fn)
-  }
-
-  /** 构建赛道选项元素（按 TRACK_DEFS 数量动态构建）：按钮文本 序号+名称+难度星级，点击等价键盘 1-9 */
-  private buildTrackOptions($: (id: string) => HTMLElement): HTMLDivElement[] {
-    const trackOptions = Array.from({ length: TRACK_DEFS.length }, (_, i) => $(`track-option-${i}`) as HTMLDivElement)
-    trackOptions.forEach((option, i) => {
-      const def = TRACK_DEFS[i]
-      // m4：优先写入结构化 .track-label（序号徽章 + 名称 + 星级 span），缺失时回退纯文本
-      const label = option.querySelector('.track-label')
-      const nameEl = label?.querySelector<HTMLElement>('.track-name')
-      const starsEl = label?.querySelector<HTMLElement>('.track-stars')
-      const text = `${i + 1} ${def.name} ${'★'.repeat(def.difficulty)}${'☆'.repeat(3 - def.difficulty)}`
-      if (nameEl && starsEl) {
-        nameEl.textContent = def.name
-        // M-4（菜单审计）：星级拆分 filled/empty 双 span——空星 ☆ 降不透明度（CSS .stars-empty），
-        // 难度一眼可辨；diff-N 色相编码与 aria-label 保持不变。
-        // innerHTML 收敛（2026-08-05 rt4 批次）：静态星级串改 DOM API 构建，零 HTML 注入面
-        starsEl.textContent = ''
-        const filled = document.createElement('span')
-        filled.className = 'stars-filled'
-        filled.textContent = '★'.repeat(def.difficulty)
-        const empty = document.createElement('span')
-        empty.className = 'stars-empty'
-        empty.textContent = '☆'.repeat(3 - def.difficulty)
-        starsEl.appendChild(filled)
-        starsEl.appendChild(empty)
-        // 星级颜色编码（diff-1 绿 / diff-2 金 / diff-3 粉红）+ 难度 title 提示
-        starsEl.className = `track-stars diff-${def.difficulty}`
-        starsEl.title = `难度：${DIFFICULTY_HINT[def.difficulty]}`
-        if (typeof starsEl.setAttribute === 'function') {
-          starsEl.setAttribute('aria-label', `难度：${DIFFICULTY_HINT[def.difficulty]}`)
-        }
-        // M23 方案 7：赛道已得奖牌（S/A/B）在星级后追加徽章（无奖牌不加，避免空 DOM）
-        const medal = loadMedal(def.id)
-        if (medal && typeof label?.appendChild === 'function') {
-          const medalEl = document.createElement('span')
-          medalEl.className = 'track-medal'
-          medalEl.textContent = MEDAL_LABEL[medal]
-          medalEl.title = `赛道奖牌 ${MEDAL_LABEL[medal]}`
-          label.appendChild(medalEl)
-        }
-      } else if (label) label.textContent = text
-      else option.textContent = text
-      // 菜单点击选赛道（触屏/鼠标均可）：等价于键盘 1-9；热座双人同步 P2 世界
-      const onClick = (): void => {
-        if (this.phase !== PHASE_MENU) return
-        this.selectP1Track(i)
-      }
-      option.addEventListener('click', onClick)
-      // 键盘可访问性：聚焦按钮上 Enter/Space 等效点击（菜单阶段）
-      const onKeyDown = (e: KeyboardEvent): void => {
-        if ((e.code === 'Enter' || e.code === 'Space') && this.phase === PHASE_MENU) {
-          e.preventDefault()
-          this.selectP1Track(i)
-        }
-      }
-      option.addEventListener('keydown', onKeyDown)
-      // P3-③（2026-08-06）：hover 预览联动——悬停某赛道卡临时预览该赛道，
-      // 移出（或悬停下方开始按钮）恢复显示当前选中赛道（previewTrackIndex 由 selectTrackFor 同步）
-      const onMouseEnter = (): void => {
-        if (this.phase !== PHASE_MENU) return
-        applyTrackPreview(i)
-      }
-      const onMouseLeave = (): void => {
-        if (this.phase !== PHASE_MENU) return
-        applyTrackPreview(this.previewTrackIndex)
-      }
-      option.addEventListener('mouseenter', onMouseEnter)
-      option.addEventListener('mouseleave', onMouseLeave)
-      // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-      this.onCleanup(() => {
-        option.removeEventListener('click', onClick)
-        option.removeEventListener('keydown', onKeyDown)
-        option.removeEventListener('mouseenter', onMouseEnter)
-        option.removeEventListener('mouseleave', onMouseLeave)
-      })
-    })
-    // 低优①：中央信息区赛道缩略图（controlPoints 积分生成 SVG 轨迹，初始显示 0 号赛道）
-    applyTrackPreview(0)
-    return trackOptions
   }
 
   /** 安装调试钩子（window.__gameDebug 运行时状态读取器，自动化验证脚本消费）。
@@ -630,10 +424,11 @@ export class GameLoop {
     if (startBtn) {
       const onStartClick = (): void => {
         if (this.phase !== PHASE_MENU || startBtn.classList.contains('loading')) return
-        this.setStartBtnLoading(startBtn, true)
+        // M34：加载态下沉 pause-controls.ts setStartBtnLoading
+        setStartBtnLoading(startBtn, true)
         this.startGame()
         // 短暂加载态后恢复（进入 RACING 后面板已隐藏，恢复仅影响返回菜单时）
-        window.setTimeout(() => this.setStartBtnLoading(startBtn, false), 600)
+        window.setTimeout(() => setStartBtnLoading(startBtn, false), 600)
       }
       startBtn.addEventListener('click', onStartClick)
       // S 修复 S3：监听经清理函数登记
@@ -649,74 +444,12 @@ export class GameLoop {
     this.resize()
   }
 
-  /** 开始按钮加载态：禁用点击 + 文案切换（dataset 缺失元素安全跳过） */
-  private setStartBtnLoading(btn: HTMLElement, loading: boolean): void {
-    btn.classList.toggle('loading', loading)
-    if (loading) {
-      if (typeof btn.dataset === 'object' && btn.dataset !== null) {
-        btn.dataset.originalText = btn.textContent ?? '开始游戏'
-      }
-      btn.textContent = '开始中…'
-    } else {
-      const original = typeof btn.dataset === 'object' && btn.dataset !== null ? btn.dataset.originalText : null
-      btn.textContent = original ?? '开始游戏'
-    }
-  }
-
   /**
    * 当前模式下的渲染降级参数（Task 8）：分屏/性能模式返回降级档位，默认全效。
    * 委托纯函数 resolvePerformanceConfig（单测直接覆盖该函数；GameLoop 依赖 DOM 不便实例化）。
    */
   getPerformanceConfig(): PerformanceConfig {
     return resolvePerformanceConfig(this.mode.splitMode, this._perfMode)
-  }
-
-  /**
-   * 同步暂停菜单滑块数值标签（P2：UI 层新增 #pause-*-value span，显示百分比整数）。
-   * 元素尚未由 UI 层添加时静默跳过（判空守卫），不抛错。
-   */
-  private syncVolumeLabel(slider: HTMLInputElement, labelId: string): void {
-    const label = document.getElementById(labelId)
-    if (label) {
-      label.textContent = `${Math.round(Number(slider.value))}%`
-    }
-  }
-
-  /**
-   * 绑定暂停菜单音量 slider（P6/G7）：input → clampAndSyncGain 同步对应分轨 gain → setValue 写回
-   * 音量字段 → persistVolume 持久化 → 同步数值标签；构造时初始同步一次。
-   * gain 惰性为 null 时 clampAndSyncGain 仅 clamp 不同步（与旧 setVolume 行为一致）。
-   */
-  private bindVolumeSlider(
-    slider: HTMLInputElement | undefined,
-    labelId: string,
-    volumeKey: string,
-    gain: () => GainNode | null,
-    setValue: (v: number) => number,
-  ): void {
-    if (!slider) {
-      return
-    }
-    const onInput = (): void => {
-      const v = setValue(clampAndSyncGain(Number(slider.value) / 100, gain()))
-      persistVolume(volumeKey, v)
-      this.syncVolumeLabel(slider, labelId)
-    }
-    slider.addEventListener('input', onInput)
-    // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-    this.onCleanup(() => slider.removeEventListener('input', onInput))
-    // P2（P2）：初始同步一次（UI 层 span 初始文本可能为空，保证与 slider 当前值一致）
-    this.syncVolumeLabel(slider, labelId)
-  }
-
-  /** 绑定暂停菜单按钮 click（重开/继续/触屏暂停；元素缺失守卫式跳过） */
-  private bindPhaseButton(btn: HTMLButtonElement | undefined, action: () => void): void {
-    if (!btn) {
-      return
-    }
-    btn.addEventListener('click', action)
-    // S 修复 S3：监听经清理函数登记（destroy() 时移除）
-    this.onCleanup(() => btn.removeEventListener('click', action))
   }
 
   /** 重置对局：清玩家状态与计数，重建双世界车流（渲染全部走 view 参数，renderer 不再持有车流引用）。
@@ -760,8 +493,7 @@ export class GameLoop {
       this.routeChoosing = false
       this.routeFork = null
       this.routeForkAlpha = 0
-      const routeOverlay = document.getElementById('route-choice')
-      if (routeOverlay) routeOverlay.hidden = true
+      hideRouteChoiceOverlay((id) => document.getElementById(id))
     }
     // 2026-08-05 音频修复：离开 RACING 时静音车相关持续音——完赛后 RAF 停摆、updateFrame 静音分支
     // 不再执行，引擎/胎噪/漂移/雨声会停在最后一帧状态形成持续蜂鸣/噪声；暂停保留雨声（环境音），
@@ -778,31 +510,16 @@ export class GameLoop {
     if (newPhase === PHASE_PAUSED) {
       this.joystick?.reset()
       this.touchQuadrant?.reset()
-      // P9：暂停标题按暂停玩家动态标注——分屏按最近活跃玩家（lastActivePlayer，触屏按钮无输入时默认 P1）、
-      // 热座按当前回合玩家（hotseatPlayer）、单屏保持通用 "PAUSED"；
-      // 配色类与 HUD P1/P2 标签风格一致（p1/p2 class，见 hud.ts hudPlayerTag）
-      const pauseTitle = this.screenElements.pauseTitle
-      if (pauseTitle) {
-        const pausedWho = this.mode.splitMode
-          ? this.lastActivePlayer
-          : this.mode.hotseatMode
-            ? this.hotseatPlayer
-            : null
-        if (pausedWho !== null) {
-          pauseTitle.textContent = pausedWho === 2 ? 'P2 已暂停' : 'P1 已暂停'
-          pauseTitle.classList.toggle('p1', pausedWho === 1)
-          pauseTitle.classList.toggle('p2', pausedWho === 2)
-        } else {
-          pauseTitle.textContent = 'PAUSED'
-        }
-      }
-      // 2026-08-05 P2-6：暂停画面显示当前赛道名（#pause-track-name），帮助玩家确认暂停的是哪条赛道
-      const pauseTrack = this.screenElements.pauseTrackName
-      if (pauseTrack) {
-        const trackId = this.trackManager.getTrackId(0)
-        const def = TRACK_DEFS.find((d) => d.id === trackId)
-        pauseTrack.textContent = def ? `赛道：${def.name}` : ''
-      }
+      // M34：暂停标题按暂停玩家动态标注 + 赛道名填充（下沉 ui/screens.ts applyPauseBranding）
+      const trackId = this.trackManager.getTrackId(0)
+      const trackDef = TRACK_DEFS.find((d) => d.id === trackId)
+      applyPauseBranding(this.screenElements, {
+        splitMode: this.mode.splitMode,
+        hotseatMode: this.mode.hotseatMode,
+        lastActivePlayer: this.lastActivePlayer,
+        hotseatPlayer: this.hotseatPlayer,
+        trackName: trackDef?.name ?? '',
+      })
     }
     const pauseBtn = this.hudElements.pauseBtn
     if (pauseBtn) {
@@ -898,18 +615,8 @@ export class GameLoop {
       this.countdownCancel = null
       // 菜单阶段隐藏虚拟摇杆（右下角圆环）
       this.updateJoystickVisibility(false)
-      refreshDriftTop()
-      refreshBestSummary()
-      refreshMatchTop()
-      // M23 方案 6：回菜单时刷新成就进度（本局可能有新解锁）
-      refreshAchievementProgress()
-      // M28 方案 14：回菜单时刷新每日挑战进度（本局可能完成挑战/跨日滚动；?daily=0 关闭时清空元素）
-      if (this.dailyModeEnabled) {
-        refreshDailyProgress()
-      } else {
-        const dailyEl = document.getElementById('daily-progress')
-        if (dailyEl) dailyEl.textContent = ''
-      }
+      // M34：菜单板块整体刷新（漂移榜/BEST/对局榜/成就/每日进度）
+      refreshMenuBoard(this.dailyModeEnabled)
     }
   }
 
@@ -972,10 +679,9 @@ export class GameLoop {
     // 是 P2 油门/转向（帧循环采集），菜单阶段复用无冲突
     if (this.phase === PHASE_MENU && ARROW_KEYS.includes(e.code)) {
       if (typeof e.preventDefault === 'function') e.preventDefault()
-      const cols = 3
+      // M34：3x3 网格导航目标计算下沉 track-cards.ts nextGridTrackIndex（左右 ±1、上下 ±3，越界 clamp）
       const cur = this.trackManager.getSelectedIndex(0)
-      const move = e.code === 'ArrowLeft' ? -1 : e.code === 'ArrowRight' ? 1 : e.code === 'ArrowUp' ? -cols : cols
-      const next = Math.min(TRACK_DEFS.length - 1, Math.max(0, cur + move))
+      const next = nextGridTrackIndex(e.code, cur, 3, TRACK_DEFS.length)
       if (next !== cur) {
         this.selectP1Track(next)
         const opt = document.getElementById(`track-option-${next}`)
@@ -1074,22 +780,15 @@ export class GameLoop {
         this.weatherMode === 'random'
           ? (['sunny', 'rain', 'night'] as const)[Math.floor(Math.random() * 3)]
           : this.weatherMode
-      // M28 方案 9：路线模式开局初始化——加载路线定义、置起始阶段、切换到起始段赛道并重置对局。
-      // 仅菜单阶段（真正开局）执行；RACING/FINISHED 兜底调用不重初始化（段切换由 routeStageAdvance 驱动）。
+      // M28 方案 9：路线模式开局初始化——加载路线定义、置起始阶段、切换到起始段赛道并重置对局
+      //（下沉 route-choice.ts initRouteRun）。仅菜单阶段（真正开局）执行；RACING/FINISHED 兜底
+      // 调用不重初始化（段切换由 routeStageAdvance 驱动）。
       if (this.mode.routeMode && this.routeId !== null) {
-        this.routeDef = getRouteDef(this.routeId)
-        if (this.routeDef) {
-          const startStage = getRouteStage(this.routeDef, this.routeDef.startStageId)
-          this.race.routeStageId = this.routeDef.startStageId
-          this.race.routeStageCount = routeStageCount(this.routeDef)
-          this.race.routeStageIndex = routeStageIndex(this.routeDef, this.routeDef.startStageId)
-          this.race.routeCumulativeTime = 0
-          this.race.routeCumulativeDriftScore = 0
-          // 起始段赛道：按 trackId 查 TRACK_DEFS 下标 → 切换赛道（触发 resetRace 与渲染缓存重建）
-          const trackIndex = TRACK_DEFS.findIndex((d) => d.id === startStage?.trackId)
-          if (trackIndex >= 0) {
-            this.selectTrackFor(0, trackIndex)
-          }
+        const { routeDef, startTrackIndex } = initRouteRun(this.routeId, this.race)
+        this.routeDef = routeDef
+        if (startTrackIndex >= 0) {
+          // 起始段赛道：切换赛道（触发 resetRace 与渲染缓存重建）
+          this.selectTrackFor(0, startTrackIndex)
         }
       }
       this.startCountdown()
@@ -1151,53 +850,18 @@ export class GameLoop {
     this.routeChoosing = true
     // M28 方案 9 三次打磨：重置分叉淡入动画进度（每次进入岔路选择从 0 开始淡入）
     this.routeForkAlpha = 0
-    const overlay = document.getElementById('route-choice')
-    if (!overlay) {
+    // 覆盖层 DOM 填充与分叉渲染参数计算下沉 route-choice.ts openRouteChoice
+    const { fork, overlayMissing } = openRouteChoice({
+      routeDef: this.routeDef,
+      race: this.race,
+      getElement: (id) => document.getElementById(id),
+    })
+    if (overlayMissing) {
       // 覆盖层缺失（测试 stub 环境）：无法交互 → 直接取左路继续（防卡死）
       this.chooseRouteBranch('left')
       return
     }
-    const route = this.routeDef
-    if (!route) return
-    const stage = getRouteStage(route, this.race.routeStageId ?? '')
-    const branches = routeBranches(route, this.race.routeStageId ?? '')
-    const leftId = branches.left
-    const rightId = branches.right
-    const leftStage = leftId ? getRouteStage(route, leftId) : null
-    const rightStage = rightId ? getRouteStage(route, rightId) : null
-    const title = overlay.querySelector<HTMLElement>('.route-choice-title')
-    if (title) title.textContent = '选择路线'
-    const stageEl = overlay.querySelector<HTMLElement>('.route-choice-stage')
-    if (stageEl) {
-      stageEl.textContent = `第 ${this.race.routeStageIndex}/${this.race.routeStageCount} 段 · ${stage?.name ?? ''}`
-    }
-    const leftBtn = overlay.querySelector<HTMLButtonElement>('.route-choice-btn.route-left')
-    if (leftBtn) leftBtn.textContent = leftStage ? `← ${leftStage.name}` : '（无路）'
-    const rightBtn = overlay.querySelector<HTMLButtonElement>('.route-choice-btn.route-right')
-    if (rightBtn) rightBtn.textContent = rightStage ? `${rightStage.name} →` : '（无路）'
-    overlay.hidden = false
-    // M28 方案 9 三次打磨：岔路阶段预览——展示左右下一段赛道难度星级 + 环境名（getTrackDef 读取）
-    const previewEl = overlay.querySelector<HTMLElement>('#route-choice-preview')
-    if (previewEl) {
-      const describe = (s: RouteStageDef | null): string => {
-        if (!s) return '——'
-        const def = getTrackDef(s.trackId)
-        if (!def) return s.name
-        const stars = '★'.repeat(def.difficulty)
-        return `${s.name} · ${stars}`
-      }
-      previewEl.textContent = `左路：${describe(leftStage)}　右路：${describe(rightStage)}`
-    }
-    // M28 方案 9 深化：计算分叉渲染参数（左/右分支名 + 横向偏移——正右负左；单出口时两方向同偏移）
-    // 分叉偏移量基于当前阶段车道宽度（ROAD_HALF_WIDTH × 2 为路面全宽，分支各向外偏 3 个路面宽）
-    const lane = 3
-    this.routeFork = {
-      active: true,
-      leftName: leftStage?.name ?? '',
-      rightName: rightStage?.name ?? '',
-      leftOffset: -lane * 2,
-      rightOffset: lane * 2,
-    }
+    this.routeFork = fork
   }
 
   /**
@@ -1206,31 +870,15 @@ export class GameLoop {
    * 无该方向出口（终段/单出口缺省）时不动作。
    */
   private chooseRouteBranch(dir: 'left' | 'right'): void {
-    const route = this.routeDef
-    if (!route || !this.race.routeStageId) return
-    const branches = routeBranches(route, this.race.routeStageId)
-    const nextId = dir === 'left' ? branches.left : branches.right
-    if (!nextId) return
-    const nextStage = getRouteStage(route, nextId)
-    if (!nextStage) return
-    // 累计本段时间/得分（本段 raceTime 从 0 起计时；结算总用时 = routeCumulativeTime + 最后段 raceTime）
-    this.race.routeCumulativeTime += this.race.player1.raceTime
-    this.race.routeCumulativeDriftScore += Math.round(
-      this.race.player1.driftState.score + this.race.player1.nearMissScore,
-    )
+    // 累计本段时间/得分 + 段状态更新下沉 route-choice.ts selectRouteBranch（纯计算）
+    const result = selectRouteBranch({ routeDef: this.routeDef, race: this.race, dir })
+    if (!result) return
     // 切到下一段赛道（触发 resetRace 清本段玩家状态/计时，保留 routeCumulative* 与 routeStage*）
-    const trackIndex = TRACK_DEFS.findIndex((d) => d.id === nextStage.trackId)
-    if (trackIndex < 0) return
-    this.selectTrackFor(0, trackIndex)
-    // 更新段状态（终段标记供完赛判定）
-    this.race.routeStageId = nextId
-    this.race.routeStageIndex = routeStageIndex(route, nextId)
-    this.race.routeIsFinish = nextStage.isFinish === true
+    this.selectTrackFor(0, result.trackIndex)
     this.routeChoosing = false
     this.routeFork = null
     this.routeForkAlpha = 0
-    const overlay = document.getElementById('route-choice')
-    if (overlay) overlay.hidden = true
+    hideRouteChoiceOverlay((id) => document.getElementById(id))
   }
 
   /**
@@ -1314,24 +962,16 @@ export class GameLoop {
       this.showRacingTouchHint()
     }
     // M18：BOOST 未蓄能反馈——键盘按下 Space/Enter 且 charge<=0 且未激活时，#boost-bar 红闪 300ms
-    if (
-      this.phase === PHASE_RACING &&
-      this.input.getP1Input().boost === true &&
-      this.race.player1.boostCharge <= 0 &&
-      !this.boostActive &&
-      now - this.lastBoostDeniedAt > 300
-    ) {
-      this.lastBoostDeniedAt = now
-      if (this.boostBar) {
-        this.boostBar.classList.add('no-charge')
-        const timer = globalThis.setTimeout(() => {
-          this.boostBar?.classList.remove('no-charge')
-        }, 300)
-        if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
-          ;(timer as { unref: () => void }).unref()
-        }
-      }
-    }
+    //（M34 下沉 boost-feedback.ts maybeTriggerBoostDeniedFlash：冷却窗口 + unref 兼容计时收敛）
+    this.lastBoostDeniedAt = maybeTriggerBoostDeniedFlash({
+      phase: this.phase,
+      now,
+      inputBoost: this.input.getP1Input().boost === true,
+      boostCharge: this.race.player1.boostCharge,
+      boostActive: this.boostActive,
+      lastDeniedAt: this.lastBoostDeniedAt,
+      boostBar: this.boostBar,
+    })
     if (!shouldScheduleNextFrame(ur.shouldRender)) {
       // 完赛/挑战限时触发 finish：等价旧帧内 return（跳过渲染与 rAF 自续）
       // M16：决策下沉 frame-pure 纯函数（frame-pure.test.ts 锁定 shouldRender 契约）
@@ -1343,26 +983,27 @@ export class GameLoop {
 
     // M28 方案 9：路线模式段末检测——RACING 且非岔路选择中，P1 跑完当前段 1 圈（lapFromZ > 1）时：
     // 终点段 → 累计本段时间/得分后完赛；非终点段 → 进入岔路选择覆盖层（冻结物理，等玩家选路）。
-    // 置于 shouldRender 检查后（段末必在 GO 后正常渲染帧），渲染段仍走 RACING 显示当前赛道画面。
-    if (
-      this.phase === PHASE_RACING &&
-      this.mode.routeMode &&
-      !this.routeChoosing &&
-      this.race.routeStageId !== null &&
-      lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > 1
-    ) {
-      if (this.race.routeIsFinish) {
+    // 判定下沉 route-choice.ts routeAdvanceAction（置于 shouldRender 检查后——段末必在 GO 后
+    // 正常渲染帧，渲染段仍走 RACING 显示当前赛道画面）。
+    if (this.phase === PHASE_RACING && this.mode.routeMode && !this.routeChoosing) {
+      const action = routeAdvanceAction(
+        this.race,
+        lapFromZ(this.race.player1.cameraZ, this.trackManager.getLapLength(0)) > 1,
+      )
+      if (action === 'finish') {
         // 终点段跑完 → 累计最后段时间/得分并完赛（accountFinish 在 FINISHED 块按 route 分支再累加，
         // 此处预累加当前段——注意 accountFinish 已处理累计，此分支不重复累加）
         this.applyPhase(PHASE_FINISHED)
         return
       }
-      this.beginRouteChoice()
+      if (action === 'choice') {
+        this.beginRouteChoice()
+      }
     }
     // M28 方案 9 三次打磨：分叉淡入动画——routeChoosing 期间 forkAlpha 逐帧递增至 1
     // （约 0.3s 淡入；不抢帧率，纯渲染层进度状态，无物理/确定性影响）
     if (this.phase === PHASE_RACING && this.routeChoosing && this.routeFork) {
-      this.routeForkAlpha = Math.min(1, this.routeForkAlpha + dt * 3.5)
+      this.routeForkAlpha = advanceRouteForkAlpha(this.routeForkAlpha, dt)
     }
 
     // 玩家实时转向输入（-1..1）：优先复用更新段已路由的输入（S 修复 P4：消除帧内二次
@@ -1461,25 +1102,14 @@ export class GameLoop {
 
   /**
    * 触屏驾驶引导浮层（U-3：倒计时 GO 后触发，每局仅一次）：
-   * 仅 hover:none 触屏设备显示，2s 淡出；文案取自 copy.ts 的 RACING_TOUCH_HINT。
+   * 仅 hover:none 触屏设备显示，2s 淡出；DOM/文案逻辑下沉 ui/screens.ts revealRacingTouchHint。
    */
   private showRacingTouchHint(): void {
     if (this.hasShownRacingTouchHint) return
     this.hasShownRacingTouchHint = true
     const hint = this.screenElements.racingTouchHint
-    if (hint && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches) {
-      const textEl = hint.querySelector<HTMLElement>('.racing-touch-hint-text')
-      // 2026-08-08：分屏不常驻右下角摇杆，浮层文案按模式区分（防「右下角」误导）
-      if (textEl) textEl.textContent = this.mode.splitMode ? SPLIT_TOUCH_HINT : RACING_TOUCH_HINT
-      hint.hidden = false
-      hint.classList.add('show')
-      const timer = globalThis.setTimeout(() => {
-        hint.classList.remove('show')
-        hint.hidden = true
-      }, 2000)
-      if (timer && typeof timer === 'object' && typeof (timer as { unref?: () => void }).unref === 'function') {
-        ;(timer as { unref: () => void }).unref()
-      }
+    if (hint) {
+      revealRacingTouchHint(hint, this.mode.splitMode)
     }
   }
 }

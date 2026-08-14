@@ -178,6 +178,25 @@ export function refreshAchievementProgress(): void {
 }
 
 /**
+ * 菜单板块整体刷新（M34 收敛 game-loop.ts 构造器末尾与 applyPhase MENU 块两处同源调用）：
+ * 漂移榜/BEST 汇总/对局榜/成就进度 + 每日挑战进度（?daily=0 关闭时清空元素）。
+ */
+export function refreshMenuBoard(dailyModeEnabled: boolean): void {
+  refreshDriftTop()
+  refreshBestSummary()
+  refreshMatchTop()
+  // M23 方案 6：菜单成就进度刷新（构造时/回菜单时——本局可能有新解锁）
+  refreshAchievementProgress()
+  // M28 方案 14：菜单每日挑战进度刷新（构造时/回菜单时，含跨日滚动；?daily=0 关闭时清空元素）
+  if (dailyModeEnabled) {
+    refreshDailyProgress()
+  } else {
+    const dailyEl = document.getElementById('daily-progress')
+    if (dailyEl) dailyEl.textContent = ''
+  }
+}
+
+/**
  * 刷新菜单每日挑战进度（#daily-progress，M28 方案 14）：
  * 显示「今日挑战 · <赛道名> · 已完成/未完成 · 连续 N 天」。
  * 跨日自动滚动今日赛道并回写（rollDailyToToday），title 悬停展示详情。

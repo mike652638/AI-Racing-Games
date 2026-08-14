@@ -13,8 +13,9 @@ import {
   type WinStats,
 } from './save'
 import { CHALLENGE_TARGET_SCORE } from '../shared/constants'
+import { unrefSafeTimeout } from '../shared/timer'
 import type { MedalGrade } from '../shared/medal'
-import { ACHIEVEMENTS, MEDAL_LABEL } from './copy'
+import { ACHIEVEMENTS, MEDAL_LABEL, RACING_TOUCH_HINT, SPLIT_TOUCH_HINT } from './copy'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../shared/phase'
 import {
   FINISH_DRIFT_HINT,
@@ -108,6 +109,63 @@ export interface FinishPanelOptions {
   routeName?: string
   /** M28 方案 14：本局完成今日挑战（结算行追加「今日挑战完成 · 连续 N 天」提示） */
   dailyDoneToday?: boolean
+}
+
+/**
+ * 暂停面板品牌标注（M34 拆分自 game-loop.ts applyPhase）：暂停标题按暂停玩家动态标注
+ * （分屏按最近活跃玩家、热座按当前回合玩家、单屏通用 "PAUSED"），并填充当前赛道名。
+ * 赛道名由调用方解析传入（ui 层不依赖 engine/tracks）。
+ */
+export function applyPauseBranding(
+  elements: ScreenElements,
+  args: {
+    splitMode: boolean
+    hotseatMode: boolean
+    /** 分屏最近活跃玩家（P1 优先） */
+    lastActivePlayer: 1 | 2
+    /** 热座当前回合玩家 */
+    hotseatPlayer: 1 | 2
+    /** 当前赛道名（无匹配时空串，不显示赛道行） */
+    trackName: string
+  },
+): void {
+  const { splitMode, hotseatMode, lastActivePlayer, hotseatPlayer, trackName } = args
+  // P9：暂停标题——配色类与 HUD P1/P2 标签风格一致（p1/p2 class，见 hud.ts hudPlayerTag）
+  const pauseTitle = elements.pauseTitle
+  if (pauseTitle) {
+    const pausedWho = splitMode ? lastActivePlayer : hotseatMode ? hotseatPlayer : null
+    if (pausedWho !== null) {
+      pauseTitle.textContent = pausedWho === 2 ? 'P2 已暂停' : 'P1 已暂停'
+      pauseTitle.classList.toggle('p1', pausedWho === 1)
+      pauseTitle.classList.toggle('p2', pausedWho === 2)
+    } else {
+      pauseTitle.textContent = 'PAUSED'
+    }
+  }
+  // 2026-08-05 P2-6：暂停画面显示当前赛道名（#pause-track-name），帮助玩家确认暂停的是哪条赛道
+  const pauseTrack = elements.pauseTrackName
+  if (pauseTrack) {
+    pauseTrack.textContent = trackName ? `赛道：${trackName}` : ''
+  }
+}
+
+/**
+ * 触屏驾驶引导浮层显示（M34 拆分自 game-loop.ts showRacingTouchHint 的 DOM 部分）：
+ * 仅 (hover: none) 触屏设备显示，2s 淡出；一次性标志由调用方维护。
+ */
+export function revealRacingTouchHint(hint: HTMLDivElement, splitMode: boolean): void {
+  if (typeof window.matchMedia !== 'function' || !window.matchMedia('(hover: none)').matches) {
+    return
+  }
+  const textEl = hint.querySelector<HTMLElement>('.racing-touch-hint-text')
+  // 2026-08-08：分屏不常驻右下角摇杆，浮层文案按模式区分（防「右下角」误导）
+  if (textEl) textEl.textContent = splitMode ? SPLIT_TOUCH_HINT : RACING_TOUCH_HINT
+  hint.hidden = false
+  hint.classList.add('show')
+  unrefSafeTimeout(() => {
+    hint.classList.remove('show')
+    hint.hidden = true
+  }, 2000)
 }
 
 /**
