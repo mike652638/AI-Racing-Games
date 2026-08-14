@@ -20,6 +20,8 @@ import { applyPhaseToScreens, type ScreenElements } from '../ui/screens'
 import { loadBestTime, loadBestTimeFor, loadDaily, loadMedal } from '../ui/save'
 import {
   COUNTDOWN_HINTS,
+  APP_VERSION,
+  APP_VERSION_DATE,
   COUNTDOWN_HINTS_TOUCH,
   COUNTDOWN_HINTS_TOUCH_SPLIT,
   MEDAL_LABEL,
@@ -410,6 +412,11 @@ export class GameLoop {
     // 2026-08-08 分屏文案修复：分屏不常驻右下角摇杆（U-4），统一摇杆文案误导
     const touchHint = $('touch-hint')
     if (touchHint) touchHint.textContent = this.mode.splitMode ? SPLIT_TOUCH_HINT : RACING_TOUCH_HINT
+
+    // 2026-08-08：菜单底部版本号（#app-version）由 copy.ts 填充，便于确认线上部署版本
+    //（APP_VERSION 已含 v 前缀，勿重复拼接）
+    const versionTag = $('app-version')
+    if (versionTag) versionTag.textContent = `${APP_VERSION} · ${APP_VERSION_DATE}`
 
     this.installDebugSinks()
 
@@ -1161,8 +1168,9 @@ export class GameLoop {
     const title = overlay.querySelector<HTMLElement>('.route-choice-title')
     if (title) title.textContent = '选择路线'
     const stageEl = overlay.querySelector<HTMLElement>('.route-choice-stage')
-    if (stageEl)
+    if (stageEl) {
       stageEl.textContent = `第 ${this.race.routeStageIndex}/${this.race.routeStageCount} 段 · ${stage?.name ?? ''}`
+    }
     const leftBtn = overlay.querySelector<HTMLButtonElement>('.route-choice-btn.route-left')
     if (leftBtn) leftBtn.textContent = leftStage ? `← ${leftStage.name}` : '（无路）'
     const rightBtn = overlay.querySelector<HTMLButtonElement>('.route-choice-btn.route-right')

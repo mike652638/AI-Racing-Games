@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   ACHIEVEMENTS,
+  APP_VERSION,
+  APP_VERSION_DATE,
   BEST_EMPTY_HINT,
   COUNTDOWN_HINTS,
   COUNTDOWN_HINTS_TOUCH,
@@ -124,5 +126,25 @@ describe('操作提示与 README「操作说明」同源（防文案漂移）', 
   it('菜单提示「空格键开始」在 README 有对应描述', () => {
     expect(readme).toContain('任意键')
     expect(readme).toContain('开始游戏')
+  })
+})
+
+describe('部署可见版本号（2026-08-08 新增）', () => {
+  it('APP_VERSION 非空且形如 vX.Y.Z', () => {
+    expect(APP_VERSION).toMatch(/^v\d+\.\d+\.\d+$/)
+  })
+
+  it('APP_VERSION_DATE 为 YYYY-MM-DD', () => {
+    expect(APP_VERSION_DATE).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('index.html 的 meta app-version 与常量同步（防版本号漂移）', () => {
+    const html = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8')
+    expect(html).toContain(`content="${APP_VERSION}-${APP_VERSION_DATE}"`)
+  })
+
+  it('菜单含版本标签元素 #app-version', () => {
+    const html = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8')
+    expect(html).toContain('id="app-version"')
   })
 })

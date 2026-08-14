@@ -3,9 +3,14 @@
  * 提升至 shared，ui 改从本模块导入——game↔ui 仅剩的 import type 依赖消除，
  * ui → game 方向完全断开（类型层亦然）。
  *
+ * 2026-08-15 二次提升：PlayerState 接口自 game/player-state 迁入本层（其字段类型
+ * CarState/DriftState 来自 physics，随迁为类型级依赖）——shared 对 game 的
+ * 唯一类型反指消除，shared → game 零引用（含类型层）。
+ *
  * 依赖说明：本模块仅 `import type`（编译期擦除，运行时无任何依赖）；
  * shared 仍为运行时最底层（constants/phase/lap 真源），类型转发不构成运行时环。
- * game/state.ts 与 game/track-context.ts 保留同名 re-export 兼容层，既有导入路径不受影响。
+ * game/state.ts、game/track-context.ts 与 game/player-state.ts 保留同名
+ * re-export 兼容层，既有导入路径不受影响。
  */
 import type { RoadStrip } from '../engine/road-strip'
 import type { Segment } from '../engine/track'
@@ -13,7 +18,8 @@ import type { Sprite } from '../engine/sprites'
 import type { TrackDef } from '../engine/tracks'
 import type { TrafficCar } from '../engine/traffic'
 import type { WeatherOverride } from '../engine/lighting'
-import type { PlayerState } from '../game/player-state'
+import type { CarState } from '../physics/car'
+import type { DriftState } from '../physics/drift'
 import type { Phase } from './phase'
 
 /**
@@ -41,6 +47,59 @@ export interface TrackContext {
   roadStrips: RoadStrip[]
   /** 本世界车流（in-place 推进） */
   traffic: TrafficCar[]
+}
+
+/**
+ * 单个玩家的独立对局状态（2026-08-15 自 game/player-state 提升）：车辆、漂移、
+ * 相机进度、个人计时与碰撞冷却。分屏模式下 P1/P2 各持有一份实例，
+ * 主循环分别更新，互不影响。game/player-state.ts 保留同名 re-export 兼容层。
+ */
+export interface PlayerState {
+  /** 车辆状态（横向位置 + 速度） */
+  carState: CarState
+  /** 漂移状态（含烟雾粒子数组） */
+  driftState: DriftState
+  /** 相机 z（沿赛道累计距离） */
+  cameraZ: number
+  /** 个人比赛用时（秒） */
+  raceTime: number
+  /** 碰撞冷却（秒），冷却期内不重复触发碰撞惩罚 */
+  collisionCooldown: number
+  /** BOOST 蓄力值（0-1，漂移激活期间累积，按键消耗，G4） */
+  boostCharge: number
+  /** 上一帧该玩家 boost 是否激活（边沿检测：本帧激活且上帧未激活 → 完美氮气判定，P0） */
+  boostActive: boolean
+  /** 本次 BOOST 激活段是否为完美氮气（激活边沿 charge ≥ 阈值锁定，boost 结束后重置，P0） */
+  boostPerfect: boolean
+  /** near-miss 冷却（秒，P0：贴身超车触发后冷却防刷） */
+  nearMissCooldown: number
+  /** near-miss 累计得分（P0：独立于漂移得分——不污染漂移 TOP10 语义；挑战 HUD 实时总分 = 漂移 + near-miss） */
+  nearMissScore: number
+  /** M23 方案 6：本局是否使用过 BOOST（对局内统计，成就「首次氮气」检测） */
+  boostUsedEver: boolean
+  /** M23 方案 6：本局是否触发过完美氮气（成就「完美爆发」检测） */
+  perfectBoostUsed: boolean
+  /** M23 方案 6：本局最高连击档位（对局内统计，成就「连击大师」检测；driftState.combo 会因断连归零） */
+  maxCombo: number
+  /** M23 方案 6：本局 near-miss 累计次数（对局内统计，成就「贴地飞行」检测） */
+  nearMissCount: number
+  /** M23 方案 8：挑战模式已通过检查点数（cameraZ / 检查点间距取整，frame-update 推进） */
+  challengeCheckpoints: number
+  /** M23 方案 8：挑战模式检查点累计奖励时长（秒，每过 1 个检查点 +CHALLENGE_CHECKPOINT_BONUS） */
+  challengeBonus: number
+  /** M23 方案 13：车流橡皮筋动态系数（当前玩家世界 speedFactor，frame-update 平滑收敛；初始 1） */
+  trafficRubber: number
+  /** M23 方案 12：near-miss 速度线脉冲强度（0-1 指数衰减，触发后逐帧衰减；0 = 无脉冲） */
+  nearMissPulse: number
+  /** M23 方案 12：完美氮气金色闪光强度（0-1 指数衰减；0 = 无闪光） */
+  perfectBoostFlash: number
+  /** M23 方案 12：漂移小喷蓝色闪光强度（0-1 指数衰减；0 = 无闪光） */
+  miniTurboFlash: number
+  /** M23 方案 12：漂移得分浮动飘字（得分累积到整数位变化时生成；非空时逐帧推进/超期清除）。
+   *  M29 方案 12 二次打磨：combo 字段为生成时连击档位（≥5 时飘字放大+橙色高亮） */
+  driftPopup: { t: number; amount: number; combo?: number } | null
+  /** M23 方案 12：上次漂移得分整数位（帧间 diff 判定生成飘字，避免每帧重复生成） */
+  lastDriftScoreInt: number
 }
 
 /**

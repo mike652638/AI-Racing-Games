@@ -79,10 +79,12 @@ export class TouchQuadrantInput {
       const rect = (
         this.canvas as HTMLCanvasElement & { getBoundingClientRect?: () => DOMRect }
       ).getBoundingClientRect?.()
-      if (rect && rect.width > 0 && rect.height > 0)
+      if (rect && rect.width > 0 && rect.height > 0) {
         return { width: rect.width, height: rect.height, left: rect.left, top: rect.top }
-      if (this.canvas.width > 0 && this.canvas.height > 0)
+      }
+      if (this.canvas.width > 0 && this.canvas.height > 0) {
         return { width: this.canvas.width, height: this.canvas.height, left: 0, top: 0 }
+      }
     }
     return { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 }
   }

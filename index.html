@@ -10,8 +10,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <!-- 可见版本号：view-source 即可确认拿到的是哪次部署 -->
-    <meta name="app-version" content="2026-08-05-v3-portrait-cache-fix" />
+    <!-- 可见版本号：view-source 即可确认拿到的是哪次部署（2026-08-08 更新至 M21 版本） -->
+    <meta name="app-version" content="v1.21.0-2026-08-08" />
     <title>像素狂飙 - OutRun 伪 3D 街机赛车</title>
     <meta name="description" content="像素狂飙：网页版 OutRun 伪 3D 街机赛车游戏，9 条赛道、漂移连击、氮气加速、双人分屏与热座对战，无需安装即点即玩。" />
     <!-- 微信分享卡片：OG/Twitter 协议 + 微信专用 itemprop，og:image 必须为永久无鉴权绝对 URL（EdgeOne 预览链接会过期致回退占位图，故用 CloudBase 永久静态托管） -->
@@ -225,6 +225,9 @@
         <p class="hint" id="menu-hint">空格键开始 · 1-9 / 方向键 切换赛道</p>
         <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 点击榜单可展开</p>
         <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
+        <!-- 2026-08-08：部署可见版本号（copy.ts APP_VERSION/APP_VERSION_DATE 填充），
+             方便确认线上已是最新版；首次渲染为空避免布局跳动 -->
+        <p class="version-tag" id="app-version" aria-hidden="true"></p>
       </div>
     </div>
     <!-- 起步倒计时覆盖层：游戏开始 3 秒显示操作提示（放在 #start-screen 外面，避免被父元素 hidden 连带隐藏） -->

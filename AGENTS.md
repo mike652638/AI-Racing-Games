@@ -31,7 +31,7 @@ src/
   ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）（阶段常量/类型直接导入 shared/phase；原 gamestate 兼容层 2026-08-05 已删除）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（48 文件 710 用例；连同 tests/bench 冒烟合计 49 文件 711 用例）
+  unit/         # Vitest 单测（56 文件 937 用例；连同 tests/bench 冒烟合计 57 文件 938 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
@@ -70,6 +70,9 @@ docs/           # 计划档案、视觉分析、superpowers plans
 20. **M19**：潜在改进点收尾——debug 钩子生产剥离（`installDebugSinks` 入口 DEV 门控，19 个状态 getter 闭包生产构建死码消除，dist 实测无 `__gameDebug`）、输入采集去重（`collectSteerInputs(ctx, splitMode)` 纯函数下沉 mode-strategy，与 updateFrame 内 `mode.getInputs` 路由完全同源）、ui/gamestate 纯 re-export 死层删除（hud/screens 直接导入 `shared/phase`）+ tests 导入统一到 shared 真源、e2e 玩法链路扩展（BOOST 漂移蓄能 charge 增长 + 碰撞反馈 HUD 计数显示，双 project）、bot violations ≤ 3 容差与集成长用例 testTimeout 保留为刻意的防御性折衷（实测 0 违规、收紧会降低 CI 鲁棒性）（✅ typecheck + lint + 685 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 26 通过）
 21. **M20**：运行时实测报告 14 项 P1/P2/P3 修复启动输入——大屏布局根因修复（`.menu-content` `width: min(100%, 1280px); margin: 0 auto` + `#track-select` 从 flex-wrap 改 `display: grid; grid-template-columns: repeat(3, 1fr)` 根治 1920 下 9 卡 wrap 成 1+3+4+1 错落偏左 90px）、portrait-mode 真实 bug 修复（旋转方向不同步——`isPortraitViewport()` 守卫 + `resize/orientationchange` 监听，横屏自动移除 class 保留 sessionStorage 记忆）、移动横屏副标题保留（`(max-height: 620px) and (max-width: 599px)` 才隐藏）、夜晚路灯近距缩放上限（`MAX_LAMP_SCALE = 1.4` + renderer lamp 分支专用 clamp）、路面颗粒噪点降密度（`ROAD_NOISE_PER_SEG` 14→10、alpha 0.12-0.22→0.08-0.15）、暂停文案去重（按钮"继续"→"恢复比赛"）、视口缩放放宽 a11y（移除 maximum-scale=1 / user-scalable=no、加 viewport-fit=cover）、挑战模式徽章文案补目标分（`挑战模式 · 60s 刷分 · 目标 5000`）、CI e2e 大屏 1920×1080 project + 大屏内容居中回归测试；**HUD 行驶期修复**：BOOST 条 + 暂停按钮同 `left:16 bottom:16` 重叠 → BOOST 改 `bottom-center`（`left:50%; transform:translateX(-50%)`）+ span `text-align:center` 解决「BOOST 文字左偏被圆形按钮遮住」；速度线 8 根纯白刺眼 → `rgba(190,220,255,...)` 淡蓝白（alpha/len 保持原值避触发天空条纹 P0-1 回归 maxDelta<60）；**榜单菜单优化 v1**：去掉手风琴式关联（三榜单可独立展开）+ 收起态完全折叠（`.lb-card-body` `max-height:0` + `padding-top/bottom:0`） + 宽屏（≥1100px）三列并排（`.leaderboard-cards` `width:100%; max-width:1080px` + `.lb-card` `flex:1 1 0; max-width:360px` 修复 align-items:center 父级下子项按内容收缩的坑）+ 漂移榜单单行不换行（字号 11px + 紧凑格式去掉 `·` 与 `连击` 字 → `1. P1  800分  经典赛道  x1.50`）；**榜单菜单优化 v2**：整体控制——`.leaderboard-toolbar` master 切换按钮（`#lb-toggle-all`）控制三卡片同时展开/收起（默认展开）+ 卡片宽度收紧（base max-width 280→220，宽屏 360→280，`.leaderboard-cards` max-width 1080→900/880→720 减少右侧留白）+ 加大各模块竖向间距（`.menu-content` padding-bottom 20→32、`.title-wrap` margin 10→18、`.title-sub` margin-bottom 20→28、`#track-select` margin 8/6→12/14、`.track-preview-wrap` margin-top 6→18、`#start-btn` margin 10/4→24/12）+ 副标题文案 `经典街机竞速 · 伪 3D 复刻` → `经典街机竞速 OUTRUN · 伪 3D 复刻`；**榜单菜单优化 v3**：`.leaderboard-section` 整体感容器（包住 toolbar + cards，背景模糊 + 圆角 16px + 边框）形成 dashboard widget；隐藏单卡内 `.lb-card-toggle`（整体控制下卡片头部只显示标题）；"我的榜单" label 字号 13→15 + letter-spacing 2→3.5 + 金黄字色；toolbar gap 12→4 让 label 与切换按钮靠近；卡片 border-radius 14→12 嵌套层级清晰；**M20 收尾批次**：HUD 脏值比对（R9）+ roadStrip 缓存宽度守卫（R5）、摇杆幂等/音频节点显式释放/地形类型收敛（R7/R8/R10）、存档版本化 + 渲染性能加固 + 重复逻辑收敛 + 视觉常量共享化、style.css 按屏幕维度拆分三文件（style.base/screens/interaction）、菜单专项测试与优化（.menu-sun 光晕移除/track-preview 重绘/开始按钮移出滚动容器）、菜单测试产物与上传截图 .gitignore、playwright.config expect 提升至顶层（✅ typecheck + lint + 711 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 48 执行 40 通过 + 8 视口条件跳过 0 失败（2026-08-06 全量实测）+ 大屏居中回归 OK + HUD 视觉验证 OK + 榜单整体感容器视觉验证 OK）
 
+22. **M21**：菜单沉浸感优化与部署修复（2026-08-07）——菜单修复批次（竖屏标题重叠归零/hover 预览联动/竖屏榜单默认收起/320 字号收敛/按钮 hover 光晕/榜单对比度）、赛道预览背景层（宽屏全屏赛道 SVG 背景 + 响应式降级 + 中央/背景双写联动）、菜单响应式布局修复（审计驱动：低高度桌面分支/移动横屏紧凑化/竖屏 rotate-hint 上移）、菜单整体感优化（#start-screen 背景叠加割裂修复）、静态托管子路径部署修复（vite base 相对路径 './'）；**M21 收尾（2026-08-08）**：部署可见版本号（copy.ts `APP_VERSION`/`APP_VERSION_DATE` + index.html meta app-version + `#app-version` 菜单标签 + `.version-tag` 样式 + copy.test 版本断言 4 用例）（✅ typecheck + lint + format:check + 938 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 40 通过 0 失败 + 8 视口条件跳过）
+23. **M22-M33**（2026-08-07/08 可玩性提升与实测修复系列，一次提交合并）：M22 near-miss 贴身超车/完美氮气/漂移小喷；M23 S/A/B 奖牌/8 项成就/挑战检查站；M24 随机天气变体 `?weather=`；M25 车流橡皮筋 `?traffic=`；M26 Game Feel 强化（飘字/脉冲线/闪光）；M27 运行时实测修复批次；M28/M28-b/M31/M32 OutRun 式路线模式 `?route=` 与导航引导线 `?guide=1`；M29 每日挑战 `?daily=`；M30 BOOST 速度线强化与飘字 combo 联动；M33 2026-08-08 运行实测修复 5 项（引导线 z-order/岔路提示间距/路灯双层光晕/分屏 P2 独立 BOOST 条/倒计时触屏提示适配）。各里程碑明细与验证记录见 README 里程碑表（✅ 每项经 typecheck + lint + test + bot + build + e2e 验证）
+
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
 ## Skills 使用规则（长程测试约束）
@@ -81,7 +84,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，49 文件 711 用例，含 tests/bench 冒烟），失败即修复
+- `/test`：`npm test`（vitest run，57 文件 938 用例，含 tests/bench 冒烟），失败即修复
 - `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375 + 大屏 1920×1080；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）

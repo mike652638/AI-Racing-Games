@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { accountFinish, type FinishAccountingResult } from '../../src/game/finish-accounting'
 import { createModeStrategy, type ModeStrategy } from '../../src/game/mode-strategy'
 import { createRaceState, type RaceState } from '../../src/game/state'
@@ -352,6 +352,19 @@ describe('M28 方案 9：路线模式完赛判定与记账', () => {
 })
 
 describe('M28 方案 14：每日挑战完成判定', () => {
+  /**
+   * 日期敏感修复（2026-08-15）：accountFinish 内部用 todayDateString()（真实系统时钟）roll 每日状态，
+   * 本组 fixture 日期硬编码 2026-08-08——系统日期 ≠ 2026-08-08 时每日赛道被滚动为当天赛道，
+   * 「今日赛道」匹配必然失败。冻结系统时钟使"今天"恒为 fixture 日期，跨日 CI 稳定。
+   */
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-08T12:00:00'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   /** 注入 daily 存档 mock 返回可控状态 */
   const withDaily = (daily: { date: string; trackId: string; done: boolean; streak: number }): void => {
     mockedLoadDaily.mockReturnValue(daily)

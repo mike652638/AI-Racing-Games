@@ -4,6 +4,14 @@
  * tests/unit/copy.test.ts 以关键词断言锁定两者一致（防文案漂移）。
  */
 
+/**
+ * 应用版本号（2026-08-08 新增，部署可见性需求）：菜单页显示 + index.html meta app-version 同步。
+ * 每次更新部署时递增 BUILD 号并更新 BUILD_DATE，方便用户确认线上已是最新版。
+ * 当前对应 M21 里程碑（2026-08-07 菜单沉浸感优化批次：赛道预览背景层/响应式修复/整体感优化/子路径部署修复）。
+ */
+export const APP_VERSION = 'v1.21.0'
+export const APP_VERSION_DATE = '2026-08-08'
+
 /** 起步倒计时覆盖层操作提示（#countdown-overlay .countdown-hints，由 startCountdown 填充） */
 export const COUNTDOWN_HINTS = ['WASD / 方向键 驾驶', '空格 氮气加速', '高速急转 自动漂移'] as const
 
