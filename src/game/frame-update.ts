@@ -14,13 +14,12 @@ import {
   DRIFT_SCORE_MAX,
   NEAR_MISS_CHARGE,
   NEAR_MISS_SCORE,
-} from './constants'
+} from '../shared/constants'
 import { updateBoostCharge } from './frame-pure'
 import { updateNearMiss } from './near-miss'
 import type { ModeStrategy, TouchQuadrantSource } from './mode-strategy'
-import { PHASE_RACING, type Phase } from './phase'
-import type { RaceState } from './state'
-import type { PlayerState } from './player-state'
+import { PHASE_RACING, type Phase } from '../shared/phase'
+import type { PlayerState, RaceState } from '../shared/types'
 import type { TrackManager } from './track-manager'
 
 /** M23 方案 12：漂移得分飘字生命周期（秒）与最大增量显示（飘字仅显示本段新增分，避免巨数溢出） */

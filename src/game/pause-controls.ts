@@ -1,7 +1,7 @@
 import type { HudElements } from '../ui/hud'
 import type { ScreenElements } from '../ui/screens'
-import { togglePause } from './phase-logic'
-import { PHASE_MENU, type Phase } from './phase'
+import { togglePause } from '../shared/phase-logic'
+import { PHASE_MENU, type Phase } from '../shared/phase'
 import { clampAndSyncGain, MUSIC_VOLUME_KEY, persistVolume, SFX_VOLUME_KEY, VOLUME_KEY } from './volume'
 
 /**

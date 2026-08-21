@@ -4,12 +4,8 @@ import { buildCurvePrefixSum, buildSpriteIndex, createRoadsideSprites } from '..
 import { createTrackFromDef, type TrackDef } from '../engine/tracks'
 import { getEnvironmentProfile } from '../engine/environment'
 import { createTraffic, TRAFFIC_SPAWN_SAFE_ZONE } from '../engine/traffic'
-import { TRAFFIC_DEFAULT_COUNT } from './constants'
+import { TRAFFIC_DEFAULT_COUNT } from '../shared/constants'
 import type { TrackContext } from '../shared/types'
-
-// 类型提升（2026-08-05）：TrackContext 接口唯一真源移至 src/shared/types.ts（解耦 ui→game 类型依赖），
-// 本文件保留同名 re-export 兼容层，既有导入路径不变
-export type { TrackContext }
 
 /** 按赛道定义创建完整赛道上下文（含渲染预计算与车流） */
 export function createTrackContext(def: TrackDef): TrackContext {

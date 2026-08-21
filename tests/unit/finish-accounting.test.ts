@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { accountFinish, type FinishAccountingResult } from '../../src/game/finish-accounting'
 import { createModeStrategy, type ModeStrategy } from '../../src/game/mode-strategy'
-import { createRaceState, type RaceState } from '../../src/game/state'
+import { createRaceState } from '../../src/game/state'
+import type { RaceState } from '../../src/shared/types'
 import { addDriftScore, addMatchResult, loadDaily, recordWin, saveDaily } from '../../src/ui/save'
 import type { TrackManager } from '../../src/game/track-manager'
 

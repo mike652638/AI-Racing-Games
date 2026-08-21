@@ -8,7 +8,7 @@ import { Minimap } from '../../src/ui/minimap'
 import { type HudElements } from '../../src/ui/hud'
 import type { Renderer, RenderView } from '../../src/engine/renderer'
 import type { TrackManager } from '../../src/game/track-manager'
-import type { TrackContext } from '../../src/game/track-context'
+import type { TrackContext } from '../../src/shared/types'
 
 /** 圈长 1000 × 3 圈的 TrackManager 替身（渲染仅使用 getLapLength 推进预览相机） */
 const TRACK_MANAGER = {

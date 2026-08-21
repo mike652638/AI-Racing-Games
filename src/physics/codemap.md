@@ -40,7 +40,7 @@
   - `src/ai/simulate.ts`、`src/ai/bot.ts`：复用 `updateCar` / `CarConfig` / `CarState` / `CarInput` 做 bot 跑圈模拟与校验
   - `src/engine/renderer.ts`、`src/engine/smoke-render.ts`：消费 `SmokeParticle` 渲染烟雾
   - `src/ui/hud.ts`、`src/ui/screens.ts`：读取 `CarConfig`（`import type`，编译期擦除）显示参数
-- Depends on: `src/shared/constants`（`DRIFT_STEER_THRESHOLD` / `DRIFT_CHARGE_THRESHOLD` / `DRIFT_SPEED_FACTOR` / `DRIFT_SCORE_MAX`、`BOOST_ACCEL_MULT` / `BOOST_MAX_SPEED_MULT`、`OFF_ROAD_PUSHBACK`——唯一真源，2026-08-05 自 game/constants 提升，`src/game/constants` 为 re-export 兼容层）；不依赖引擎 / 渲染 / 赛道模块；`drift.ts`、`input.ts` 以类型方式依赖同目录 `car.ts`
+- Depends on: `src/shared/constants`（`DRIFT_STEER_THRESHOLD` / `DRIFT_CHARGE_THRESHOLD` / `DRIFT_SPEED_FACTOR` / `DRIFT_SCORE_MAX`、`BOOST_ACCEL_MULT` / `BOOST_MAX_SPEED_MULT`、`OFF_ROAD_PUSHBACK`——唯一真源，2026-08-05 自 game/constants 提升，原 `src/game/constants` 兼容层已于 2026-08-22 移除）；不依赖引擎 / 渲染 / 赛道模块；`drift.ts`、`input.ts` 以类型方式依赖同目录 `car.ts`
 
 ## Files
 

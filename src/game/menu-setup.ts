@@ -1,6 +1,6 @@
 import { getRouteDef, ROUTE_DEFS, routeStageCount } from '../engine/routes'
 import { APP_VERSION, APP_VERSION_DATE, RACING_TOUCH_HINT, SPLIT_TOUCH_HINT, WEATHER_MODE_LABEL } from '../ui/copy'
-import { CHALLENGE_SECONDS, CHALLENGE_TARGET_SCORE } from './constants'
+import { CHALLENGE_SECONDS, CHALLENGE_TARGET_SCORE } from '../shared/constants'
 import type { ModeStrategy } from './mode-strategy'
 import type { WeatherOverride } from '../engine/lighting'
 

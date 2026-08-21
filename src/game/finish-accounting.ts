@@ -1,4 +1,4 @@
-import { lapFromZ } from './lap'
+import { lapFromZ } from '../shared/lap'
 import {
   addDriftScore,
   addMatchResult,
@@ -16,7 +16,7 @@ import { resolveWeatherPhase } from '../engine/lighting'
 import { evaluateAchievements, type AchievementId } from './achievements'
 import { markDailyFinished, rollDailyToToday, shouldCompleteDaily, todayDateString } from './daily'
 import type { ModeStrategy } from './mode-strategy'
-import type { RaceState } from './state'
+import type { RaceState } from '../shared/types'
 import type { TrackManager } from './track-manager'
 
 /**

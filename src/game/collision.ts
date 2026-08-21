@@ -1,7 +1,7 @@
-import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR, RACE_START_GRACE } from './constants'
+import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR, RACE_START_GRACE } from '../shared/constants'
 import type { CarState } from '../physics/car'
 import { collideWithPlayer, type TrafficCar } from '../engine/traffic'
-import type { RaceState } from './state'
+import type { RaceState } from '../shared/types'
 
 /**
  * 单个玩家与车流的碰撞检测 + 惩罚。

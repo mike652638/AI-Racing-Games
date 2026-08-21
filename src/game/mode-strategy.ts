@@ -1,9 +1,9 @@
 import type { CarConfig, CarInput } from '../physics/car'
 import { mergeCarInputs } from '../physics/input'
-import { CHALLENGE_SECONDS } from './constants'
+import { CHALLENGE_SECONDS } from '../shared/constants'
 import { initialPreviewCameraZ, updatePlayerFrame } from './frame-pure'
-import { lapFromZ } from './lap'
-import type { RaceState } from './state'
+import { lapFromZ } from '../shared/lap'
+import type { RaceState } from '../shared/types'
 import type { TrackManager } from './track-manager'
 
 /**

@@ -3,7 +3,8 @@ import { updateHud, type HudElements } from '../../src/ui/hud'
 import { createRaceState } from '../../src/game/state'
 import { createCarConfig } from '../../src/physics/car'
 import { TRACK_DEFS } from '../../src/engine/tracks'
-import { createTrackContext, type TrackContext } from '../../src/game/track-context'
+import { createTrackContext } from '../../src/game/track-context'
+import type { TrackContext } from '../../src/shared/types'
 import { DRIFT_SCORE_MAX } from '../../src/shared/constants'
 
 /** 双玩家各自独立赛道世界：P1 经典（3 圈）、P2 S 弯（2 圈） */

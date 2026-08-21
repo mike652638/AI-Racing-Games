@@ -1,12 +1,8 @@
 import { createPlayerState, resetPlayerState } from './player-state'
 import { TRACK_DEFS } from '../engine/tracks'
-import { PHASE_MENU } from './phase'
+import { PHASE_MENU } from '../shared/phase'
 import { createTrackContext } from './track-context'
 import type { RaceState } from '../shared/types'
-
-// 类型提升（2026-08-05）：RaceState 接口唯一真源移至 src/shared/types.ts（解耦 ui→game 类型依赖），
-// 本文件保留同名 re-export 兼容层，既有导入路径不变
-export type { RaceState }
 
 /** 创建初始对局状态（默认以 TRACK_DEFS[0] 创建双 TrackContext，车流由各自上下文持有） */
 export function createRaceState(): RaceState {

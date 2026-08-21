@@ -9,8 +9,8 @@
  *
  * 依赖说明：本模块仅 `import type`（编译期擦除，运行时无任何依赖）；
  * shared 仍为运行时最底层（constants/phase/lap 真源），类型转发不构成运行时环。
- * game/state.ts、game/track-context.ts 与 game/player-state.ts 保留同名
- * re-export 兼容层，既有导入路径不受影响。
+ * game/state.ts、game/track-context.ts 与 game/player-state.ts 以 import type
+ * 自本模块引入类型（原同名 re-export 兼容层已于 2026-08-22 移除）。
  */
 import type { RoadStrip } from '../engine/road-strip'
 import type { Segment } from '../engine/track'
@@ -52,7 +52,8 @@ export interface TrackContext {
 /**
  * 单个玩家的独立对局状态（2026-08-15 自 game/player-state 提升）：车辆、漂移、
  * 相机进度、个人计时与碰撞冷却。分屏模式下 P1/P2 各持有一份实例，
- * 主循环分别更新，互不影响。game/player-state.ts 保留同名 re-export 兼容层。
+ * 主循环分别更新，互不影响。（原 game/player-state.ts 的类型 re-export 已于
+ * 2026-08-22 移除，该文件以 import type 自本模块引入。）
  */
 export interface PlayerState {
   /** 车辆状态（横向位置 + 速度） */

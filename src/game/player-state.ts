@@ -1,12 +1,7 @@
 import { createDriftState } from '../physics/drift'
 import type { PlayerState } from '../shared/types'
 
-/**
- * PlayerState 接口真源已提升至 src/shared/types.ts（2026-08-15 类型提升，
- * 消除 shared → game 的唯一类型反指），本文件保留同名 re-export 兼容层
- * 供 game 内部旧路径与既有测试消费；新代码可直接从 src/shared/types 导入。
- */
-export type { PlayerState } from '../shared/types'
+/** PlayerState 接口唯一真源在 src/shared/types.ts */
 
 /** 创建初始玩家状态 */
 export function createPlayerState(): PlayerState {

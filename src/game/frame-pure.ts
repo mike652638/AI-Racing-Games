@@ -5,10 +5,14 @@ import type { DriftPopup } from '../engine/screen-effects'
 import type { RouteFork } from '../engine/guide-line'
 import { updateCar, type CarConfig, type CarInput } from '../physics/car'
 import { driftSpeedFactor, effectiveTurnRate, updateDrift } from '../physics/drift'
-import { BOOST_CHARGE_RATE, BOOST_DRAIN_RATE, MINI_TURBO_ACCEL_MULT, PERFECT_BOOST_MIN_CHARGE } from './constants'
-import { lapFromZ } from './lap'
-import type { PlayerState } from './player-state'
-import type { TrackContext } from './track-context'
+import {
+  BOOST_CHARGE_RATE,
+  BOOST_DRAIN_RATE,
+  MINI_TURBO_ACCEL_MULT,
+  PERFECT_BOOST_MIN_CHARGE,
+} from '../shared/constants'
+import { lapFromZ } from '../shared/lap'
+import type { PlayerState, TrackContext } from '../shared/types'
 
 /**
  * 是否调度下一帧（M16 纯函数化，替代 frame() 内 `if (!ur.shouldRender) return` 裸判断）：

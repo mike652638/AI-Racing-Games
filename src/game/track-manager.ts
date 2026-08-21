@@ -1,5 +1,6 @@
 import { TRACK_DEFS } from '../engine/tracks'
-import { createTrackContext, type TrackContext } from './track-context'
+import { createTrackContext } from './track-context'
+import type { TrackContext } from '../shared/types'
 
 /** TrackManager 依赖注入：重置回调与选单 DOM（P1/P2 双类高亮） */
 export interface TrackManagerDeps {

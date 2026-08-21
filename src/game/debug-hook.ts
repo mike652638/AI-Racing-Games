@@ -1,4 +1,4 @@
-import type { Phase } from './phase'
+import type { Phase } from '../shared/phase'
 
 /** 调试钩子类型：供自动化验证脚本读取运行时状态（与 installDebugHook 保持同步） */
 declare global {
