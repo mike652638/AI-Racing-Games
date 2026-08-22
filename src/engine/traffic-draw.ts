@@ -29,11 +29,17 @@ export function drawSingleTraffic(ctx: CanvasRenderingContext2D, car: TrafficPro
   ctx.fillRect(cx - w * 0.45, topY + h * 0.78, w * 0.18, h * 0.22)
   ctx.fillRect(cx + w * 0.27, topY + h * 0.78, w * 0.18, h * 0.22)
   if (night) {
-    // 红色尾灯：车身下部（车头朝画面上方，车尾在下）双灯——cx ± width*0.3、宽 width*0.2、
-    // 从 car.top.y + height*0.7 起高 height*0.25
+    // 红色尾灯：车身下部（车头朝画面上方，车尾在下）双灯。
+    // 2026-08-22 收敛：原每盏 0.2w×0.25h 面积过大（合计约 10% 车身面积、纵向吞掉
+    // 70%-95% 区带）遮挡车身，且右灯未减自身宽导致左右不对称；现核心灯收敛为
+    // 0.15w×0.07h 并镜像对称（左 [-0.26,-0.11] / 右 [0.11,0.26]），外层低透明
+    // 光晕保留夜间点亮感（合计面积约 5%，不再遮挡车身主体）。
+    ctx.fillStyle = 'rgba(255, 59, 48, 0.25)'
+    ctx.fillRect(cx - w * 0.29, topY + h * 0.7, w * 0.22, h * 0.11)
+    ctx.fillRect(cx + w * 0.29 - w * 0.22, topY + h * 0.7, w * 0.22, h * 0.11)
     ctx.fillStyle = '#ff3b30'
-    ctx.fillRect(cx - w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
-    ctx.fillRect(cx + w * 0.3, topY + h * 0.7, w * 0.2, h * 0.25)
+    ctx.fillRect(cx - w * 0.26, topY + h * 0.72, w * 0.15, h * 0.07)
+    ctx.fillRect(cx + w * 0.26 - w * 0.15, topY + h * 0.72, w * 0.15, h * 0.07)
     // car 为 TrafficProjection（含原始车数据字段 car.car），shiftDir 取自车数据
     drawHeadlight(ctx, cx, topY, w, h, car.car.shiftDir)
   } else {
