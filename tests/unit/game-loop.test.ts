@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
+  GameLoop,
   advancePreviewCameraZ,
   initialPreviewCameraZ,
   PREVIEW_CAMERA_SPEED,
@@ -9,6 +10,8 @@ import {
   updatePlayerFrame,
   viewFor,
 } from '../../src/game/game-loop'
+import { createMockCanvas } from '../__mocks__/canvas'
+import { PHASE_MENU, PHASE_RACING } from '../../src/shared/phase'
 import { createPlayerState } from '../../src/game/player-state'
 import { createTrackContext } from '../../src/game/track-context'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
@@ -354,5 +357,265 @@ describe('shouldScheduleNextFrame（M16 帧循环调度契约）', () => {
     // 断言契约：mustRender 语义下调度决策唯一依赖 shouldRender
     expect(shouldScheduleNextFrame(true)).toBe(true)
     expect(shouldScheduleNextFrame(false)).toBe(false)
+  })
+})
+
+/**
+ * D3：GameLoop.destroy() 生命周期测试的 DOM/window stub（仿 integration 精简版——
+ * 覆盖构造/startCountdown/destroy 触达的 API；getElementById 通配自动建记录式监听元素）。
+ */
+function stubDestroyEnvironment(): {
+  fireKey: (code: string) => void
+  driveFrame: () => void
+  rafCount: () => number
+  cancelRafCount: () => number
+  phase: () => unknown
+  clearIntervalCalls: () => number
+} {
+  const listeners = new Map<string, Array<(e: { code: string }) => void>>()
+  const elements = new Map<string, StubDestroyElement>()
+  const rafCallbacks: FrameRequestCallback[] = []
+  let now = performance.now()
+  let intervalSeq = 0
+  const clearedIntervals: number[] = []
+  let cancelRafCalls = 0
+
+  const createElementStub = (): StubDestroyElement => {
+    const elListeners = new Map<string, Array<(e: unknown) => void>>()
+    return {
+      textContent: '',
+      hidden: false,
+      className: '',
+      style: {},
+      classList: { toggle: vi.fn(), add: vi.fn(), remove: vi.fn(), contains: vi.fn(() => false) },
+      appendChild: vi.fn(),
+      querySelector: () => null,
+      addEventListener: (type: string, cb: (e: unknown) => void): void => {
+        const arr = elListeners.get(type) ?? []
+        arr.push(cb)
+        elListeners.set(type, arr)
+      },
+      removeEventListener: (type: string, cb: (e: unknown) => void): void => {
+        const arr = elListeners.get(type)
+        if (arr) {
+          const idx = arr.indexOf(cb)
+          if (idx >= 0) arr.splice(idx, 1)
+        }
+      },
+      setPointerCapture: vi.fn(),
+      value: '',
+      remove: vi.fn(),
+      _listeners: elListeners,
+    }
+  }
+
+  const windowStub = {
+    location: { search: '' },
+    innerWidth: 800,
+    innerHeight: 600,
+    devicePixelRatio: 1,
+    addEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+      const arr = listeners.get(type) ?? []
+      arr.push(cb)
+      listeners.set(type, arr)
+    },
+    removeEventListener: (type: string, cb: (e: { code: string }) => void): void => {
+      const arr = listeners.get(type)
+      if (arr) {
+        const idx = arr.indexOf(cb)
+        if (idx >= 0) arr.splice(idx, 1)
+      }
+    },
+    setInterval: (): number => ++intervalSeq,
+    clearInterval: (id: number): void => {
+      clearedIntervals.push(id)
+    },
+    setTimeout: (): number => ++intervalSeq,
+    clearTimeout: (): void => undefined,
+  }
+
+  const documentStub = {
+    getElementById: (id: string): unknown => {
+      if (id === 'game') return createMockCanvas(800, 600)
+      if (!elements.has(id)) {
+        const stub = createElementStub()
+        // 倒计时覆盖层：querySelector 需返回元素（runCountdown 依赖 .countdown-number 存在才建 interval）
+        if (id === 'countdown-overlay') {
+          stub.querySelector = () => createElementStub()
+        }
+        elements.set(id, stub)
+      }
+      return elements.get(id)
+    },
+    createElement: (tag: string): unknown => (tag === 'canvas' ? createMockCanvas() : createElementStub()),
+    body: createElementStub(),
+    querySelector: () => null,
+  }
+
+  class FakeAudioContext {
+    state = 'running'
+    currentTime = 0
+    sampleRate = 44100
+    destination = {}
+    createGain = (): unknown => ({
+      gain: {
+        value: 0,
+        setTargetAtTime: (): void => undefined,
+        setValueAtTime: (): void => undefined,
+        exponentialRampToValueAtTime: (): void => undefined,
+        linearRampToValueAtTime: (): void => undefined,
+      },
+      connect: (): unknown => undefined,
+      disconnect: (): void => undefined,
+    })
+    createBiquadFilter = (): unknown => ({
+      type: '',
+      frequency: { value: 0, setTargetAtTime: (): void => undefined },
+      Q: { value: 1 },
+      connect: (): unknown => undefined,
+      disconnect: (): void => undefined,
+    })
+    createOscillator = (): unknown => ({
+      type: '',
+      frequency: { value: 0, setTargetAtTime: (): void => undefined },
+      detune: { value: 0 },
+      connect: (): unknown => undefined,
+      disconnect: (): void => undefined,
+      start: (): void => undefined,
+      stop: (): void => undefined,
+    })
+    createBuffer = (channels: number, length: number, rate: number): unknown => ({
+      numberOfChannels: channels,
+      length,
+      sampleRate: rate,
+      getChannelData: (): Float32Array => new Float32Array(length),
+    })
+    createBufferSource = (): unknown => ({
+      buffer: null,
+      loop: false,
+      connect: (): unknown => undefined,
+      disconnect: (): void => undefined,
+      start: (): void => undefined,
+      stop: (): void => undefined,
+    })
+    resume = (): void => undefined
+  }
+
+  vi.stubGlobal('performance', { now: (): number => now })
+  vi.stubGlobal('window', windowStub as unknown as Window & typeof globalThis)
+  vi.stubGlobal('document', documentStub as unknown as Document)
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
+    rafCallbacks.push(cb)
+    return rafCallbacks.length
+  })
+  vi.stubGlobal('cancelAnimationFrame', (): void => {
+    cancelRafCalls++
+  })
+  vi.stubGlobal('AudioContext', FakeAudioContext as unknown as typeof AudioContext)
+
+  const fireKey = (code: string): void => {
+    for (const cb of listeners.get('keydown') ?? []) cb({ code })
+  }
+  const driveFrame = (): void => {
+    const frame = rafCallbacks[0] as FrameRequestCallback
+    now += 50
+    frame(now)
+  }
+  const phase = (): unknown => (windowStub as unknown as { __gameDebug?: { phase: unknown } }).__gameDebug?.phase
+
+  return {
+    fireKey,
+    driveFrame,
+    rafCount: () => rafCallbacks.length,
+    cancelRafCount: () => cancelRafCalls,
+    phase,
+    clearIntervalCalls: () => clearedIntervals.length,
+  }
+}
+
+/** D3：destroy 测试最小元素替身（记录式监听 + 可移除） */
+interface StubDestroyElement {
+  textContent: string
+  hidden: boolean
+  className: string
+  style: Record<string, string>
+  classList: {
+    toggle: ReturnType<typeof vi.fn>
+    add: ReturnType<typeof vi.fn>
+    remove: ReturnType<typeof vi.fn>
+    contains: ReturnType<typeof vi.fn>
+  }
+  appendChild: ReturnType<typeof vi.fn>
+  querySelector: (selector: string) => StubDestroyElement | null
+  addEventListener: (type: string, cb: (e: unknown) => void) => void
+  removeEventListener: (type: string, cb: (e: unknown) => void) => void
+  setPointerCapture: ReturnType<typeof vi.fn>
+  value: string
+  remove: ReturnType<typeof vi.fn>
+  _listeners?: Map<string, Array<(e: unknown) => void>>
+}
+
+describe('GameLoop.destroy 生命周期（D3）', () => {
+  let env: ReturnType<typeof stubDestroyEnvironment>
+
+  beforeEach(() => {
+    env = stubDestroyEnvironment()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('destroy 后再次触发原键盘事件不产生状态变化（监听已移除）', () => {
+    const loop = new GameLoop()
+    expect(env.phase()).toBe(PHASE_MENU)
+    // 驱动一帧确保帧循环活跃（构造时已调度 1 帧）
+    env.driveFrame()
+    loop.destroy()
+    // 菜单阶段 Space 原会开始比赛：destroy 后 keydown 监听已移除，触发无任何效果
+    env.fireKey('Space')
+    expect(env.phase()).toBe(PHASE_MENU)
+    // Digit2 原会切换赛道：同样无效果
+    env.fireKey('Digit2')
+    expect(env.phase()).toBe(PHASE_MENU)
+  })
+
+  test('destroy 幂等：连续两次调用不抛错', () => {
+    const loop = new GameLoop()
+    loop.destroy()
+    expect(() => loop.destroy()).not.toThrow()
+    expect(() => loop.destroy()).not.toThrow()
+  })
+
+  test('destroy 后 RAF 不再被调度（已排队旧帧回调不自续）', () => {
+    const loop = new GameLoop()
+    // 构造时调度 1 帧；驱动两帧后循环活跃（每帧自续 → rafCount 增长）
+    expect(env.rafCount()).toBe(1)
+    env.driveFrame()
+    env.driveFrame()
+    const before = env.rafCount()
+    expect(before).toBeGreaterThan(1)
+    loop.destroy()
+    // destroy 已 cancel 当前句柄；模拟已排队旧帧回调仍被驱动（cancel 竞态防御）：
+    // frame 首行 destroyed 守卫直接 return，不再 push 新 rAF
+    const queued = env.rafCount()
+    env.driveFrame()
+    env.driveFrame()
+    env.driveFrame()
+    expect(env.rafCount()).toBe(queued)
+    expect(env.cancelRafCount()).toBe(1)
+  })
+
+  test('destroy 取消起步倒计时计时器（countdownCancel 释放 interval）', () => {
+    const loop = new GameLoop()
+    // 菜单开始 → startCountdown 创建倒计时 interval（覆盖层 3→2→1→GO）
+    env.fireKey('Space')
+    expect(env.phase()).toBe(PHASE_RACING)
+    expect(env.clearIntervalCalls()).toBe(0)
+    loop.destroy()
+    // countdownCancel → runCountdown.cancel → window.clearInterval 被调用
+    expect(env.clearIntervalCalls()).toBeGreaterThan(0)
+    // 二次 destroy 幂等：countdownCancel 已置 null，不再重复取消
+    loop.destroy()
+    expect(env.clearIntervalCalls()).toBe(1)
   })
 })

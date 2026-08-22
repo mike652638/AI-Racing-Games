@@ -141,6 +141,10 @@ export class GameLoop {
   private challengeTimer: HTMLDivElement | null = null
   /** 挑战模式实时得分 HUD 元素（#challenge-score，挑战模式竞赛中显示当前漂移得分） */
   private challengeScore: HTMLDivElement | null = null
+  /** 每日挑战赛中徽章元素（#daily-badge，A2 惰性缓存；显隐/文本由帧块处理） */
+  private dailyBadge: HTMLDivElement | null = null
+  /** A2：当前赛道是否为今日挑战道（startGame 真正开局时计算；路线模式恒 false 保守隐藏） */
+  private isDailyTrack = false
   /** BOOST 条 HUD 元素（#boost-bar，防御式缓存；宽度/显隐由帧块处理，G4） */
   private boostBar: HTMLDivElement | null = null
   /** 分屏 P2 BOOST 条 HUD 元素（#boost-bar-2，2026-08-08 实测修复：分屏时 P2 蓄能显示；防御式缓存） */
@@ -234,6 +238,8 @@ export class GameLoop {
   private routeForkAlpha = 0
   /** 已注册的清理函数（S 修复 S3：destroy() 统一移除事件监听/取消定时器） */
   private readonly cleanups: Array<() => void> = []
+  /** D3：destroy() 是否已执行——幂等守卫（二次调用直接返回）；frame 首行防御已排队旧帧回调不再自续 */
+  private destroyed = false
 
   constructor() {
     const $ = (id: string): HTMLElement => document.getElementById(id)!
@@ -622,17 +628,26 @@ export class GameLoop {
   }
 
   /**
-   * 销毁实例（S 修复 S3）：取消帧循环与倒计时定时器、移除全部已登记事件监听、
-   * 释放输入管理/摇杆/持续音效。用于测试隔离与热重载；重复调用幂等。
+   * 销毁实例（S 修复 S3 + D3 生命周期管理）：取消帧循环与倒计时定时器、移除全部已登记
+   * 事件监听、释放输入管理/摇杆/持续音效。用于测试隔离与热重载；
+   * 幂等——destroyed 标志守卫，二次调用直接返回；destroy 后已排队旧帧回调即使仍被驱动
+   * （cancelAnimationFrame 竞态）亦因 frame 首行守卫不再自续 rAF。
    */
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+
+    // 1. 取消帧循环：已排队 rAF 回调即使仍被驱动，frame 首行 destroyed 守卫不再自续
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId)
       this.rafId = null
     }
     this.loopRunning = false
-    this.countdownCancel?.()
-    this.countdownCancel = null
+
+    // 2. 移除自身注册的事件监听：window keydown/resize 与各元素监听（start-btn/轨道卡/音量
+    //    slider/暂停按钮/榜单卡片/竖屏按钮等）经 cleanups 统一移除——onKeyDown/resize 均为
+    //    具名私有引用，与注册时同一函数引用，removeEventListener 可正确配对；input manager
+    //    的 window keydown/keyup 经 input.destroy() 移除
     this.cleanups.forEach((fn) => {
       try {
         fn()
@@ -642,10 +657,21 @@ export class GameLoop {
     })
     this.cleanups.length = 0
     this.input.destroy()
+
+    // 3. 取消起步倒计时计时器（runCountdown 的 interval 与隐藏 timeout）
+    this.countdownCancel?.()
+    this.countdownCancel = null
+
+    // 4. 静音持续音（引擎/漂移胎声/胎噪/雨声）
+    this.silenceDriveSounds(true)
+
+    // 5. 摇杆：清残留输入（detach 内部已含 reset，此处显式调用保证 destroy 契约，幂等无害）+
+    //    解除 pointer 监听并移除 DOM；分屏四分区触控同走 detach
+    this.joystick?.reset()
     this.joystick?.detach()
     this.touchQuadrant?.detach()
-    this.silenceDriveSounds(true)
-    // R8：释放持续音节点（引擎/胎噪构造即 start，页面销毁时须 stop 防上下文占用）
+
+    // 6. 释放音频装备束（引擎/胎噪 destroy，防音频上下文占用；雨声等 stop 即停源）
     if (this.audioRig) {
       try {
         destroyAudioRig(this.audioRig)
@@ -792,6 +818,12 @@ export class GameLoop {
           this.selectTrackFor(0, startTrackIndex)
         }
       }
+      // A2：每日挑战赛中徽章——当前赛道 == 今日赛道才显示（?daily=0 关闭时不显示；
+      // 路线模式段切换会换赛道，重算复杂，保守隐藏徽章避免与实际赛道不符）。
+      this.isDailyTrack =
+        !this.mode.routeMode &&
+        this.dailyModeEnabled &&
+        this.trackManager.getTrackId(0) === rollDailyToToday(loadDaily(), todayDateString()).trackId
       this.startCountdown()
       // F-1（2026-08-05 审计修复）：起步倒计时冻结窗口——与 runCountdown 视觉同步，
       // GO 前 raceTime/车流/玩家物理全部冻结（updateFrame 按 dt 递减 countdownRemaining）
@@ -914,6 +946,8 @@ export class GameLoop {
    * 跳过渲染段与 rAF 自续，保持既有行为）。
    */
   private readonly frame = (now: number): void => {
+    // D3：destroy 后不再执行帧逻辑/自续（已排队旧帧回调竞态防御；destroy 前恒 false 零行为改变）
+    if (this.destroyed) return
     const dt = Math.min((now - this.last) / 1000, 0.05)
     this.last = now
 
@@ -931,6 +965,8 @@ export class GameLoop {
       collisionFlash: this.collisionFlash,
       challengeTimer: this.challengeTimer,
       challengeScore: this.challengeScore,
+      dailyBadge: this.dailyBadge,
+      isDailyTrack: this.isDailyTrack,
       boostBar: this.boostBar,
       boostBar2: this.boostBar2,
       nearMissEl: this.nearMissEl,
@@ -955,6 +991,7 @@ export class GameLoop {
     this.collisionFlash = ur.collisionFlash
     this.challengeTimer = ur.challengeTimer
     this.challengeScore = ur.challengeScore
+    this.dailyBadge = ur.dailyBadge
     this.boostBar = ur.boostBar
     this.boostBar2 = ur.boostBar2 ?? null
     this.nearMissEl = ur.nearMissEl

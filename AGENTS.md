@@ -31,7 +31,7 @@ src/
   ui/           # HUD（含碰撞计数 hudCollision）、画面（screens）、存档（save）、格式化（format）、文案常量（copy.ts）、触屏摇杆（joystick）、小地图（minimap）（阶段常量/类型直接导入 shared/phase；原 gamestate 兼容层 2026-08-05 已删除）
   audio/        # WebAudio 合成：引擎音效（engine，含漂移摩擦 DriftSound / 胎噪 TireSound / 双层碰撞音 CollisionSound）、背景音乐（music）
 tests/
-  unit/         # Vitest 单测（63 文件 997 用例；连同 tests/bench 冒烟合计 64 文件 998 用例）
+  unit/         # Vitest 单测（64 文件 1025 用例；连同 tests/bench 冒烟合计 65 文件 1026 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面 1280×720 + 移动横屏 812×375 双 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock
@@ -73,6 +73,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 22. **M21**：菜单沉浸感优化与部署修复（2026-08-07）——菜单修复批次（竖屏标题重叠归零/hover 预览联动/竖屏榜单默认收起/320 字号收敛/按钮 hover 光晕/榜单对比度）、赛道预览背景层（宽屏全屏赛道 SVG 背景 + 响应式降级 + 中央/背景双写联动）、菜单响应式布局修复（审计驱动：低高度桌面分支/移动横屏紧凑化/竖屏 rotate-hint 上移）、菜单整体感优化（#start-screen 背景叠加割裂修复）、静态托管子路径部署修复（vite base 相对路径 './'）；**M21 收尾（2026-08-08）**：部署可见版本号（copy.ts `APP_VERSION`/`APP_VERSION_DATE` + index.html meta app-version + `#app-version` 菜单标签 + `.version-tag` 样式 + copy.test 版本断言 4 用例）（✅ typecheck + lint + format:check + 938 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 40 通过 0 失败 + 8 视口条件跳过）
 23. **M22-M33**（2026-08-07/08 可玩性提升与实测修复系列，一次提交合并）：M22 near-miss 贴身超车/完美氮气/漂移小喷；M23 S/A/B 奖牌/8 项成就/挑战检查站；M24 随机天气变体 `?weather=`；M25 车流橡皮筋 `?traffic=`；M26 Game Feel 强化（飘字/脉冲线/闪光）；M27 运行时实测修复批次；M28/M28-b/M31/M32 OutRun 式路线模式 `?route=` 与导航引导线 `?guide=1`；M29 每日挑战 `?daily=`；M30 BOOST 速度线强化与飘字 combo 联动；M33 2026-08-08 运行实测修复 5 项（引导线 z-order/岔路提示间距/路灯双层光晕/分屏 P2 独立 BOOST 条/倒计时触屏提示适配）。各里程碑明细与验证记录见 README 里程碑表（✅ 每项经 typecheck + lint + test + bot + build + e2e 验证）
 24. **M34**：game-loop 第二轮瘦身（2026-08-15，1490→1133 行）——六组逻辑下沉为带单测的兄弟模块：`game-params.ts`（URL 模式解析纯函数：互斥判定/weather/traffic/guide/daily/route 解析集中）、`menu-setup.ts`（菜单静态装饰装配 applyMenuChrome，getElement 注入式）、`route-choice.ts`（路线模式集中化：initRouteRun/openRouteChoice/selectRouteBranch/routeAdvanceAction/advanceRouteForkAlpha/hideRouteChoiceOverlay——逻辑原散落 startGame/beginRouteChoice/chooseRouteBranch/frame/applyPhase 五处，收敛为单一真源）、`boost-feedback.ts`（BOOST 未蓄能红闪纯状态机 + 300ms 冷却窗口）、`track-cards.ts`（赛道卡构建 + nextGridTrackIndex 网格导航纯函数）、`pause-controls.ts`（三音量 slider/按钮/加载态注入式绑定）；另加 `shared/timer.ts` unrefSafeTimeout（收敛两处重复 unref 兼容 setTimeout）、`ui/screens.ts` applyPauseBranding（暂停标题按玩家标注 + 赛道名）/revealRacingTouchHint（触屏引导下沉）、`top-refresh.ts` refreshMenuBoard（构造器与回菜单两处同源刷新消重）；applyPhase 由 159 行瘦至 ~90 行；新增 7 个单测文件 60 用例（game-params 11/menu-setup 8/route-choice 17/screens-pause 5/boost-feedback 5/track-cards 7/pause-controls 7），行为逐字节等价（game-loop-integration 全链路回归锁定）；对外 API（initGame/re-export 兼容层）不变（✅ typecheck + lint + 998 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 40 通过 0 失败 + 8 视口条件跳过）
+25. **M35**：QA 实测修复与打磨批次（2026-08-22）——**批次 A 模式 HUD 信息补全**：挑战模式实时得分文案改「得分 N / 目标 5000」（`CHALLENGE_TARGET_SCORE` 自 shared/constants 导入）+ 新增 `#daily-badge` 每日挑战徽章（frame-update 按 `isDailyTrack` 输入显隐、game-loop startGame 计算——`!routeMode && dailyModeEnabled && 当前赛道 === rollDailyToToday(loadDaily()).trackId`，路线模式保守隐藏；金色胶囊徽章样式 `--color-accent` 令牌）；**批次 B 移动端触控体验**：`.track-stars` nowrap + flex-shrink 0（星级与赛道名同行）、max-height:480 下 `.track-option` min-height 28→44px（Apple HIG 触摸目标）+ `.track-label` row 布局、(hover:none) 下 `#pause-btn` bottom 16→32px、portrait-mode 14→30px（与摇杆拉开 ≥16px 安全边距）；**批次 C 六项视觉打磨**：`.daily-progress` 字号 12→13px + 颜色提亮 rgba(0,230,255,1)、雨滴密度 ×1.4（80→112，`RAIN_DROPS_MULT`）+ 每滴 ±4° 确定性角度抖动（`RAIN_ANGLE_JITTER_DEG`，mulberry32(2026)，RainDrop 新增 angleOffset）、分屏分隔线 4→6px、`HEADLIGHT_CORE` #ffe08a→#fff0c0（车头灯更白与路灯反向拉开）、路灯光晕更黄更弥散（rgba(255,208,90,…) 半径 2.6→2.9 / 1.9→2.1）、canyon grassLight 22→20（拉大与路面明度差）、小地图背景 alpha 0.72→0.6（缓解遮挡路灯光晕）、`#near-miss` top 22%→42%（飘字下移至画面中部）；**批次 D 技术债**：screens-finish-panel.test.ts 新增 17 用例（经 applyPhaseToScreens 覆盖私有 fillFinishPanel 各分支：普通/挑战达标未达标/路线/热座/分屏/幂等）、GameLoop.destroy() 幂等生命周期（destroyed 标志 + frame 首行守卫防旧帧自续；清理 RAF/window 监听/倒计时/持续音/音频装备束/joystick/touchQuadrant；game-loop.test.ts +4 用例）、docs/reports/pwa-update-assessment.md PWA 更新策略评估（已是 registerType 'prompt'，对局打断风险不存在，维持现状；vite.config.ts 仅注释增强）；**尾灯修复（用户反馈驱动）**：night 车流双尾灯收敛——核心灯 0.15w×0.07h 镜像对称（原 0.2w×0.25h 且右灯贴边不对称，合计约 10% 车身面积遮挡车身）+ 外层 rgba(255,59,48,0.25) 光晕层（合计约 5%，保留夜间点亮感）（✅ typecheck + lint + 1026 用例 + bot 9 赛道矩阵 0 违规 + build PWA + e2e 46 通过 0 失败 + 8 视口条件跳过）
 
 每个里程碑结束验收标准：typecheck + test 全绿 + `npm run bot` 有稳定输出。
 
@@ -85,7 +86,7 @@ docs/           # 计划档案、视觉分析、superpowers plans
 
 ## 测试命令（对应 opencode 的 /test /lint /typecheck）
 
-- `/test`：`npm test`（vitest run，64 文件 998 用例，含 tests/bench 冒烟），失败即修复
+- `/test`：`npm test`（vitest run，65 文件 1026 用例，含 tests/bench 冒烟），失败即修复
 - `/test:e2e`：`npm run test:e2e`（Playwright 视觉回归，桌面 1280×720 + 移动横屏 812×375 + 大屏 1920×1080；需先 `npx playwright install chromium`）
 - `/lint`：`npm run lint`（eslint）
 - `/typecheck`：`npm run typecheck`（tsc --noEmit）

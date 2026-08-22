@@ -160,7 +160,7 @@ src/
   ui/           # HUD、格式化、游戏状态机、启动/结算画面、存档、触屏摇杆、四分区触控、小地图
   audio/        # WebAudio 合成：引擎音效（漂移摩擦/胎噪）、背景音乐
 tests/
-  unit/         # Vitest 单测（56 文件 937 用例；连同 tests/bench 冒烟合计 57 文件 938 用例）
+  unit/         # Vitest 单测（64 文件 1025 用例；连同 tests/bench 冒烟合计 65 文件 1026 用例）
   e2e/          # Playwright 视觉回归（visual.spec.ts，桌面/移动横屏/大屏三 project）
   bot/          # bot 跑圈校验脚本（run-bot.ts，9 赛道矩阵）
   __mocks__/    # canvas mock

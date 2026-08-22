@@ -139,13 +139,14 @@ export function drawLamp(ctx: CanvasRenderingContext2D, x: number, y: number, hp
   ctx.fillRect(x - poleW / 2, y - hpx, poleW, hpx)
   const r = Math.max(hpx * 0.14, 2)
   // 光晕：外圈淡光 + 内圈微光（逐层覆盖模拟渐变衰减）
-  ctx.fillStyle = 'rgba(255, 224, 138, 0.14)'
+  // C3：光晕色向黄偏移（255,224,138→255,208,90）+ 半径/透明度梯度微增，更黄更弥散，与车头灯冷白反向拉开
+  ctx.fillStyle = 'rgba(255, 208, 90, 0.16)'
   ctx.beginPath()
-  ctx.arc(x, y - hpx, r * 2.6, 0, Math.PI * 2)
+  ctx.arc(x, y - hpx, r * 2.9, 0, Math.PI * 2)
   ctx.fill()
-  ctx.fillStyle = 'rgba(255, 224, 138, 0.22)'
+  ctx.fillStyle = 'rgba(255, 208, 90, 0.26)'
   ctx.beginPath()
-  ctx.arc(x, y - hpx, r * 1.9, 0, Math.PI * 2)
+  ctx.arc(x, y - hpx, r * 2.1, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = '#ffe08a'
   ctx.beginPath()

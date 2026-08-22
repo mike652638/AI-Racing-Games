@@ -216,6 +216,13 @@
     min-height: 52px;
     padding: 8px 14px;
   }
+
+  /* B2（2026-08-22）：触屏暂停按钮适度上移（bottom 16→32px），拉开与底部摇杆热区的
+   * 垂直安全边距（≥16px），避免快速操作误触；bottom 32px 仍在拇指热区（≤60px）内保持可达。
+   * 桌面键鼠（hover:hover）不匹配本分支，不受影响。 */
+  #pause-btn {
+    bottom: 32px;
+  }
 }
 
 /* 桌面端显式隐藏触屏提示与触屏菜单提示 */
@@ -316,7 +323,9 @@ body.portrait-mode #boost-bar {
 
 body.portrait-mode #pause-btn {
   left: 14px;
-  bottom: 14px;
+  /* B2（2026-08-22）：竖屏同步上移（bottom 14→30px），与横屏触屏分支（32px）保持一致的
+   * 底部安全边距，避免与底部摇杆热区误触；仍处拇指热区。 */
+  bottom: 30px;
 }
 
 body.portrait-mode #hud {
@@ -627,12 +636,14 @@ body.portrait-mode #hud2 .hud-side-tag {
     gap: 4px;
   }
 
-  /* P0-1/P3-4：横屏低高度进一步压缩赛道卡片，释放 ~30px 垂直空间给榜单区。
-   * box-sizing:border-box 让 min-height 28px 即真实渲染高度，保证触控目标下限。 */
+  /* P0-1/P3-4：横屏低高度赛道卡片。
+   * B1（2026-08-22）：触摸目标由 28px 抬至 44px（Apple HIG 下限）；星级与赛道名改同行（row）
+   * 消除「有的紧跟、有的换行」的对齐不一致——单行内容使 44px 即真实渲染高度（box-sizing:border-box），
+   * 总高增加克制（3 行 +48px），开始按钮在 .menu-footer 固定底部始终可见，不破坏 812×375 滚动渐隐设计。 */
   .track-option {
     box-sizing: border-box;
-    min-height: 28px;
-    padding: 2px 6px;
+    min-height: 44px;
+    padding: 4px 8px;
     font-size: 12px;
   }
 
@@ -643,18 +654,24 @@ body.portrait-mode #hud2 .hud-side-tag {
     margin-right: 4px;
   }
 
+  /* B1：星级与赛道名同行（row）+ nowrap，gap 4px 分隔名称与星级；min-width:0 允许收缩防溢出 */
   .track-option .track-label {
-    gap: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
   }
 
   .track-option .track-name {
     font-size: 12px;
     line-height: 1.1;
+    white-space: nowrap;
   }
 
   .track-option .track-stars {
     font-size: 9px;
     line-height: 1;
+    white-space: nowrap;
   }
 
   #menu-mode-badge {
@@ -1178,4 +1195,10 @@ body.split-mode #hud2 .hud-side-tag {
   font-weight: 600;
   font-size: var(--hint-fs);
   cursor: pointer;
+}
+
+/* C6：NEAR MISS 飘字下移至画面中部附近（覆盖 style.base.css 的 #near-miss top 22%→42%，
+ * 高速时不再与天空背景融合；上浮动画方向不变） */
+#near-miss {
+  top: 42%;
 }

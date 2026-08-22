@@ -42,9 +42,10 @@ const WINDOW_COLOR = '#1b2430'
 /** 车轮色 */
 const WHEEL_COLOR = '#14171c'
 /** 车头灯外层光晕 / 核心（配色参考 drawHeadlight；UX-9 修复 2026-08-05：光晕 alpha 0.35→0.25，
- * 半径倍率 1.6→1.25，防大团光晕笼罩车体影响辨识） */
+ * 半径倍率 1.6→1.25，防大团光晕笼罩车体影响辨识）
+ *  C3：核心色 #ffe08a→#fff0c0 更白更冷一档，与路灯暖黄光晕反向拉开（canyon/alpine 环境色仍覆盖） */
 const HEADLIGHT_HALO = 'rgba(255, 235, 180, 0.25)'
-const HEADLIGHT_CORE = '#ffe08a'
+const HEADLIGHT_CORE = '#fff0c0'
 /** 碰撞边框闪白：白色端点（flash=0 时纯白）与红色端点（flash=1 时纯红，与 M16 碰撞红闪同理念） */
 const FLASH_WHITE_RGB = { r: 255, g: 255, b: 255 }
 const FLASH_RED_RGB = { r: 255, g: 80, b: 60 }

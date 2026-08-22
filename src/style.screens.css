@@ -544,6 +544,9 @@
   letter-spacing: 1px;
   line-height: 1.2;
   color: rgba(255, 255, 255, 0.85);
+  /* B1（2026-08-22）：星级容器不换行 + 不被 flex 压缩——消除「有的紧跟赛道名、有的换行」的对齐不一致 */
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: color 0.2s ease;
 }
 
@@ -1439,4 +1442,11 @@
   opacity: 0.85;
   animation: pulse 1.6s ease-in-out infinite;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+/* C1：菜单每日挑战进度对比度提升（覆盖 style.base.css 的 .daily-progress：
+ * 字号 12→13px、青色提亮 rgba(0,217,255,0.85)→rgba(0,230,255,1)，深色背景辨识度更高；不改布局） */
+.daily-progress {
+  font-size: 13px;
+  color: rgba(0, 230, 255, 1);
 }

@@ -12,8 +12,13 @@ export default defineConfig({
     // dev 模式仅注入 HTML 的 serve 插件），因此 vitest node 环境加载配置时
     // 不会执行 workbox 相关逻辑，测试不受影响。
     VitePWA({
-      // S 修复（S1）：autoUpdate → prompt——新版本不再自动刷新页面（会对局中途被打断），
-      // 改由 pwa-update.ts 提供「新版本就绪」提示 + 用户确认刷新（菜单外静默，不打断对局）。
+      // PWA 更新策略（S 修复 S1 + 2026-08-22 评估确认）：autoUpdate → prompt。
+      // 理由：autoUpdate 在新 SW 安装成功后自动 skipWaiting + reload，刷新时机不区分是否在对局中——
+      // 正在 RACING 的 RAF 循环/内存 RaceState/AudioContext 会被 reload 直接打断（一局无预警丢失）。
+      // 改 prompt 后由 pwa-update.ts 弹「新版本已就绪」提示条，玩家确认才 updateSW(true) 刷新，
+      // 刷新权交给玩家，对局不被打断。precache 更新对旧页面无 404 风险（单入口 bundle + Canvas/WebAudio
+      // 无外部请求；html 已剔除预缓存 + Cache-Control no-cache 保证普通刷新即拿新版）。详见
+      // docs/reports/pwa-update-assessment.md。
       registerType: 'prompt',
       // 手动控制 SW 注册（pwa-update.ts setupPwaUpdate 调 registerSW）：禁用插件自动注入，
       // 避免双重注册（插件注入脚本 + 手动 registerSW）导致回调重复触发。

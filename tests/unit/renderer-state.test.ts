@@ -177,15 +177,15 @@ describe('Renderer 状态切换', () => {
     expect(Number.isInteger(regionTranslate[0])).toBe(true)
   })
 
-  it('drawDivider 绘制全高 4px 深色渐变分隔线（P3：左右边缘柔化）', () => {
+  it('drawDivider 绘制全高 6px 深色渐变分隔线（P3：左右边缘柔化；C5：4→6px 加宽）', () => {
     const { canvas, renderer } = createHarness(800, 600)
     renderer.drawDivider(400)
     const fillRectArgs = canvas.__ctx.__args.fillRect
     const last = fillRectArgs[fillRectArgs.length - 1]
-    // fillRect(Math.round(x - width/2), 0, width, height)：居中 4px 全高竖线（P3：加宽 + 渐变）
-    expect(last[0]).toBe(398)
+    // fillRect(Math.round(x - width/2), 0, width, height)：居中 6px 全高竖线（P3：加宽 + 渐变）
+    expect(last[0]).toBe(397)
     expect(last[1]).toBe(0)
-    expect(last[2]).toBe(4)
+    expect(last[2]).toBe(6)
     expect(last[3]).toBe(600)
     // fillStyle 为 createLinearGradient 渐变对象，且 addColorStop 调用了 3 次（透明→深色→透明）
     expect(canvas.__ctx.__calls.createLinearGradient ?? 0).toBeGreaterThan(0)
@@ -279,7 +279,7 @@ describe('Renderer 状态切换', () => {
     expect(nightIncrement).toBeGreaterThan(baseIncrement)
   })
 
-  it('night 渲染车尾灯：fillRect 增量高于 day（每辆可见车 2 次红色尾灯）', () => {
+  it('night 渲染车尾灯：fillRect 增量高于 day（每辆可见车 4 次红色尾灯：光晕+核心双灯）', () => {
     const { canvas, renderer } = createHarness()
     const trackB = createTrackFromDef(TRACK_DEFS[4]) // canyon（夜晚赛道）
     const traffic = createTraffic(2000)
@@ -299,7 +299,7 @@ describe('Renderer 状态切换', () => {
     const afterBase = callCount(canvas.__ctx.__calls, 'fillRect')
     const nightIncrement = afterNight - beforeNight
     const baseIncrement = afterBase - afterNight
-    // 同一场景下 night 每辆可见车多 2 次 fillRect（红色尾灯双灯），增量应高于 day
+    // 同一场景下 night 每辆可见车多 4 次 fillRect（红色尾灯光晕+核心双灯），增量应高于 day
     expect(nightIncrement).toBeGreaterThan(baseIncrement)
   })
 

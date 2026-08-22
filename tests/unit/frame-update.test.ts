@@ -58,6 +58,8 @@ function makeCtx(over: Partial<FrameUpdateContext> = {}): FrameUpdateContext {
     collisionFlash: 0,
     challengeTimer: null,
     challengeScore: null,
+    dailyBadge: null,
+    isDailyTrack: false,
     boostBar: null,
     rainSound: null,
     boostSound: null,
@@ -290,7 +292,7 @@ describe('惰性 DOM 缓存与 HUD 副作用', () => {
     expect(r.challengeTimer).not.toBeNull()
     expect(r.challengeScore).not.toBeNull()
     expect((r.challengeTimer as unknown as StubElement).textContent).toBe('剩余 60.0s')
-    expect((r.challengeScore as unknown as StubElement).textContent).toBe('得分 123')
+    expect((r.challengeScore as unknown as StubElement).textContent).toBe('得分 123 / 目标 5000')
   })
 
   test('挑战模式：已缓存元素不重新获取（原引用透传）', () => {
@@ -317,6 +319,33 @@ describe('惰性 DOM 缓存与 HUD 副作用', () => {
     updateFrame(DT, makeCtx({ mode: SINGLE }))
     expect(getElementById).not.toHaveBeenCalledWith('challenge-timer')
     expect(getElementById).not.toHaveBeenCalledWith('challenge-score')
+  })
+
+  test('A2：今日挑战道（isDailyTrack=true）RACING 时 #daily-badge 可见且文案同源', () => {
+    docElements = { 'daily-badge': makeElement() }
+    stubDocument()
+    const ctx = makeCtx({ isDailyTrack: true, dailyBadge: null })
+    const r = updateFrame(DT, ctx)
+    const badge = r.dailyBadge as unknown as StubElement
+    expect(badge).not.toBeNull()
+    expect(badge.hidden).toBe(false)
+    expect(badge.textContent).toBe('今日挑战')
+  })
+
+  test('A2：非今日挑战道（isDailyTrack=false）RACING 时 #daily-badge 保持隐藏', () => {
+    docElements = { 'daily-badge': makeElement() }
+    stubDocument()
+    const ctx = makeCtx({ isDailyTrack: false, dailyBadge: null })
+    const r = updateFrame(DT, ctx)
+    expect((r.dailyBadge as unknown as StubElement).hidden).toBe(true)
+  })
+
+  test('A2：非 RACING 阶段隐藏 #daily-badge（防回菜单残留）', () => {
+    docElements = { 'daily-badge': makeElement() }
+    stubDocument()
+    const ctx = makeCtx({ phase: PHASE_MENU, isDailyTrack: true, dailyBadge: null })
+    const r = updateFrame(DT, ctx)
+    expect((r.dailyBadge as unknown as StubElement).hidden).toBe(true)
   })
 
   test('M23 方案 8：检查点推进——cameraZ 越过检查点间距补发时间奖励', () => {

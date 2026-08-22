@@ -124,7 +124,7 @@ const PROFILES: Record<Environment, EnvironmentProfile> = {
     skyHue: 15,
     grassHue: 25,
     grassSat: 30,
-    grassLight: 22,
+    grassLight: 20, // C4：22→20 调暗地面，与灰色路面拉开明度差（路面边缘更易判断）
     mountainFar: '#5a3a2a',
     mountainNear: '#4a2e20',
     mountainFarNight: '#3a2418',

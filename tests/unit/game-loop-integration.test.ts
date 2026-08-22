@@ -440,14 +440,14 @@ describe('GameLoop 主循环集成冒烟测试', () => {
     SIM_TIMEOUT,
   )
 
-  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 4px 全高分隔线）', () => {
+  it('分屏模式：菜单与比赛渲染后 drawDivider 均被调用（出现 6px 全高分隔线）', () => {
     // 重新构造分屏环境（window.location.search = '?split=1'），覆盖 beforeEach 的单屏 stub
     const splitEnv = stubEnvironment(true)
     new GameLoop()
     const canvas = splitEnv.getCanvas()
-    // 过滤出"4px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线（P3：3px 加宽至 4px）
+    // 过滤出"6px 宽、y=0 起、全高 600"的 fillRect，即 drawDivider 绘制的分隔线（P3：3px→4px；C5：4→6px 加宽）
     const countDivider = (): number =>
-      (canvas.__ctx.__args.fillRect ?? []).filter((a) => a[1] === 0 && a[2] === 4 && a[3] === 600).length
+      (canvas.__ctx.__args.fillRect ?? []).filter((a) => a[1] === 0 && a[2] === 6 && a[3] === 600).length
 
     // 菜单分屏：左/右两次 renderRegion + 一次 drawDivider
     splitEnv.driveFrames(3)
@@ -999,10 +999,10 @@ describe('GameLoop 主循环集成冒烟测试', () => {
       // 首帧挑战剩余时间 60s（raceTime 0）
       const first = chEnv.debugValue('challengeTimeLeft')
       expect(first).toBe(60)
-      // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N」），RACING 阶段可见。
+      // P2（P2）：挑战实时得分 HUD——帧块惰性获取并填充 #challenge-score（格式「得分 N / 目标 N」），RACING 阶段可见。
       // F-1 后前 2.4s 为倒计时冻结窗口（帧更新段跳过），需驱动 50 帧（2.5s）跨过 GO 后再断言
       chEnv.driveFrames(50)
-      expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+$/)
+      expect(chEnv.getElement('challenge-score').textContent).toMatch(/^得分 \d+ \/ 目标 5000$/)
       expect(chEnv.getElement('challenge-score').hidden).toBe(false)
       // 1250 帧 ≈ 62.5s：P1 全油门约 47s 先正常完赛（challenge 模式无圈数限制仍按完赛收束），
       // 结算面板走挑战分支 → 标题 #finish-title 切「挑战结束」（F-2），finish-time 改显用时

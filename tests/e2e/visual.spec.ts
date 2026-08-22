@@ -316,4 +316,33 @@ test.describe('玩法链路（2026-08-05 新增）', () => {
     expect(s.hidden, '碰撞后 #hud-collision 应可见').toBe(false)
     expect(s.text).toContain('碰撞')
   })
+
+  test('挑战模式：实时得分 HUD 含目标分参照（A1）', async ({ page }) => {
+    await page.goto('/?challenge=1')
+    await page.keyboard.press(' ')
+    await page.waitForTimeout(3_500)
+    const text = await page.locator('#challenge-score').textContent()
+    expect(text, '挑战实时得分应含「目标」参照（得分 N / 目标 5000）').toContain('目标')
+  })
+
+  test('每日挑战：选今日赛道时 #daily-badge 可见（A2）', async ({ page }) => {
+    await page.goto('/?daily=1')
+    // 读取今日赛道 id（debug hook dailyState.trackId，DEV 门控下可用）
+    const trackId = await page.evaluate(() => {
+      const d = (window as { __gameDebug?: { dailyState: { trackId: string } } }).__gameDebug
+      return d?.dailyState?.trackId ?? null
+    })
+    expect(trackId, '应能读取今日赛道 id').not.toBeNull()
+    // TRACK_DEFS 顺序（与 src/engine/tracks.ts 一致）：下标 i → 数字键 i+1
+    const order = ['classic', 'highway', 's-curve', 'island', 'canyon', 'desert', 'forest', 'coast', 'alpine']
+    const idx = order.indexOf(trackId as string)
+    expect(idx, `今日赛道 ${trackId} 应在 TRACK_DEFS 中`).toBeGreaterThanOrEqual(0)
+    // 选中今日赛道并开始（倒计时 3.5s 后 GO，徽章由 frame-update 点亮）
+    await page.keyboard.press(String(idx + 1))
+    await page.keyboard.press(' ')
+    await page.waitForTimeout(3_500)
+    const badge = page.locator('#daily-badge')
+    expect(await badge.isVisible(), '选今日赛道时 #daily-badge 应可见').toBe(true)
+    expect(await badge.textContent()).toBe('今日挑战')
+  })
 })

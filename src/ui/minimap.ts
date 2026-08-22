@@ -94,8 +94,8 @@ export class Minimap {
     const h = this.canvas.height
     ctx.clearRect(0, 0, w, h)
 
-    // 半透明深色圆角背景
-    ctx.fillStyle = 'rgba(8, 10, 24, 0.72)'
+    // 半透明深色圆角背景（C5：alpha 0.72→0.6 更透明，让被叠的路灯光晕隐约可见）
+    ctx.fillStyle = 'rgba(8, 10, 24, 0.6)'
     this.roundRectPath(ctx, 0, 0, w, h, 10)
     ctx.fill()
 

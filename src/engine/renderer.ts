@@ -133,21 +133,23 @@ interface MountainLayer {
 const P2_BODY_COLOR = '#2563eb'
 const P2_BODY_DARK_COLOR = '#1e40af'
 
-/** 雨丝倾斜角（B7 天气交互化）：角度常量收敛至 shared（RAIN_TILT_DEG），此处预计算 sin/cos 供离屏预渲染复用 */
-const RAIN_TILT = (RAIN_TILT_DEG * Math.PI) / 180
-const RAIN_TILT_SIN = Math.sin(RAIN_TILT)
-const RAIN_TILT_COS = Math.cos(RAIN_TILT)
+/** C2：雨滴密度倍率（预渲染离屏 canvas 一次性成本；80→112 滴，观感更密） */
+const RAIN_DROPS_MULT = 1.4
+/** C2：每滴雨丝角度随机偏移（度，±4° 内自然抖动，保持整体风向一致） */
+const RAIN_ANGLE_JITTER_DEG = 4
 
 /** BOOST 尾焰粒子投影复用缓冲（S 修复：循环内立即消费，复用安全） */
 const _boostProj: Projected = { x: 0, y: 0, scale: 0 }
 /** 景物底部投影复用缓冲（S 修复：drawSpriteProjected 内立即消费，复用安全） */
 const _spriteProj: Projected = { x: 0, y: 0, scale: 0 }
 
-/** 雨滴数据：x 为宽度归一化坐标（0-1，绘制时乘宽度自适应视口），y0 为下落相位，len 为雨丝长度 */
+/** 雨滴数据：x 为宽度归一化坐标（0-1，绘制时乘宽度自适应视口），y0 为下落相位，len 为雨丝长度，
+ *  angleOffset 为每滴雨丝角度随机偏移（度，C2：±4° 内自然抖动，保持整体风向一致） */
 interface RainDrop {
   x: number
   y0: number
   len: number
+  angleOffset: number
 }
 
 function renderMountainOffscreen(layer: MountainLayer, width: number): HTMLCanvasElement {
@@ -272,8 +274,14 @@ export class Renderer {
   private buildRainDrops(): RainDrop[] {
     const rnd = mulberry32(2026)
     const drops: RainDrop[] = []
-    for (let i = 0; i < RAIN_DROPS; i++) {
-      drops.push({ x: rnd(), y0: rnd(), len: 12 + rnd() * 12 })
+    const count = Math.round(RAIN_DROPS * RAIN_DROPS_MULT)
+    for (let i = 0; i < count; i++) {
+      drops.push({
+        x: rnd(),
+        y0: rnd(),
+        len: 12 + rnd() * 12,
+        angleOffset: (rnd() * 2 - 1) * RAIN_ANGLE_JITTER_DEG,
+      })
     }
     return drops
   }
@@ -295,8 +303,12 @@ export class Renderer {
     for (const drop of this.rainDrops) {
       const x = drop.x * width
       const y = drop.y0 * height
+      // C2：每滴在基准 15° 上叠加 ±4° 随机抖动，保持整体风向一致但有自然起伏
+      const angle = ((RAIN_TILT_DEG + drop.angleOffset) * Math.PI) / 180
+      const sin = Math.sin(angle)
+      const cos = Math.cos(angle)
       ctx.moveTo(x, y)
-      ctx.lineTo(x + RAIN_TILT_SIN * drop.len, y + RAIN_TILT_COS * drop.len)
+      ctx.lineTo(x + sin * drop.len, y + cos * drop.len)
     }
     ctx.stroke()
     this.rainCanvas = canvas
@@ -406,9 +418,10 @@ export class Renderer {
     ctx.restore()
   }
 
-  /** 分屏交界分隔线：4px 深色渐变（左右边缘柔化，视觉不生硬），覆盖两区域近处路缘石交错瑕疵。
+  /** 分屏交界分隔线：6px 深色渐变（左右边缘柔化，视觉不生硬），覆盖两区域近处路缘石交错瑕疵。
+   *  C5：4→6px 加宽，暗背景下分隔感更强。
    *  必须在 renderRegion 的 ctx.restore() 之后调用（transform 已复位，用全屏坐标）。 */
-  drawDivider(x: number, width = 4): void {
+  drawDivider(x: number, width = 6): void {
     const { ctx } = this
     const cx = Math.round(x)
     const gradient = ctx.createLinearGradient(cx - width / 2, 0, cx + width / 2, 0)

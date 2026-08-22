@@ -253,8 +253,8 @@ describe('drawPlayerCar 玩家车辆精灵（P0）', () => {
     }
     const defaultStyles = drawWith({ night: true })
     const canyonStyles = drawWith({ night: true, headlightColor: '#ff8a5c' })
-    // 缺省：核心灯色为默认黄白（HEADLIGHT_CORE = #ffe08a）
-    expect(defaultStyles).toContain('#ffe08a')
+    // 缺省：核心灯色为默认黄白（HEADLIGHT_CORE = #fff0c0，C3 更白更冷一档）
+    expect(defaultStyles).toContain('#fff0c0')
     // 传入环境色时覆盖核心灯色
     expect(canyonStyles).toContain('#ff8a5c')
     expect(defaultStyles).not.toContain('#ff8a5c')

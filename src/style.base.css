@@ -425,6 +425,22 @@ canvas {
     0 0 3px rgba(0, 0, 0, 0.8);
 }
 
+/* A2：每日挑战赛中徽章（#daily-badge：当前赛道为今日挑战道时由 frame-update 显示；
+ * 小徽章样式——金色边框/半透明底/圆角/小字号，配色复用 --color-accent 令牌） */
+#daily-badge {
+  margin-top: 6px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.12);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+  border-radius: 999px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* P0 near-miss 贴身超车弹出（#near-miss：贴身超车触发时由 frame-update 短暂显示；
  * M27 修复：移到屏幕中央上方避开 HUD 区，与小地图/最佳/速度无遮挡；
  * 金色描边 + 缩放弹出动画，不阻塞驾驶视线） */

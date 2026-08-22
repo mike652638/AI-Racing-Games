@@ -20,6 +20,7 @@
 - **2026-08-08 实测修复批次**：引导线 z-order 修复（renderer 移到车流之下防穿透）、引导线宽度 5px + 近端 alpha 0.5、岔路提示与 BOOST 条间距（.route-choice-hint margin-bottom 28px）、路灯双层光晕（sprite-draw drawLamp）、分屏 P2 独立 BOOST 条（index.html `#boost-bar-2` + frame-update splitMode 更新 + game-loop 透传缓存）、倒计时操作提示触屏适配（copy.ts `COUNTDOWN_HINTS_TOUCH`/`COUNTDOWN_HINTS_TOUCH_SPLIT`，countdown.ts 第 2 参 hints 由 game-loop 按触屏/分屏选择——小米 13 Ultra 横屏 1067×480 专项实测驱动）。
 - **2026-08-05 运行时实测修复批次**：`RACE_START_GRACE`（起步碰撞保护期 5s）+ `TRAFFIC_SPAWN_SAFE_ZONE`（车流出生安全窗口）防开局误撞；`OFF_ROAD_PUSHBACK`（出界内侧推回 0.05）修复"钉死边缘"BUG-2；碰撞横向容差 0.9→0.55；`ensureLoop` 幂等 RAF 重启 + `silenceDriveSounds` 静音（防完赛/暂停持续蜂鸣）；完赛界面空边框卡片 `hideIfEmpty` 修复；菜单打磨（赛道缩略图放大 + 环境主题预览色 + 光晕、暂停按钮真实指针可点性）。
 - **测试辅助迁移（死代码清理）**：仅测试使用的导出 `createDefaultTrack`（原 `engine/track.ts`）与 `spritesInRange` 线性版（原 `engine/sprites.ts`）已迁移至 `tests/helpers/`（`tests/helpers/track.ts`、`tests/helpers/sprites.ts`），生产代码不再导出；`createStraightTrack` 因禁碰测试文件仍自 src 导入而保留并标注 `@deprecated`。
+- **M35 QA 实测修复与打磨批次（2026-08-22）**：模式 HUD 信息补全（挑战实时得分文案「得分 N / 目标 5000」+ `#daily-badge` 每日挑战徽章按 `isDailyTrack` 显隐）、移动端触控体验（`.track-stars` nowrap + `.track-option` 触摸目标 28→44px + `#pause-btn` 上移拉开摇杆安全边距）、六项视觉打磨（雨滴密度 ×1.4 + ±4° 确定性角度抖动、分屏分隔线 6px、`HEADLIGHT_CORE` #fff0c0、路灯光晕更黄更弥散、canyon grassLight 20、小地图背景 alpha 0.6、`#near-miss` 下移）、技术债（`GameLoop.destroy()` 幂等生命周期、screens-finish-panel 17 用例、PWA 更新策略评估维持 prompt）。
 
 ## Flow
 

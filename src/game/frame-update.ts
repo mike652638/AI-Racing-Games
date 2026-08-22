@@ -10,6 +10,7 @@ import {
   CHALLENGE_CHECKPOINT_BONUS,
   CHALLENGE_CHECKPOINTS_PER_LAP,
   CHALLENGE_SECONDS,
+  CHALLENGE_TARGET_SCORE,
   COMBO_MULTIPLIER_STEP,
   DRIFT_SCORE_MAX,
   NEAR_MISS_CHARGE,
@@ -21,6 +22,7 @@ import type { ModeStrategy, TouchQuadrantSource } from './mode-strategy'
 import { PHASE_RACING, type Phase } from '../shared/phase'
 import type { PlayerState, RaceState } from '../shared/types'
 import type { TrackManager } from './track-manager'
+import { DAILY_PROGRESS_PREFIX } from '../ui/copy'
 
 /** M23 方案 12：漂移得分飘字生命周期（秒）与最大增量显示（飘字仅显示本段新增分，避免巨数溢出） */
 const DRIFT_POPUP_LIFETIME = 0.7
@@ -85,6 +87,10 @@ export interface FrameUpdateContext {
   challengeTimer: HTMLDivElement | null
   /** 挑战实时得分 HUD 元素缓存（惰性获取；元素缺失时为 null） */
   challengeScore: HTMLDivElement | null
+  /** 每日挑战赛中徽章元素缓存（#daily-badge，A2 惰性获取；元素缺失时为 null） */
+  dailyBadge: HTMLDivElement | null
+  /** A2：当前赛道是否为今日挑战道（GameLoop.startGame 计算；路线模式恒 false 保守隐藏） */
+  isDailyTrack: boolean
   /** BOOST 条 HUD 元素缓存（惰性获取；元素缺失时为 null） */
   boostBar: HTMLDivElement | null
   /** 分屏 P2 BOOST 条 HUD 元素缓存（#boost-bar-2，2026-08-08 实测修复：分屏时按 P2 蓄能更新；缺失 null） */
@@ -137,6 +143,8 @@ export interface FrameUpdateResult {
   challengeTimer: HTMLDivElement | null
   /** 挑战实时得分 HUD 元素（可能惰性获取后非 null，写回缓存） */
   challengeScore: HTMLDivElement | null
+  /** 每日挑战赛中徽章元素（可能惰性获取后非 null，写回缓存；A2） */
+  dailyBadge: HTMLDivElement | null
   /** BOOST 条 HUD 元素（可能惰性获取后非 null，写回缓存） */
   boostBar: HTMLDivElement | null
   /** 分屏 P2 BOOST 条 HUD 元素缓存（#boost-bar-2，2026-08-08 实测修复；写回缓存，非分屏恒 null） */
@@ -166,6 +174,9 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     // M15（M15）：暂停/结算/菜单时静音漂移胎声与胎噪（音频未创建为 null/undefined 时安全 no-op）
     ctx.driftSound?.stop()
     ctx.tireSound?.setLevel(0, 0, false)
+    // A2：非比赛阶段隐藏每日挑战徽章（防回菜单/暂停/结算时残留）
+    ctx.dailyBadge ??= document.getElementById('daily-badge') as HTMLDivElement | null
+    if (ctx.dailyBadge && !ctx.dailyBadge.hidden) ctx.dailyBadge.hidden = true
     return {
       shouldRender: true,
       countdownJustFinished: false,
@@ -175,6 +186,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
+      dailyBadge: ctx.dailyBadge,
       boostBar: ctx.boostBar,
       nearMissEl: ctx.nearMissEl ?? null,
     }
@@ -186,6 +198,9 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   // 模拟时钟按帧 dt 递减而非墙钟 setTimeout：与 rAF 驱动同源，暂停不消耗、单测可确定性驱动。
   if (race.countdownRemaining > 0) {
     race.countdownRemaining = Math.max(0, race.countdownRemaining - dt)
+    // A2：倒计时期间隐藏每日挑战徽章（GO 后由主 RACING 块按 isDailyTrack 显示）
+    ctx.dailyBadge ??= document.getElementById('daily-badge') as HTMLDivElement | null
+    if (ctx.dailyBadge && !ctx.dailyBadge.hidden) ctx.dailyBadge.hidden = true
     return {
       shouldRender: true,
       countdownJustFinished: race.countdownRemaining === 0,
@@ -195,6 +210,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
+      dailyBadge: ctx.dailyBadge,
       boostBar: ctx.boostBar,
       nearMissEl: ctx.nearMissEl ?? null,
     }
@@ -240,12 +256,14 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       // m17：剩余 10 秒内触发紧急闪烁动画
       ctx.challengeTimer.classList.toggle('urgent', left <= 10)
     }
-    // 挑战模式实时得分——与倒计时同生命周期，显示总分（漂移得分 + near-miss 得分，P0 起）
+    // 挑战模式实时得分——与倒计时同生命周期，显示总分（漂移得分 + near-miss 得分，P0 起）。
+    // A1（P1）：加目标分参照（CHALLENGE_TARGET_SCORE 真源 src/shared/constants），
+    // 与 ui/screens.ts 结算文案「达标/未达标（目标 N）」同源对应，玩家赛中即可知目标。
     ctx.challengeScore ??= document.getElementById('challenge-score') as HTMLDivElement | null
     if (ctx.challengeScore) {
       ctx.challengeScore.hidden = false
       const totalScore = race.player1.driftState.score + race.player1.nearMissScore
-      const scoreText = `得分 ${Math.round(totalScore)}`
+      const scoreText = `得分 ${Math.round(totalScore)} / 目标 ${CHALLENGE_TARGET_SCORE}`
       if (ctx.challengeScore.textContent !== scoreText) {
         ctx.challengeScore.textContent = scoreText
       }
@@ -256,6 +274,16 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     ctx.challengeScore ??= document.getElementById('challenge-score') as HTMLDivElement | null
     if (ctx.challengeTimer && !ctx.challengeTimer.hidden) ctx.challengeTimer.hidden = true
     if (ctx.challengeScore && !ctx.challengeScore.hidden) ctx.challengeScore.hidden = true
+  }
+
+  // A2：每日挑战赛中徽章——当前赛道为今日挑战道时显示（#daily-badge）。
+  // 文案复用 copy.ts DAILY_PROGRESS_PREFIX（与菜单 #daily-progress 同源）；脏值比对省中间帧分配。
+  ctx.dailyBadge ??= document.getElementById('daily-badge') as HTMLDivElement | null
+  if (ctx.dailyBadge) {
+    ctx.dailyBadge.hidden = !ctx.isDailyTrack
+    if (ctx.isDailyTrack && ctx.dailyBadge.textContent !== DAILY_PROGRESS_PREFIX) {
+      ctx.dailyBadge.textContent = DAILY_PROGRESS_PREFIX
+    }
   }
 
   // 双世界车流独立推进：P1 用 tracks[0]（恒推进），分屏或热座 P2 回合时 P2 用 tracks[1]
@@ -570,6 +598,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
       collisionFlash,
       challengeTimer: ctx.challengeTimer,
       challengeScore: ctx.challengeScore,
+      dailyBadge: ctx.dailyBadge,
       boostBar: ctx.boostBar,
       boostBar2: ctx.boostBar2 ?? null,
       nearMissEl: ctx.nearMissEl ?? null,
@@ -587,6 +616,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     collisionFlash,
     challengeTimer: ctx.challengeTimer,
     challengeScore: ctx.challengeScore,
+    dailyBadge: ctx.dailyBadge,
     boostBar: ctx.boostBar,
     boostBar2: ctx.boostBar2 ?? null,
     nearMissEl: ctx.nearMissEl ?? null,
