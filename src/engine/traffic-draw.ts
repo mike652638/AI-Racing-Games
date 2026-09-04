@@ -57,8 +57,10 @@ export function drawTraffic(
   cameraZ: number,
   opts: ProjectionOptions,
   night: boolean,
+  /** 圈长（可选）：传入时启用车流环形语义，与 Renderer 交错绘制路径保持一致 */
+  lapLength?: number,
 ): void {
-  for (const car of projectTraffic(traffic, cameraZ, camera.x, opts, camera)) {
+  for (const car of projectTraffic(traffic, cameraZ, camera.x, opts, camera, lapLength)) {
     drawSingleTraffic(ctx, car, night)
   }
 }

@@ -1,6 +1,6 @@
 import { COLLISION_COOLDOWN, COLLISION_SPEED_FACTOR, RACE_START_GRACE } from '../shared/constants'
 import type { CarState } from '../physics/car'
-import { collideWithPlayer, type TrafficCar } from '../engine/traffic'
+import { collideWithPlayer, TRAFFIC_X_TOL, TRAFFIC_Z_TOL, type TrafficCar } from '../engine/traffic'
 import type { RaceState } from '../shared/types'
 
 /**
@@ -8,6 +8,8 @@ import type { RaceState } from '../shared/types'
  * cooldown 为数字字段（调用方持有的 PlayerState.collisionCooldown）：每帧随 dt 衰减，
  * 命中后重置为 COLLISION_COOLDOWN 并施加速度惩罚；冷却期内不再重复触发。
  * @param maxSpeed 玩家车最大速度（用于碰撞强度归一化，取 carConfig.maxSpeed）
+ * @param lapLength 赛道圈长（可选）：传入时车流碰撞启用环形语义，保证多圈场景仍生效。
+ *                  缺省时行为与旧版一致（裸差值比较，仅首圈有效）——仅测试/兼容路径使用。
  * @returns 是否发生碰撞（hit）、碰撞强度（impact 0-1 速度比，供声音/视觉分级）、
  *           与衰减/重置后的冷却值（cooldown，由调用方写回）
  */
@@ -18,12 +20,13 @@ export function applyTrafficCollision(
   cooldown: number,
   dt: number,
   maxSpeed = 6000,
+  lapLength?: number,
 ): { hit: boolean; impact: number; cooldown: number } {
   cooldown = Math.max(cooldown - dt, 0)
   if (cooldown > 0) {
     return { hit: false, impact: 0, cooldown }
   }
-  const collision = collideWithPlayer(traffic, cameraZ, carState.position)
+  const collision = collideWithPlayer(traffic, cameraZ, carState.position, TRAFFIC_Z_TOL, TRAFFIC_X_TOL, lapLength)
   if (collision) {
     // M16：碰撞强度 = 碰撞瞬间速度比（0-1），供声音响度与红闪分级（高速撞击更剧烈）
     const impact = Math.max(0, Math.min(1, carState.speed / maxSpeed))
@@ -66,6 +69,7 @@ export function updateCollisions(
       race.player1.collisionCooldown,
       dt,
       maxSpeed,
+      race.tracks[0].lapLength,
     )
     race.player1.collisionCooldown = r1.cooldown
     if (r1.hit) {
@@ -83,6 +87,7 @@ export function updateCollisions(
       race.player2.collisionCooldown,
       dt,
       maxSpeed,
+      race.tracks[1].lapLength,
     )
     race.player2.collisionCooldown = r2.cooldown
     if (r2.hit) {

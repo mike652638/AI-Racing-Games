@@ -1,5 +1,4 @@
-import type { TrafficCar } from '../engine/traffic'
-import { TRAFFIC_X_TOL } from '../engine/traffic'
+import { TRAFFIC_X_TOL, ringForwardDistance, type TrafficCar } from '../engine/traffic'
 import { NEAR_MISS_COOLDOWN, NEAR_MISS_X_TOL, NEAR_MISS_Z_DIST } from '../shared/constants'
 
 /**
@@ -31,8 +30,10 @@ export function updateNearMiss(
     return { hit: false, cooldown }
   }
   for (const car of traffic) {
-    // 环形前方距离：车在玩家后方时接近 lapLength，天然不触发；d 很小时即"在正前方/刚被超过"
-    const d = (car.z - playerZ + lapLength) % lapLength
+    // 环形前方距离：车在玩家后方时接近 lapLength，天然不触发；d 很小时即"在正前方/刚被超过"。
+    // 2026-09-04 修复：改用 ringForwardDistance——旧式取模在 playerZ > 2×lapLength（第三圈起）
+    // 会因 JS 负数取模返回负值，导致 near-miss 静默失效。
+    const d = ringForwardDistance(playerZ, car.z, lapLength)
     const dx = Math.abs(car.offset - playerX)
     if (d > 0 && d < NEAR_MISS_Z_DIST && dx > TRAFFIC_X_TOL && dx < NEAR_MISS_X_TOL && playerSpeed > car.speed) {
       return { hit: true, cooldown: NEAR_MISS_COOLDOWN }

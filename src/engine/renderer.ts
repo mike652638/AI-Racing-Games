@@ -189,9 +189,11 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D
   private opts: ProjectionOptions
   private camera = { x: 0, y: 1, z: 0 }
-  private mountains: MountainLayer[]
-  /** 夜晚模式的深色远山缓存（night 赛道用，避免每帧重建离屏位图） */
-  private mountainsNight: MountainLayer[]
+  /** 由 rebuildMountains 填充（构造期与 setViewport 各调用一次）；初始空数组仅为满足
+   *  strictPropertyInitialization，构造完成后恒为两层离屏位图 */
+  private mountains: MountainLayer[] = []
+  /** 夜晚模式的深色远山缓存（night 赛道用，避免每帧重建离屏位图）；同上由 rebuildMountains 填充 */
+  private mountainsNight: MountainLayer[] = []
   /** M17 当前环境（懒重建远山缓存用：环境切换时才重建离屏位图，运行时零成本） */
   private currentEnv: LightingEnvironment = 'plains'
   /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
@@ -235,8 +237,9 @@ export class Renderer {
   ) {
     this.ctx = canvas.getContext('2d')!
     this.opts = this.buildOpts(width, height)
-    this.mountains = this.buildMountains(width, '#27425e', '#1f3046')
-    this.mountainsNight = this.buildMountains(width, '#101a2a', '#0a1220')
+    // 远山配色统一取自环境配置（plains 的 mountainFar/mountainNear 与旧硬编码 #27425e/#1f3046
+    // 逐位一致，零视觉回归；此处与 setViewport、renderWithOpts 懒重建共用同一真源）
+    this.rebuildMountains(width)
     this.curvePrefixSum = buildCurvePrefixSum(track)
     this.spriteIndex = buildSpriteIndex(sprites, SEGMENT_LENGTH)
     this.rainDrops = this.buildRainDrops()
@@ -247,8 +250,11 @@ export class Renderer {
   /** 更新视口尺寸（CSS 像素），并按 devicePixelRatio 缩放画布 */
   setViewport(canvas: HTMLCanvasElement, width: number, height: number, dpr = 1): void {
     this.opts = this.buildOpts(width, height)
-    this.mountains = this.buildMountains(width, '#27425e', '#1f3046')
-    this.mountainsNight = this.buildMountains(width, '#101a2a', '#0a1220')
+    // P0-3（2026-09-04）：按**当前环境**重建远山，而非写死 plains 配色。
+    // 旧实现在此处硬编码 #27425e/#1f3046，却未重置 currentEnv，下一帧懒重建判定
+    // `envForMountains !== this.currentEnv` 会因"环境未变"直接跳过 → canyon/alpine 等
+    // 非 plains 环境下 resize 窗口后远山配色退化为 plains，直到再次切换赛道/环境才恢复。
+    this.rebuildMountains(width)
     this.buildRainCanvas(this.opts)
     this.applyCanvasSize(canvas, width, height, dpr)
     // 视口变化后重建道路段缓存：纹理宽度 = 视口宽度，旧纹理直接缩放会拉伸失真
@@ -267,6 +273,17 @@ export class Renderer {
       ...def,
       offscreen: renderMountainOffscreen(def as MountainLayer, width),
     }))
+  }
+
+  /**
+   * 按当前环境重建两层远山离屏缓存（构造 / setViewport / 环境切换三处共用的唯一真源）。
+   * 集中在此是为了让「改尺寸」与「改环境」走同一条配色取值路径——二者分离正是
+   * P0-3（resize 后远山配色退化为 plains）的根因。
+   */
+  private rebuildMountains(width: number): void {
+    const env = getEnvironmentProfile(this.currentEnv)
+    this.mountains = this.buildMountains(width, env.mountainFar, env.mountainNear)
+    this.mountainsNight = this.buildMountains(width, env.mountainFarNight, env.mountainNearNight)
   }
 
   /** 确定性生成雨滴数据（种子 2026；x 归一化 0-1，setViewport 改变画布尺寸时无需重算）。
@@ -457,9 +474,7 @@ export class Renderer {
     const envForMountains = (view?.environment ?? 'plains') as LightingEnvironment
     if (envForMountains !== this.currentEnv) {
       this.currentEnv = envForMountains
-      const env = getEnvironmentProfile(envForMountains)
-      this.mountains = this.buildMountains(this.opts.width, env.mountainFar, env.mountainNear)
-      this.mountainsNight = this.buildMountains(this.opts.width, env.mountainFarNight, env.mountainNearNight)
+      this.rebuildMountains(this.opts.width)
     }
     // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
     // R6 收敛：phase 判定走 lighting.resolveWeatherPhase 单一真源——M23 方案 11 支持对局天气变体
@@ -655,14 +670,18 @@ export class Renderer {
       maxK * SEGMENT_LENGTH,
       this.spriteScratch, // 复用数组：返回匹配数量，数组内容在下一次调用前有效
     )
-    const cars = projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera)
+    // lapLength 传入以启用车流环形语义：车流 z 恒在 [0, lapLength) 内循环，而 cameraZ 单调累加，
+    // 第二圈起若不环形化，车流既不渲染也不碰撞（2026-09-04 P0-1 修复）。
+    const cars = projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera, v.track.length * SEGMENT_LENGTH)
     const camCurve = curveOffsetAtZ(v.track, v.curvePrefixSum, cameraZ)
     // spriteScratch 近→远（索引 0 最近），cars 远→近（索引 0 最远）；双指针从远端向近端归并
     let si = count - 1
     let ti = 0
     while (si >= 0 || ti < cars.length) {
       const spriteZ = si >= 0 ? this.spriteScratch[si].z : -Infinity
-      const carZ = ti < cars.length ? cars[ti].car.z : -Infinity
+      // 用绝对化 z（cameraZ + 环形前向距离）而非 car.z：两者在多圈时量级不同，
+      // 且 sprite.z 同样是绝对化后的坐标，用 car.z 比较会让归并顺序错乱。
+      const carZ = ti < cars.length ? cars[ti].z : -Infinity
       if (spriteZ >= carZ) {
         this.drawSpriteProjected(this.spriteScratch[si], opts, v, camCurve)
         si--

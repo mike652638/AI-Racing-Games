@@ -2,7 +2,14 @@ import { decideBotInput, type BotConfig, type BotContext } from './bot'
 import { updateCar, type CarConfig, type CarState } from '../physics/car'
 import type { Segment } from '../engine/track'
 import { SEGMENT_LENGTH } from '../engine/track'
-import { createTraffic, updateTraffic, collideWithPlayer, type TrafficCar } from '../engine/traffic'
+import {
+  createTraffic,
+  updateTraffic,
+  collideWithPlayer,
+  TRAFFIC_X_TOL,
+  TRAFFIC_Z_TOL,
+  type TrafficCar,
+} from '../engine/traffic'
 
 /** 车流碰撞速度惩罚系数（语义等价 game 层 COLLISION_SPEED_FACTOR，避免反向依赖） */
 const COLLISION_SPEED_FACTOR = 0.5
@@ -82,8 +89,9 @@ export function simulateLaps(
     if (traffic) {
       // 车流推进 + 对逼近的同车道车辆避让（以更新后的玩家位置为基准）
       updateTraffic(traffic, dt, lapLength, { z: cameraZ, x: state.position })
-      // 碰撞判定：命中车重置到玩家后方远处（移出前进路径），并施加速度惩罚
-      const hit = collideWithPlayer(traffic, cameraZ, state.position)
+      // 碰撞判定：命中车重置到玩家后方远处（移出前进路径），并施加速度惩罚。
+      // 传 lapLength 启用环形语义：cameraZ 单调累加而 car.z 每帧取模，不环形化则第二圈起碰撞全失效。
+      const hit = collideWithPlayer(traffic, cameraZ, state.position, TRAFFIC_Z_TOL, TRAFFIC_X_TOL, lapLength)
       if (hit) {
         collisions++
         state.speed *= COLLISION_SPEED_FACTOR

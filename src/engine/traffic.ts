@@ -59,6 +59,28 @@ const AVOID_STEP = 0.8
 const AVOID_LANE_EDGE = 0.85
 
 /**
+ * 环形前向距离（跨圈语义的单一真源）：从 from 沿赛道前进到 to 的距离，结果恒 ∈ [0, lapLength)。
+ *
+ * 与直接写 `(to - from + lapLength) % lapLength` 的区别：JS 的 `%` 对负数返回负值，
+ * 而玩家 cameraZ 是单调累加、从不取模的（frame-pure / simulate），故第三圈起
+ * `(car.z - cameraZ + lapLength)` 为大负数、取模后仍为负，所有依赖 `d > 0` 的判定
+ * （车流避让、near-miss）会静默失效。本函数对任意大小的 from/to 均正确回绕。
+ * 第一圈（from < lapLength）时与旧表达式逐位等价，既有确定性（bot 基线）不受影响。
+ */
+export function ringForwardDistance(from: number, to: number, lapLength: number): number {
+  return (((to - from) % lapLength) + lapLength) % lapLength
+}
+
+/**
+ * 环形最短带符号距离：结果 ∈ [-lapLength/2, lapLength/2]，用于「是否足够接近」类判定（碰撞）。
+ * 正值 = to 在 from 前方半圈内，负值 = 在后方半圈内；|结果| 即两者在环上的最短距离。
+ */
+export function ringDelta(from: number, to: number, lapLength: number): number {
+  const d = ringForwardDistance(from, to, lapLength)
+  return d <= lapLength / 2 ? d : d - lapLength
+}
+
+/**
  * 按种子确定性生成均匀分布的环形车流。
  * spawnSafeZone（尾参，缺省 0 = 旧行为）：启用时把落在玩家出生点前方窗口 [0, spawnSafeZone) 内的车
  * 重映射至 [spawnSafeZone, lapLength)（均匀压缩，rnd() 消费顺序不变，确定性保持），防开局碰撞。
@@ -112,8 +134,10 @@ export function updateTraffic(
       continue
     }
     // 车相对玩家前方距离（环形语义：车在玩家后方时该值接近 lapLength，天然不触发；
-    // d === 0 视为恰好相遇/已超过，严格 > 0 不触发）
-    const d = (car.z - player.z + lapLength) % lapLength
+    // d === 0 视为恰好相遇/已超过，严格 > 0 不触发）。
+    // 2026-09-04 修复：改用 ringForwardDistance——旧式 `(car.z - player.z + L) % L` 在
+    // player.z > 2L（第三圈起）时因 JS 负数取模返回负值，导致避让 AI 静默失效。
+    const d = ringForwardDistance(player.z, car.z, lapLength)
     if (d > 0 && d < AVOID_Z_DIST && Math.abs(car.offset - player.x) < AVOID_X_TOL) {
       // —— 触发避让：向远离玩家的一侧渐变（步进 AVOID_STEP*dt，clamp ±AVOID_LANE_EDGE）——
       const target = player.x > 0 ? -AVOID_LANE_EDGE : AVOID_LANE_EDGE
@@ -144,16 +168,28 @@ export function updateTraffic(
   }
 }
 
-/** 玩家与车流碰撞检测：返回碰撞车辆或 null */
+/**
+ * 玩家与车流碰撞检测：返回碰撞车辆或 null。
+ *
+ * lapLength 可选尾参：传入时启用环形语义（跨圈正确），缺省时与旧行为逐位一致（裸差值比较）。
+ * 必须传入的理由：玩家 cameraZ 单调累加不取模、car.z 每帧 `% lapLength`，两者量级会在第二圈
+ * 起拉开一个圈长，裸比较使车流碰撞整体失效（车流形同虚设）。环形化后每圈都能正常碰撞。
+ */
 export function collideWithPlayer(
   traffic: TrafficCar[],
   playerZ: number,
   playerX: number,
   zTol = TRAFFIC_Z_TOL,
   xTol = TRAFFIC_X_TOL,
+  lapLength?: number,
 ): TrafficCar | null {
+  const ring = lapLength !== undefined && lapLength > 0 ? lapLength : 0
   for (const car of traffic) {
-    if (Math.abs(car.z - playerZ) < zTol && Math.abs(car.offset - playerX) < xTol) {
+    if (Math.abs(car.offset - playerX) >= xTol) {
+      continue
+    }
+    const dz = ring > 0 ? ringDelta(playerZ, car.z, ring) : car.z - playerZ
+    if (Math.abs(dz) < zTol) {
       return car
     }
   }
