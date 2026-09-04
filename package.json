@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:coverage": "node scripts/check-test-coverage.mjs",
     "bot": "tsx tests/bot/run-bot.ts",
     "bench": "node --expose-gc --import tsx tests/bench/perf-bench.ts",
     "bench:reuse": "node --expose-gc --import tsx tests/bench/perf-bench.ts --reuse",

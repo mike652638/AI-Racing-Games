@@ -9,6 +9,41 @@
  * 仅在 PROD + 浏览器环境挂载（dev/test 为 no-op）；virtual:pwa-register 动态导入，
  * 避免测试/构建非 PWA 路径静态解析失败。
  */
+/** 提示条元素的最小契约（注入式，便于单测；2026-09-04 抽出） */
+export interface PwaToastElements {
+  toast: { hidden: boolean } | null
+  refreshBtn: {
+    addEventListener(type: 'click', cb: () => void): void
+    removeEventListener(type: 'click', cb: () => void): void
+  } | null
+}
+
+/**
+ * 检测到新版本：显示提示条并挂「立即刷新」确认监听——把刷新时机交给玩家，
+ * 避免 autoUpdate 在比赛对局中途刷新页面。
+ * 提示条或按钮缺失（构建异常/被移除）时退化为直接刷新，保证新版本仍能生效。
+ */
+export function handleNeedRefresh(els: PwaToastElements, updateSW: (reload: boolean) => Promise<void> | void): void {
+  const { toast, refreshBtn } = els
+  if (!toast || !refreshBtn) {
+    updateSW(true)
+    return
+  }
+  toast.hidden = false
+  const onConfirm = (): void => {
+    refreshBtn.removeEventListener('click', onConfirm)
+    updateSW(true)
+  }
+  refreshBtn.addEventListener('click', onConfirm)
+}
+
+/** 离线就绪：隐藏提示条（不打扰玩家） */
+export function handleOfflineReady(els: { toast: { hidden: boolean } | null }): void {
+  if (els.toast) {
+    els.toast.hidden = true
+  }
+}
+
 export function setupPwaUpdate(): void {
   if (!import.meta.env.PROD || typeof window === 'undefined' || typeof document === 'undefined') {
     return
@@ -18,25 +53,19 @@ export function setupPwaUpdate(): void {
       const updateSW = registerSW({
         immediate: true,
         onNeedRefresh() {
-          const toast = document.getElementById('pwa-update-toast')
-          const refreshBtn = document.getElementById('pwa-update-refresh')
-          if (!toast || !refreshBtn) {
-            // 提示条缺失（构建异常/被移除）：退化为直接刷新，保证新版本仍能生效
-            updateSW(true)
-            return
-          }
-          toast.hidden = false
-          const onConfirm = (): void => {
-            refreshBtn.removeEventListener('click', onConfirm)
-            updateSW(true)
-          }
-          refreshBtn.addEventListener('click', onConfirm)
+          handleNeedRefresh(
+            {
+              // 只消费 hidden / add-removeEventListener，故收窄为最小契约（便于注入式单测）
+              toast: document.getElementById('pwa-update-toast') as { hidden: boolean } | null,
+              refreshBtn: document.getElementById('pwa-update-refresh'),
+            },
+            updateSW,
+          )
         },
         onOfflineReady() {
-          const toast = document.getElementById('pwa-update-toast')
-          if (toast) {
-            toast.hidden = true
-          }
+          handleOfflineReady({
+            toast: document.getElementById('pwa-update-toast') as { hidden: boolean } | null,
+          })
         },
       })
     })

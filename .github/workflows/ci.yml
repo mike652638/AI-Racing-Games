@@ -33,6 +33,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # 2026-09-04：模块级测试可达性门禁（零依赖静态分析）。
+      # 此前 CI 完全没有覆盖率度量，新增模块可能在无人察觉下零测试（如 applyRuntimeParams
+      # 热切路径、pwa-update 提示条均由此暴露）。见 scripts/check-test-coverage.mjs。
+      - name: Test reachability gate
+        run: npm run test:coverage
+
       - name: Bot lap validation
         run: npm run bot
 
