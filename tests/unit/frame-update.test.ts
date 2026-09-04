@@ -3,7 +3,7 @@ import { updateDriftPopup, updateFrame, type FrameUpdateContext } from '../../sr
 import { createModeStrategy, type InputRoutingContext, type ModeStrategy } from '../../src/game/mode-strategy'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING } from '../../src/shared/phase'
 import { createRaceState } from '../../src/game/state'
-import { RACE_START_GRACE } from '../../src/shared/constants'
+import { NEAR_MISS_POPUP_SEC, RACE_START_GRACE } from '../../src/shared/constants'
 import { createCarConfig, type CarInput } from '../../src/physics/car'
 import type { RainSound } from '../../src/audio/engine'
 import { createPlayerState } from '../../src/game/player-state'
@@ -727,6 +727,79 @@ describe('P0 near-miss 贴身超车（frame-update 集成）', () => {
     updateFrame(DT, ctx)
     expect(ctx.race.player1.nearMissScore).toBeCloseTo(nearMissBefore, 6)
     expect(ctx.race.player1.boostCharge).toBeCloseTo(0.2, 6)
+  })
+
+  // —— P0-2（2026-09-04）：飘字显示倒计时，修复「触发后永不隐藏」——
+
+  test('P0-2：触发 near-miss 时启动显示倒计时（与 CSS 动画 0.8s 同源）', () => {
+    docElements = { 'near-miss': makeElement() }
+    stubDocument()
+    const ctx = makeCtx({ mode: makeStubMode(), nearMissEl: null })
+    ctx.race.player1.cameraZ = 1000
+    ctx.race.player1.carState.speed = 6000
+    ctx.race.player1.carState.position = 0
+    ctx.race.tracks[0].traffic = [{ z: 1050, offset: 0.7, speed: 2400, colorIndex: 0, shiftDir: 0 }]
+    const r = updateFrame(DT, ctx)
+    expect(r.nearMissHideIn).toBe(NEAR_MISS_POPUP_SEC)
+  })
+
+  test('P0-2：倒计时逐帧递减归零后自动隐藏飘字（修复前 hidden 永不复位）', () => {
+    docElements = { 'near-miss': makeElement() }
+    stubDocument()
+    const el = docElements['near-miss'] as StubElement
+    const ctx = makeCtx({ mode: makeStubMode(), nearMissEl: null })
+    ctx.race.player1.cameraZ = 1000
+    ctx.race.player1.carState.speed = 6000
+    ctx.race.player1.carState.position = 0
+    ctx.race.tracks[0].traffic = [{ z: 1050, offset: 0.7, speed: 2400, colorIndex: 0, shiftDir: 0 }]
+    let last = updateFrame(DT, ctx)
+    expect(el.hidden).toBe(false)
+
+    // 后续帧清空车流（不再触发），仅推进显示倒计时
+    let hideIn = last.nearMissHideIn
+    for (let i = 0; i < 200 && (hideIn ?? 0) > 0; i++) {
+      const c = makeCtx({
+        mode: makeStubMode(),
+        nearMissEl: last.nearMissEl,
+        nearMissHideIn: hideIn,
+      })
+      c.race.player1.cameraZ = 1000
+      c.race.tracks[0].traffic = []
+      last = updateFrame(DT, c)
+      hideIn = last.nearMissHideIn
+    }
+    expect(hideIn).toBe(0)
+    expect(el.hidden).toBe(true)
+  })
+
+  test('P0-2：非比赛阶段复位飘字（hidden=true 且倒计时归 null）', () => {
+    docElements = { 'near-miss': makeElement() }
+    stubDocument()
+    const el = docElements['near-miss'] as StubElement
+    el.hidden = false // 模拟比赛中残留的显示态
+    const ctx = makeCtx({
+      phase: PHASE_MENU,
+      nearMissEl: el as unknown as HTMLDivElement,
+      nearMissHideIn: 0.5,
+    })
+    const r = updateFrame(DT, ctx)
+    expect(el.hidden).toBe(true)
+    expect(r.nearMissHideIn).toBeNull()
+  })
+
+  test('P0-2：起步倒计时冻结窗口同样复位飘字', () => {
+    docElements = { 'near-miss': makeElement() }
+    stubDocument()
+    const el = docElements['near-miss'] as StubElement
+    el.hidden = false
+    const ctx = makeCtx({
+      nearMissEl: el as unknown as HTMLDivElement,
+      nearMissHideIn: 0.5,
+    })
+    ctx.race.countdownRemaining = 1
+    const r = updateFrame(DT, ctx)
+    expect(el.hidden).toBe(true)
+    expect(r.nearMissHideIn).toBeNull()
   })
 })
 

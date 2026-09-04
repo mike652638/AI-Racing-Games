@@ -395,10 +395,98 @@ canvas {
 
 #route-choice .route-choice-hint {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.8);
   letter-spacing: 1px;
-  /* 2026-08-08 实测修复：与底部中央 BOOST 条拉开间距，避免视觉拥挤 */
-  margin-bottom: 28px;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+  /* M28 P2-6：岦路提示文字加文本阴影，防止路面纹理半透白线穿透可读性差 */
+}
+
+/* M36 模式选择卡片样式 */
+.mode-selector {
+  margin: 12px 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.mode-selector-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.mode-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.mode-card {
+  all: unset;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.mode-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.mode-card--weather:hover,
+.mode-card--weather.mode-card--selected {
+  background: rgba(255, 184, 255, 0.3);
+  color: #ffb8ff;
+}
+.mode-card--traffic:hover,
+.mode-card--traffic.mode-card--selected {
+  background: rgba(255, 255, 200, 0.3);
+  color: #fff;
+}
+.mode-card--guide:hover,
+.mode-card--guide.mode-card--selected {
+  background: rgba(255, 255, 220, 0.3);
+  color: #ffe08a;
+}
+.mode-card--route:hover,
+.mode-card--route.mode-card--selected {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.mode-card--challenge:hover,
+.mode-card--challenge.mode-card--selected {
+  background: rgba(255, 215, 0, 0.3);
+  color: #ffd700;
+}
+.mode-card--daily:hover,
+.mode-card--daily.mode-card--selected {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.mode-card--split:hover,
+.mode-card--split.mode-card--selected {
+  background: rgba(130, 170, 255, 0.32);
+  color: #82aaff;
+}
+.mode-card--hotseat:hover,
+.mode-card--hotseat.mode-card--selected {
+  background: rgba(255, 150, 180, 0.32);
+  color: #ff96b4;
+}
+.mode-card--perf:hover,
+.mode-card--perf.mode-card--selected {
+  background: rgba(160, 255, 180, 0.3);
+  color: #a0ffb4;
+}
+/* 选中态描边（2026-09-04 修复：原类名 .mode-card-selected 为单横线，与 JS 写入的
+ * mode-card--selected 不匹配 → 该规则从未生效。此处统一为双横线以激活设计意图。
+ * 用 inset box-shadow 而非 border：.mode-card 的 `all: unset` 会把 box-sizing 重置为
+ * content-box，加 2px border 会撑大卡片、导致选中/取消时 flex 换行抖动。 */
+.mode-card--selected {
+  box-shadow: inset 0 0 0 2px currentColor;
 }
 
 /* 挑战模式倒计时（#challenge-timer：?challenge=1 时由 game-loop 帧块更新；橙红醒目随漂移指示） */

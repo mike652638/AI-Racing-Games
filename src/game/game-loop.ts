@@ -33,6 +33,7 @@ import { TrackManager } from './track-manager'
 import { installDebugHook } from './debug-hook'
 import { parseGameParams } from './game-params'
 import { applyMenuChrome } from './menu-setup'
+import { bindModeSelector, type ModeSelectorHandle } from './mode-settings'
 import {
   advanceRouteForkAlpha,
   hideRouteChoiceOverlay,
@@ -111,32 +112,33 @@ export class GameLoop {
   private readonly _perfMode: boolean
   /** 热座轮流模式（?hotseat=1）：双人先后跑同赛道比成绩；split 优先互斥 */
   private readonly hotseatMode: boolean
-  /** 漂移挑战模式（?challenge=1）：60 秒限时刷分；与 split/hotseat 互斥 */
-  private readonly challengeMode: boolean
+  /** 漂移挑战模式（?challenge=1）：60 秒限时刷分；与 split/hotseat 互斥；M38 起可经菜单模式卡片热切（applyRuntimeParams 重解析） */
+  private challengeMode: boolean
   /**
    * 对局天气模式（M23 方案 11，URL `?weather=` 驱动）：
    * 'auto' 缺省三态时间循环；'random' 每局开局骰子（晴/雨/夜三选一）；
-   * 'sunny'/'rain'/'night' 固定变体。startGame 时写入 race.weatherOverride。
+   * 'sunny'/'rain'/'night' 固定变体。startGame 时写入 race.weatherOverride；M38 起可经菜单模式卡片热切。
    */
-  private readonly weatherMode: WeatherOverride | 'random'
+  private weatherMode: WeatherOverride | 'random'
   /**
    * 车流橡皮筋动态难度（M23 方案 13，URL `?traffic=` 驱动）：
    * 'dynamic'（缺省）车流巡航速度随玩家速度平滑调整（快→提速保持挑战，慢→减速便于追赶）；
    * 'static' 固定车流速度（与旧版完全一致，simulate/bot 确定性路径不受影响）。
    */
-  private readonly trafficDynamic: boolean
-  /** M28 方案 10：导航辅助线强度（?guide=1 开启，0-1；缺省 0 关闭零绘制）。菜单预览不绘制 */
-  private readonly guideStrength: number
-  /** M28 方案 14：每日挑战模式（缺省启用；?daily=0 关闭，菜单进度/结算完成判定一并关闭） */
-  private readonly dailyModeEnabled: boolean
+  private trafficDynamic: boolean
+  /** M28 方案 10：导航辅助线强度（?guide=1 开启，0-1；缺省 0 关闭零绘制）。菜单预览不绘制；M38 起可热切 */
+  private guideStrength: number
+  /** M28 方案 14：每日挑战模式（缺省启用；?daily=0 关闭，菜单进度/结算完成判定一并关闭）；M38 起可热切 */
+  private dailyModeEnabled: boolean
   /**
    * M28 方案 9：路线模式（OutRun 式分段递进 + 岔路）。URL `?route=<id|1|2|3>` 驱动：
    * 每阶段复用一条赛道，玩家跑完该段 1 圈 → 段末岔路二选一 → 切换下一段赛道继续；
    * 终点段跑完完赛。全程累计用时/漂移得分（race.routeCumulative*）。
    */
-  private readonly routeId: string | null
-  /** 游玩模式策略（Task E）：输入路由/车流推进/碰撞范围/玩家更新/完赛判定/选赛道同步的下沉实现 */
-  private readonly mode: ModeStrategy
+  private routeId: string | null
+  /** 游玩模式策略（Task E）：输入路由/车流推进/碰撞范围/玩家更新/完赛判定/选赛道同步的下沉实现；
+   *  M38 起菜单模式卡片热切时整体重建（split/hotseat 恒不变，challenge/route 随 URL 重解析） */
+  private mode: ModeStrategy
   /** 挑战倒计时 HUD 元素（#challenge-timer，防御式缓存；显隐/文本由帧块处理） */
   private challengeTimer: HTMLDivElement | null = null
   /** 挑战模式实时得分 HUD 元素（#challenge-score，挑战模式竞赛中显示当前漂移得分） */
@@ -184,6 +186,10 @@ export class GameLoop {
   private nearMissSound: NearMissSound | null = null
   /** near-miss 弹出 HUD 元素缓存（#near-miss，P0 惰性获取；帧块触发时短暂显示 NEAR MISS!） */
   private nearMissEl: HTMLDivElement | null = null
+  /** near-miss 飘字剩余显示时间（秒；P0-2：>0 显示、归零隐藏，null = 未显示） */
+  private nearMissHideIn: number | null = null
+  /** M38 模式设置卡片句柄（外部改动 URL 后同步卡片显示态；容器缺失时 null） */
+  private modeSelector: ModeSelectorHandle | null = null
   /** 漂移摩擦胎声（M15：音频惰性创建时实例化，漂移激活 start / 非激活 stop，随车速/转向/湿滑调制） */
   private driftSound: DriftSound | null = null
   /** 轻量胎噪（M15：音频惰性创建时实例化，常驻极低音量，随车速/转向/湿滑调制） */
@@ -273,6 +279,15 @@ export class GameLoop {
       getElement: (id) => document.getElementById(id),
       body: typeof document === 'object' ? document.body : null,
     })
+    // M38：模式设置卡片绑定——点击循环切换 URL 参数并热应用（applyRuntimeParams 重解析+刷新徽章/提示/榜单）。
+    // 保存句柄：applyPhase 清理 ?challenge 等外部 URL 改动后需同步卡片显示态（防显示与 URL 双真源）。
+    // isMenuPhase 守卫：仅菜单阶段允许热切（避免隐式前提被破坏后在比赛中途改模式）。
+    this.modeSelector = bindModeSelector({
+      getElement: (id) => document.getElementById(id),
+      onCleanup: (fn) => this.onCleanup(fn),
+      onChanged: () => this.applyRuntimeParams(),
+      isMenuPhase: () => this.phase === PHASE_MENU,
+    })
 
     this.canvas = $('game') as HTMLCanvasElement
 
@@ -353,10 +368,6 @@ export class GameLoop {
 
     // C+E 竖屏兼容（2026-08-05）：「竖屏继续 / 横屏体验」按钮与 portrait-mode 状态
     bindPortraitMode((fn) => this.onCleanup(fn))
-
-    // M34：菜单板块整体刷新（漂移榜/BEST/对局榜/成就/每日进度；与回菜单共用 refreshMenuBoard）
-    refreshMenuBoard(this.dailyModeEnabled)
-    this.ensureLoop()
 
     // S 修复 S3：全局监听经清理函数登记（destroy() 时移除）
     window.addEventListener('keydown', this.onKeyDown)
@@ -493,6 +504,36 @@ export class GameLoop {
   }
 
   /** 阶段切换：屏幕显隐/结算由 screens 模块负责，本类负责记录刷新与菜单重置 */
+  /**
+   * M38 模式设置热应用：菜单模式卡片点击后重解析 URL 参数并更新运行时字段。
+   * 仅更新 startGame/帧级消费的可热切参数（weather/traffic/guide/daily/challenge/route）；
+   * split/hotseat/perf 涉及构造级组件不参与。随后重建模式策略并刷新菜单装饰与榜单板块，
+   * 保证徽章/提示文案/每日进度与新参数一致。
+   */
+  private applyRuntimeParams(): void {
+    const params = parseGameParams(new URLSearchParams(window.location.search))
+    this.challengeMode = params.challengeMode
+    this.weatherMode = params.weatherMode
+    this.trafficDynamic = params.trafficDynamic
+    this.guideStrength = params.guideStrength
+    this.dailyModeEnabled = params.dailyModeEnabled
+    this.routeId = params.routeId
+    this.mode = createModeStrategy({
+      splitMode: this.splitMode,
+      hotseatMode: this.hotseatMode,
+      challengeMode: this.challengeMode,
+      routeMode: this.routeId !== null,
+    })
+    applyMenuChrome({
+      mode: this.mode,
+      weatherMode: this.weatherMode,
+      routeId: this.routeId,
+      getElement: (id) => document.getElementById(id),
+      body: typeof document === 'object' ? document.body : null,
+    })
+    refreshMenuBoard(this.dailyModeEnabled)
+  }
+
   private applyPhase(newPhase: Phase): void {
     this.phase = newPhase
     // M28 方案 9：离开 RACING（暂停/完赛/回菜单）时清除岔路选择态与覆盖层（防残留冻结物理）
@@ -555,8 +596,29 @@ export class GameLoop {
     }
     // U-3（2026-08-05 审计修复）：触屏驾驶引导浮层改由倒计时归零（GO）后触发——
     // 原实现在 applyPhase(RACING) 即显示，2s 淡出早于倒计时 GO（≈2.9s）导致引导失效；
-    // 现由 frame 的 countdownJustFinished 边沿调用 showRacingTouchHint（见下）。
+    // 现由 frame的 countdownJustFinished 边沿调用 showRacingTouchHint（见下）。
     // Task E（Task E）：结算记账下沉至 finish-accounting.ts 纯函数——
+    // P1#2：竖屏 rotate-hint 浮层与结算面板/回主菜单按钮遮挡问题——
+    // 离开 RACING 阶段（菜单/暂停/结算）时隐藏 rotate-hint 遮罩，防止全屏遮罩阻断下层按钮点击。
+    const rotateHint = document.getElementById('rotate-hint')
+    if (rotateHint) {
+      rotateHint.hidden = newPhase !== PHASE_RACING
+      rotateHint.classList.toggle('show', newPhase === PHASE_RACING)
+    }
+    // P2#5：挑战模式 URL 参数清理——回主菜单后移除 ?challenge，防止徽章持续显示
+    // 使用 try/catch 兜底：若 URL 构造失效（非浏览器环境/测试 stub）则静默降级
+    if (newPhase === PHASE_MENU) {
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('challenge')
+        window.history.replaceState({}, document.title, url.toString())
+        // M38：此处是卡片点击之外的第二条 URL 写入路径，须同步卡片显示态，
+        // 否则「挑战」卡仍显示「挑战·开」，与 URL 形成两个真源（2026-09-04 收口）。
+        this.modeSelector?.render()
+      } catch {
+        /* 非浏览器环境或异常 URL 时忽略，不影响游戏核心流程 */
+      }
+    }
     // 完赛标记恒计算（applyPhaseToScreens 各阶段均需），记账写入仅首次进入完赛时执行（finishShown 守卫防重入）
     const firstFinish = newPhase === PHASE_FINISHED && !this.race.finishShown
     const {
@@ -970,6 +1032,7 @@ export class GameLoop {
       boostBar: this.boostBar,
       boostBar2: this.boostBar2,
       nearMissEl: this.nearMissEl,
+      nearMissHideIn: this.nearMissHideIn,
       rainSound: this.rainSound,
       boostSound: this.boostSound,
       collisionSound: this.collisionSound,
@@ -995,6 +1058,7 @@ export class GameLoop {
     this.boostBar = ur.boostBar
     this.boostBar2 = ur.boostBar2 ?? null
     this.nearMissEl = ur.nearMissEl
+    this.nearMissHideIn = ur.nearMissHideIn
     // U-3（2026-08-05 审计修复）：触屏驾驶引导浮层在倒计时 GO 后显示（不再与倒计时重叠淡出）
     if (ur.countdownJustFinished) {
       this.showRacingTouchHint()

@@ -255,7 +255,13 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 150px; /* 大屏默认预留 150px；低高度媒体查询覆写为 128px，给 1280×720/1024×768 更多内容空间 */
+  bottom: 180px; /* 大屏默认预留 180px；低高度媒体查询覆写为 150px，给 1280×720/1024×768 更多内容空间，防 .menu-footer 与榜单容器在矮视口下重叠（P1#1） */
+  background-color: rgba(
+    11,
+    5,
+    24,
+    0.55
+  ); /* P1#3 视觉缓冲：与 .menu-footer 最深层叠加色一致，防止 1920×1080 下侧边裸露 */
   z-index: 1;
   display: flex;
   flex-direction: column;

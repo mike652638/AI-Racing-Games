@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GameLoop, resolvePerformanceConfig, viewFor } from '../../src/game/game-loop'
 import { createTrackContext } from '../../src/game/track-context'
 import { PHASE_FINISHED, PHASE_MENU, PHASE_PAUSED, PHASE_RACING, type Phase } from '../../src/shared/phase'
@@ -65,6 +65,53 @@ function createElementStub(): StubElement {
     clientWidth: 0,
     clientHeight: 0,
     value: '',
+    _listeners: listeners,
+  }
+}
+
+/**
+ * M38 模式卡片替身（`#mode-selector .mode-card[data-param="x"]`）：
+ * bindModeSelector 需要 dataset.param / classList.toggle / setAttribute / addEventListener，
+ * 以及内部 `.mode-card-label` 子元素用于写 label 文本。
+ */
+interface ModeCardStub {
+  dataset: { param: string }
+  label: { textContent: string }
+  classList: { toggle: ReturnType<typeof vi.fn> }
+  setAttribute: ReturnType<typeof vi.fn>
+  /** bindModeSelector 取内部 `.mode-card-label` 写卡片文案 */
+  querySelector: (selector: string) => unknown
+  addEventListener: (type: string, cb: (e: unknown) => void) => void
+  _listeners: Map<string, Array<(e: unknown) => void>>
+}
+
+/** 九张模式卡片的参数名（与 src/game/mode-settings.ts MODE_CARD_PARAMS 一致） */
+const MODE_CARD_PARAMS = [
+  'weather',
+  'traffic',
+  'guide',
+  'route',
+  'challenge',
+  'daily',
+  'split',
+  'hotseat',
+  'perf',
+] as const
+
+function createModeCardStub(param: string): ModeCardStub {
+  const listeners = new Map<string, Array<(e: unknown) => void>>()
+  const label = { textContent: '' }
+  return {
+    dataset: { param },
+    label,
+    classList: { toggle: vi.fn() },
+    setAttribute: vi.fn(),
+    querySelector: (selector: string): unknown => (selector === '.mode-card-label' ? label : null),
+    addEventListener: (type: string, cb: (e: unknown) => void): void => {
+      const arr = listeners.get(type) ?? []
+      arr.push(cb)
+      listeners.set(type, arr)
+    },
     _listeners: listeners,
   }
 }
@@ -136,6 +183,10 @@ interface Environment {
   getBody: () => StubElement
   /** P6（P6）：触发指定元素记录的事件监听器（pause-volume input / pause-restart click 等） */
   fireElementEvent: (id: string, type: string) => void
+  /** M38：触发模式卡片点击（走 bindModeSelector → GameLoop.applyRuntimeParams 热切路径） */
+  fireModeCardClick: (param: string) => void
+  /** M38：取模式卡片替身（label 文本与 classList.toggle 断言用） */
+  getModeCard: (param: string) => ModeCardStub | undefined
 }
 
 /**
@@ -152,10 +203,22 @@ interface Environment {
  *   dt 恒为 0.05，用例耗时与物理推进均与机器负载无关（2026-08-05 CI 根因修复）
  * - AudioContext：EngineSound 构造所需的最小 WebAudio 替身
  */
-function stubEnvironment(search: string | boolean = '', initialStorage?: Record<string, string>): Environment {
+/**
+ * @param withModeSelector M38：是否给 `#mode-selector` 提供九张卡片替身。
+ *   默认 false（返回普通 stub，其 querySelector 返回 null → bindModeSelector 判定无卡片直接返回）。
+ *   必须按需开启的原因：为容器挂上九张卡片后，每个 `new GameLoop()` 都会走完整绑定与首次渲染，
+ *   在本文件既有用例（数十个 GameLoop 实例）叠加下会把 worker 堆推到 8GB 上限触发 OOM。
+ */
+function stubEnvironment(
+  search: string | boolean = '',
+  initialStorage?: Record<string, string>,
+  withModeSelector = false,
+): Environment {
   const query = typeof search === 'boolean' ? (search ? '?split=1' : '') : search
   const listeners = new Map<string, Array<(e: { code: string; shiftKey: boolean }) => void>>()
   const elements = new Map<string, StubElement>()
+  /** M38：模式卡片替身（延迟创建，首次 getElementById('mode-selector') 时填充） */
+  const modeCards = new Map<string, ModeCardStub>()
   const rafCallbacks: FrameRequestCallback[] = []
   let gameCanvas: MockCanvas | null = null
   let now = performance.now()
@@ -185,8 +248,22 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     },
   }
 
+  // M38：location 需可写（卡片点击走 history.replaceState 回写）且提供 href
+  // （bindModeSelector 用 `new URL(window.location.href)` 解析）
+  const locationStub = {
+    search: query,
+    get href(): string {
+      return `http://localhost:5173/${this.search}`
+    },
+  }
   const windowStub = {
-    location: { search: query },
+    location: locationStub,
+    history: {
+      replaceState: (_state: unknown, _title: string, url: string): void => {
+        const idx = url.indexOf('?')
+        locationStub.search = idx >= 0 ? url.slice(idx) : ''
+      },
+    },
     innerWidth: 800,
     innerHeight: 600,
     devicePixelRatio: 1,
@@ -210,6 +287,22 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
       if (id === 'game') {
         gameCanvas ??= createMockCanvas(800, 600)
         return gameCanvas
+      }
+      // M38：模式选择容器——返回能按 `.mode-card[data-param="x"]` 查询出九张卡片的替身
+      if (withModeSelector && id === 'mode-selector') {
+        if (!elements.has(id)) {
+          const container = createElementStub()
+          container.querySelector = (selector: string): StubElement | null => {
+            const m = /^\.mode-card\[data-param="([\w]+)"\]$/.exec(selector)
+            if (m) return (modeCards.get(m[1]) ?? null) as unknown as StubElement | null
+            return null
+          }
+          for (const param of MODE_CARD_PARAMS) {
+            modeCards.set(param, createModeCardStub(param))
+          }
+          elements.set(id, container)
+        }
+        return elements.get(id)
       }
       if (!elements.has(id)) {
         const stub = createElementStub()
@@ -318,6 +411,12 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     const cbs = el?._listeners?.get(type) ?? []
     for (const cb of cbs) cb({})
   }
+  /** M38：点击某张模式卡片（bindModeSelector 注册的 click 回调，读取 e.currentTarget.dataset.param） */
+  const fireModeCardClick = (param: string): void => {
+    const card = modeCards.get(param)
+    if (!card) return
+    for (const cb of card._listeners.get('click') ?? []) cb({ currentTarget: card })
+  }
 
   return {
     fireKey,
@@ -332,6 +431,8 @@ function stubEnvironment(search: string | boolean = '', initialStorage?: Record<
     getElement: (id: string) => elements.get(id) ?? createElementStub(),
     getBody: () => documentStub.body as unknown as StubElement,
     fireElementEvent,
+    fireModeCardClick,
+    getModeCard: (param: string) => modeCards.get(param),
   }
 }
 
@@ -1324,6 +1425,109 @@ describe('C+E 竖屏兼容（2026-08-05）：旋转遮罩可跳过 + portrait-mo
     // 点击「竖屏继续」仍能正常激活 portrait-mode（记忆失败仅影响下次会话重弹遮罩）
     env.fireElementEvent('rotate-play-portrait', 'click')
     expect(env.getBody().classList.toggle).toHaveBeenCalledWith('portrait-mode', true)
+  })
+})
+
+/**
+ * M38 模式设置卡片热切链路（2026-09-04 补零覆盖）。
+ * 此前 `GameLoop.applyRuntimeParams()` 在全仓库测试中零覆盖——它是菜单卡片点击后的
+ * 唯一热应用入口（重解析 URL → 重建模式策略 → 刷新徽章与榜单），缺失意味着
+ * 「卡片点了但运行时没变」这类回归不会被发现。
+ */
+describe('M38 模式设置卡片热切（applyRuntimeParams 集成）', () => {
+  /** GameLoop 运行时字段 + 阶段控制 + 生命周期（均为 private；测试以类型断言读取） */
+  type LoopHandle = {
+    weatherMode: string
+    challengeMode: boolean
+    trafficDynamic: boolean
+    guideStrength: number
+    dailyModeEnabled: boolean
+    routeId: string | null
+    mode: { challengeMode: boolean; routeMode: boolean }
+    applyPhase: (p: Phase) => void
+    destroy: () => void
+  }
+
+  // 共享单个 GameLoop 实例（beforeAll/afterAll）：本文件整体内存已贴近 8GB 堆上限，
+  // 逐用例新建实例（每个含 Renderer + 双 TrackContext + 离屏缓存 mock）会触发 worker OOM。
+  // 用例间按定义顺序执行，状态继承通过显式断言（而非假定初始值）保证可读。
+  let env: Environment
+  let loop: LoopHandle
+
+  beforeAll(() => {
+    // 第三个参数 true：启用 #mode-selector 卡片替身（默认关闭，见 stubEnvironment 注释）
+    env = stubEnvironment('', undefined, true)
+    loop = new GameLoop() as unknown as LoopHandle
+  })
+  afterAll(() => {
+    loop.destroy()
+    vi.unstubAllGlobals()
+  })
+
+  it('菜单阶段点击天气卡：写回 URL + 卡片 label 更新 + weatherMode 热应用', () => {
+    const card = env.getModeCard('weather')!
+    expect(card.label.textContent).toBe('天气·自动')
+
+    env.fireModeCardClick('weather')
+
+    expect(window.location.search).toContain('weather=sunny')
+    expect(card.label.textContent).toBe('天气·晴天')
+    expect(loop.weatherMode).toBe('sunny')
+  })
+
+  it('菜单阶段点击挑战卡：challengeMode 置真且模式策略同步重建', () => {
+    expect(loop.challengeMode).toBe(false)
+    expect(loop.mode.challengeMode).toBe(false)
+
+    env.fireModeCardClick('challenge')
+
+    expect(loop.challengeMode).toBe(true)
+    expect(loop.mode.challengeMode).toBe(true)
+    expect(env.getModeCard('challenge')!.label.textContent).toBe('挑战·开')
+  })
+
+  it('菜单阶段点击引导线/车流/每日卡：对应运行时字段同步（六卡热切全覆盖）', () => {
+    const guideBefore = loop.guideStrength
+    expect(loop.trafficDynamic).toBe(true) // dynamic 为缺省
+    expect(loop.dailyModeEnabled).toBe(true) // 每日挑战缺省开启
+
+    env.fireModeCardClick('guide')
+    expect(loop.guideStrength).toBeGreaterThan(guideBefore)
+
+    env.fireModeCardClick('traffic')
+    expect(loop.trafficDynamic).toBe(false) // static
+
+    env.fireModeCardClick('daily')
+    expect(loop.dailyModeEnabled).toBe(false) // daily=0
+  })
+
+  it('非菜单阶段点击热切卡被守卫忽略（URL 与运行时均不变）', () => {
+    loop.applyPhase(PHASE_RACING)
+    const searchBefore = window.location.search
+    const weatherBefore = loop.weatherMode
+    const labelBefore = env.getModeCard('weather')!.label.textContent
+
+    env.fireModeCardClick('weather')
+
+    expect(window.location.search).toBe(searchBefore)
+    expect(loop.weatherMode).toBe(weatherBefore)
+    expect(env.getModeCard('weather')!.label.textContent).toBe(labelBefore)
+    // 恢复菜单阶段供后续用例继续热切
+    loop.applyPhase(PHASE_MENU)
+  })
+
+  it('回菜单清理 ?challenge 后卡片显示态同步（消除 URL / 显示双真源）', () => {
+    // 重新开启挑战（上一用例的 applyPhase(MENU) 已清掉 URL 上的 challenge）
+    env.fireModeCardClick('challenge')
+    expect(env.getModeCard('challenge')!.label.textContent).toBe('挑战·开')
+    expect(loop.challengeMode).toBe(true)
+
+    // applyPhase(MENU) 是卡片点击之外的第二条 URL 写入路径（删除 ?challenge）
+    loop.applyPhase(PHASE_MENU)
+
+    expect(window.location.search).not.toContain('challenge')
+    // 修复前：URL 已清但卡片仍显示「挑战·开」
+    expect(env.getModeCard('challenge')!.label.textContent).toBe('挑战·关')
   })
 })
 

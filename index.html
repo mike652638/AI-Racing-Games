@@ -226,6 +226,50 @@
         <!-- M29 菜单优化：操作提示移到开始按钮上方，避免按钮 hover 时光晕向下扩散覆盖提示 -->
         <p class="hint" id="menu-hint">空格键开始 · 1-9 / 方向键 切换赛道</p>
         <p class="hint" id="menu-hint-touch" hidden>点击赛道开始 · 点击榜单可展开</p>
+        
+        <!-- M38 模式设置（九卡）：前六卡热应用无需刷新；分屏/热座/性能（构造级依赖）写 URL + reload -->
+        <div class="mode-selector" id="mode-selector">
+          <span class="mode-selector-label">模式</span>
+          <div class="mode-cards">
+            <button type="button" class="mode-card mode-card--weather" data-param="weather" aria-label="天气模式">
+              <span class="mode-card-icon">🌦️</span>
+              <span class="mode-card-label">天气</span>
+            </button>
+            <button type="button" class="mode-card mode-card--traffic" data-param="traffic" aria-label="车流模式">
+              <span class="mode-card-icon">🚗</span>
+              <span class="mode-card-label">车流</span>
+            </button>
+            <button type="button" class="mode-card mode-card--guide" data-param="guide" aria-label="导航引导线">
+              <span class="mode-card-icon">📐</span>
+              <span class="mode-card-label">引导线</span>
+            </button>
+            <button type="button" class="mode-card mode-card--route" data-param="route" aria-label="路线模式">
+              <span class="mode-card-icon">🛣️</span>
+              <span class="mode-card-label">路线</span>
+            </button>
+            <button type="button" class="mode-card mode-card--challenge" data-param="challenge" aria-label="挑战模式">
+              <span class="mode-card-icon">⏱️</span>
+              <span class="mode-card-label">挑战</span>
+            </button>
+            <button type="button" class="mode-card mode-card--daily" data-param="daily" aria-label="每日挑战">
+              <span class="mode-card-icon">📅</span>
+              <span class="mode-card-label">每日</span>
+            </button>
+            <button type="button" class="mode-card mode-card--split" data-param="split" aria-label="分屏模式">
+              <span class="mode-card-icon">👥</span>
+              <span class="mode-card-label">分屏</span>
+            </button>
+            <button type="button" class="mode-card mode-card--hotseat" data-param="hotseat" aria-label="热座模式">
+              <span class="mode-card-icon">🔁</span>
+              <span class="mode-card-label">热座</span>
+            </button>
+            <button type="button" class="mode-card mode-card--perf" data-param="perf" aria-label="性能模式">
+              <span class="mode-card-icon">⚡</span>
+              <span class="mode-card-label">性能</span>
+            </button>
+          </div>
+        </div>
+        
         <button id="start-btn" class="btn-primary" type="button">开始游戏</button>
         <!-- 2026-08-08：部署可见版本号（copy.ts APP_VERSION/APP_VERSION_DATE 填充），
              方便确认线上已是最新版；首次渲染为空避免布局跳动 -->

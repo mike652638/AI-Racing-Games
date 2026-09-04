@@ -42,6 +42,12 @@ export const NEAR_MISS_COOLDOWN = 0.6
 export const NEAR_MISS_SCORE = 100
 /** near-miss 蓄能增量（每次触发 boostCharge += 该值，封顶 1） */
 export const NEAR_MISS_CHARGE = 0.1
+/**
+ * near-miss 飘字（#near-miss）显示时长（秒）——与 style.base.css 的
+ * `near-miss-pop` 动画 0.8s 同源：动画播完即隐藏元素。
+ * 2026-09-04 P0-2：此前无复位点，飘字触发一次后会一直挂在画面上。
+ */
+export const NEAR_MISS_POPUP_SEC = 0.8
 
 /** 完美氮气触发阈值：激活 BOOST 时 charge ≥ 该值即本次为完美氮气（加速更强） */
 export const PERFECT_BOOST_MIN_CHARGE = 0.8
