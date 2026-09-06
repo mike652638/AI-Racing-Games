@@ -1,4 +1,5 @@
 import { TRACK_DEFS } from '../engine/tracks'
+import type { DailyState } from '../shared/types'
 
 /**
  * M28 方案 14：每日挑战（轻量 live-ops，PWA 离线可用）——
@@ -10,17 +11,8 @@ import { TRACK_DEFS } from '../engine/tracks'
 /** 今日赛道候选集：全部正式赛道（确定性哈希取模，保证覆盖所有赛道轮换） */
 const DAILY_TRACK_POOL = TRACK_DEFS.map((def) => def.id)
 
-/** 每日挑战存档状态（ui/save.ts 持久化；date 为 YYYY-MM-DD 本地日期字符串） */
-export interface DailyState {
-  /** 挑战日期（YYYY-MM-DD，本地时区） */
-  date: string
-  /** 今日赛道 id（由 dailyTrackIdFor 确定性生成） */
-  trackId: string
-  /** 今日挑战是否已完成（该赛道完赛即完成，只升不降直到日期变更） */
-  done: boolean
-  /** 连续完成挑战天数（断签归 1；今天完成第 1 天为 1） */
-  streak: number
-}
+/** DailyState 类型真源已提升至 shared/types（2026-09-06）；此处 re-export 防外部破坏 */
+export type { DailyState } from '../shared/types'
 
 /** 生成本地日期字符串 YYYY-MM-DD（每日挑战按日轮换，本地时区语义） */
 export function todayDateString(now: Date = new Date()): string {

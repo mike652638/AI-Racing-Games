@@ -6,9 +6,10 @@
 import { describe, expect, test, vi } from 'vitest'
 import { drawGuideLine, drawRouteFork, GUIDE_LINE_MAX_Z } from '../../src/engine/guide-line'
 import type { ProjectionOptions } from '../../src/engine/projection'
+import { project } from '../../src/engine/projection'
 import { createStraightTrack } from '../helpers/track'
-import { buildCurvePrefixSum } from '../../src/engine/sprites'
-import { SEGMENT_LENGTH } from '../../src/engine/track'
+import { buildCurvePrefixSum, curveOffsetAtZ } from '../../src/engine/sprites'
+import { createTrack, SEGMENT_LENGTH } from '../../src/engine/track'
 
 const opts: ProjectionOptions = { width: 1280, height: 720, horizon: 260, depth: 100 }
 
@@ -142,5 +143,33 @@ describe('M28 方案 9 深化：drawRouteFork 分叉渲染', () => {
       makeFork(),
     )
     expect(ctx.stroke).not.toHaveBeenCalled()
+  })
+
+  test('直道回归：分叉首采样点对齐屏幕中心（curveOffsetAtZ=0，无多余偏移）', () => {
+    const ctx = makeCtx()
+    const { track, prefix } = makeTrack()
+    drawRouteFork(ctx as unknown as CanvasRenderingContext2D, opts, { x: 0, y: 0, z: 0 }, track, prefix, makeFork())
+    // 直道 curveOffsetAtZ(z)=0，首采样点（forkZ 处 progress=0）投影 x = width/2 = 640
+    const firstX = ctx.moveTo.mock.calls[0][0] as number
+    expect(firstX).toBeCloseTo(640, 0)
+  })
+
+  test('弯道对齐：分叉从道路中心线出发（不双重叠加 baseCenter，修复回归）', () => {
+    const ctx = makeCtx()
+    // 右弯恒定曲率：forkZ（z=1600）处中心线绝对偏移 baseCenter = 8 段 × 0.02 = 0.16
+    const track = createTrack([{ curve: 0.02, count: 80 }])
+    const prefix = buildCurvePrefixSum(track)
+    const cam = { x: 0, y: 0, z: 0 }
+    drawRouteFork(ctx as unknown as CanvasRenderingContext2D, opts, cam, track, prefix, makeFork())
+    const forkZ = 8 * SEGMENT_LENGTH // camera.z=0 → forkZ = ROUTE_FORK_START_DELAY
+    const baseCenter = curveOffsetAtZ(track, prefix, forkZ)
+    expect(baseCenter).toBeGreaterThan(0) // 右弯：中心线偏移为正
+    // 左分支先画：首 moveTo 即 samples[0]（forkZ 处 progress=0 → centerOffset = curveOffsetAtZ(forkZ)）
+    const firstX = ctx.moveTo.mock.calls[0][0] as number
+    const fixedX = project(opts, cam, { x: baseCenter, y: 0, z: forkZ })!.x
+    const oldBugX = project(opts, cam, { x: baseCenter + baseCenter, y: 0, z: forkZ })!.x // 旧实现双倍叠加
+    // 新语义：与中心线偏移投影一致（容差 1px）；旧语义多出 baseCenter 偏移（>1px 区分）
+    expect(Math.abs(firstX - fixedX)).toBeLessThan(1)
+    expect(Math.abs(firstX - oldBugX)).toBeGreaterThan(1)
   })
 })

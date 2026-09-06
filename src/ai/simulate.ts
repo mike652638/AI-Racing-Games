@@ -95,7 +95,10 @@ export function simulateLaps(
       if (hit) {
         collisions++
         state.speed *= COLLISION_SPEED_FACTOR
-        hit.z = (cameraZ - COLLISION_RESET_DIST + lapLength) % lapLength
+        // 非负取模（2026-09-06 防御）：cameraZ - COLLISION_RESET_DIST 可能为负（首圈早期
+        // cameraZ < 2500 时发生碰撞），JS `%` 对负被除数结果为负——直接取模会得到负 z，
+        // 环形回绕语义失效。lapLength 恒为正（track.length × SEGMENT_LENGTH，见 :58）。
+        hit.z = (((cameraZ - COLLISION_RESET_DIST + lapLength) % lapLength) + lapLength) % lapLength
       }
     }
 

@@ -182,7 +182,9 @@ export function renderRoadSurface(
     }
 
     // 中心虚线：缓存路径已烘焙进纹理；fallback 路径保留逐段绘制（与原行为一致）
-    if (!useCache && shouldDrawCenterLine(k)) {
+    // 修复：统一用绝对段号 baseIndex+k（与 road-strip 烘焙用绝对 segIndex 一致），
+    // 避免相对段号与绝对段号奇偶判定错位导致虚线在缓存/回退两条路径下错开
+    if (!useCache && shouldDrawCenterLine(baseIndex + k)) {
       const cw = (cur.r1.x - cur.l1.x) * 0.06
       // S 修复：复用模块级缓冲（z 恒 > cameraZ，投影必成功）
       const centerProj = project(opts, camera, { x: curveSum, y: 0, z }, _centerProj)

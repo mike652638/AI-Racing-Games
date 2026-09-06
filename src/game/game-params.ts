@@ -52,8 +52,9 @@ export function parseGameParams(params: URLSearchParams): GameParams {
     weatherParam === 'random' || weatherParam === 'sunny' || weatherParam === 'rain' || weatherParam === 'night'
       ? weatherParam
       : 'auto'
-  // M23 方案 13：车流橡皮筋动态难度——?traffic=static 关闭（固定车流速度，simulate/bot 确定性不变），
-  // 缺省 dynamic（运行时按玩家速度平滑调整车流巡航速度）
+  // M23 方案 13：车流橡皮筋动态难度——?traffic=static 关闭（固定车流速度，simulate/bot 确定性不变）。
+  // 宽松解析（2026-09-06 契约锁定）：仅显式 'static' 为 static，其余值（无参/垃圾值如
+  // traffic=garbage）一律回退默认 dynamic（运行时按玩家速度平滑调整车流巡航速度）
   const trafficDynamic = params.get('traffic') !== 'static'
   // M28 方案 10：导航辅助线——?guide=1 开启（强度固定 0.8，新手辅助线亮度），缺省/0 关闭
   const guideStrength = params.get('guide') === '1' ? 0.8 : 0

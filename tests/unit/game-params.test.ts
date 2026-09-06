@@ -46,10 +46,16 @@ describe('parseGameParams', () => {
     expect(parseGameParams(new URLSearchParams('weather=')).weatherMode).toBe('auto')
   })
 
-  it('traffic=static 关闭橡皮筋；其余值（含缺省）保持 dynamic', () => {
+  it('traffic 宽松解析：仅显式 static 关闭；无参/daily 组合/垃圾值一律回退 dynamic', () => {
     expect(parseGameParams(new URLSearchParams('traffic=static')).trafficDynamic).toBe(false)
     expect(parseGameParams(new URLSearchParams('traffic=dynamic')).trafficDynamic).toBe(true)
     expect(parseGameParams(new URLSearchParams('')).trafficDynamic).toBe(true)
+    // daily 参数不影响 traffic 解析（各参数独立判定）
+    expect(parseGameParams(new URLSearchParams('daily=0')).trafficDynamic).toBe(true)
+    expect(parseGameParams(new URLSearchParams('traffic=static&daily=0')).trafficDynamic).toBe(false)
+    // 垃圾值回退默认 dynamic（宽松解析契约）
+    expect(parseGameParams(new URLSearchParams('traffic=garbage')).trafficDynamic).toBe(true)
+    expect(parseGameParams(new URLSearchParams('traffic=off')).trafficDynamic).toBe(true)
   })
 
   it('guide=1 开启 0.8 强度；其余值关闭', () => {

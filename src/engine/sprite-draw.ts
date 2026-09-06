@@ -1,6 +1,7 @@
 /** 景物形状绘制模块（2026-08-05 从 Renderer 类提取）：树/仙人掌/棕榈/雪堆/路灯。
  *  均为纯函数（仅依赖 ctx 与坐标参数），尺寸由 hpx（投影后像素高度）推导，
  *  与 Renderer.drawSprites 的调度（投影/裁剪/循环）解耦。 */
+import { shadeColor } from './road-strip'
 
 /** 树：树干 + 两层三角树冠（M17 环境树色由 sprite 携带，缺省回退内置 #2d5a27/#3a7a35） */
 export function drawTree(
@@ -86,7 +87,9 @@ export function drawPalm(
   ctx.lineTo(x + bend + crownW * 0.55, crownY)
   ctx.closePath()
   ctx.fill()
-  ctx.fillStyle = (leafColor ?? '#2a6a3a').replace('#', '#3') // 简化：上层叶略亮用同一色系近似
+  // 上层叶略亮：复用 shadeColor（6 位 hex 变亮；非 6 位 hex 原样返回防御）。
+  // 修复：原 `(leafColor ?? '#2a6a3a').replace('#', '#3')` 产出 7 位非法 hex（如 #32a6a3a）被浏览器忽略
+  ctx.fillStyle = shadeColor(leafColor ?? '#2a6a3a', 1.15)
   ctx.beginPath()
   ctx.moveTo(x + bend, crownY - hpx * 0.22)
   ctx.lineTo(x + bend - crownW * 0.8, crownY)

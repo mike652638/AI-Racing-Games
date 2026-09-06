@@ -594,6 +594,34 @@ function stepDriveAudio(ctx: FrameUpdateContext, wet: boolean, effInput1: CarInp
   ctx.tireSound?.setLevel(race.player1.carState.speed / carConfig.maxSpeed, Math.abs(effInput1.steer), wet)
 }
 
+/**
+ * 构造默认帧结果（提前返回分支共用基准，2026-09-06 工厂化）：
+ * 非比赛/倒计时冻结/完赛三分支此前重复构造 15+ 字段，且历史曾漏 boostBar2。
+ * 集中于此构造默认字段，各分支仅覆盖差异字段，保证字段完备。
+ * - 默认值取 ctx 缓存（lastActivePlayer/boostActive/lastCollisionCount/challenge* 等）；
+ * - collisionFlash 无碰撞事件时按 dt 衰减（与原分支内 updateCollisionFlash(ctx.collisionFlash, null, dt) 逐字节一致）；
+ * - nearMissHideIn 默认 null、shouldRender 默认 true、countdownJustFinished 默认 false；
+ * - steer1/steer2 默认不提供（undefined）——非比赛/倒计时分支未做输入路由，
+ *   由 GameLoop 回退 collectSteerInputs；完赛/正常分支显式覆盖。
+ */
+function emptyFrameResult(ctx: FrameUpdateContext, dt: number): FrameUpdateResult {
+  return {
+    shouldRender: true,
+    countdownJustFinished: false,
+    lastActivePlayer: ctx.lastActivePlayer,
+    boostActive: ctx.boostActive,
+    lastCollisionCount: ctx.lastCollisionCount,
+    collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
+    challengeTimer: ctx.challengeTimer,
+    challengeScore: ctx.challengeScore,
+    dailyBadge: ctx.dailyBadge,
+    boostBar: ctx.boostBar,
+    boostBar2: ctx.boostBar2 ?? null,
+    nearMissEl: ctx.nearMissEl ?? null,
+    nearMissHideIn: null,
+  }
+}
+
 export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateResult {
   const { race, trackManager, carConfig, mode } = ctx
 
@@ -608,24 +636,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     // P0-2（2026-09-04）：非比赛阶段同样复位 near-miss 飘字（暂停/结算/回菜单时不残留）
     ctx.nearMissEl ??= document.getElementById('near-miss') as HTMLDivElement | null
     hideNearMiss(ctx.nearMissEl ?? null)
-    return {
-      shouldRender: true,
-      countdownJustFinished: false,
-      lastActivePlayer: ctx.lastActivePlayer,
-      boostActive: ctx.boostActive,
-      lastCollisionCount: ctx.lastCollisionCount,
-      collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
-      challengeTimer: ctx.challengeTimer,
-      challengeScore: ctx.challengeScore,
-      dailyBadge: ctx.dailyBadge,
-      boostBar: ctx.boostBar,
-      // 2026-09-04：补齐与正常分支一致的字段集合（此前漏 boostBar2，靠 GameLoop 下帧
-      // 惰性重取兜底；显式补齐可避免未来新增字段时再次漏掉某个提前返回分支）。
-      // steer1/steer2 不返回——本分支未做输入路由，由 GameLoop 回退 collectSteerInputs。
-      boostBar2: ctx.boostBar2 ?? null,
-      nearMissEl: ctx.nearMissEl ?? null,
-      nearMissHideIn: null,
-    }
+    return emptyFrameResult(ctx, dt)
   }
 
   // F-1（2026-08-05 审计修复）：起步倒计时冻结窗口——countdownRemaining > 0 时比赛未正式开始，
@@ -640,22 +651,7 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
     // P0-2（2026-09-04）：起步倒计时窗口同样复位 near-miss 飘字
     ctx.nearMissEl ??= document.getElementById('near-miss') as HTMLDivElement | null
     hideNearMiss(ctx.nearMissEl ?? null)
-    return {
-      shouldRender: true,
-      countdownJustFinished: race.countdownRemaining === 0,
-      lastActivePlayer: ctx.lastActivePlayer,
-      boostActive: ctx.boostActive,
-      lastCollisionCount: ctx.lastCollisionCount,
-      collisionFlash: updateCollisionFlash(ctx.collisionFlash, null, dt),
-      challengeTimer: ctx.challengeTimer,
-      challengeScore: ctx.challengeScore,
-      dailyBadge: ctx.dailyBadge,
-      boostBar: ctx.boostBar,
-      // 2026-09-04：同非比赛分支，补齐 boostBar2（此前漏字段）
-      boostBar2: ctx.boostBar2 ?? null,
-      nearMissEl: ctx.nearMissEl ?? null,
-      nearMissHideIn: null,
-    }
+    return { ...emptyFrameResult(ctx, dt), countdownJustFinished: race.countdownRemaining === 0 }
   }
 
   // —— 编排：环境（天气/雨声/雨天物理/挑战加成）——
@@ -706,18 +702,12 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   if (mode.shouldFinish(race, trackManager, ctx.hotseatPlayer)) {
     ctx.onFinish()
     return {
+      ...emptyFrameResult(ctx, dt),
       shouldRender: false,
-      countdownJustFinished: false,
       lastActivePlayer,
       boostActive,
       lastCollisionCount,
       collisionFlash,
-      challengeTimer: ctx.challengeTimer,
-      challengeScore: ctx.challengeScore,
-      dailyBadge: ctx.dailyBadge,
-      boostBar: ctx.boostBar,
-      boostBar2: ctx.boostBar2 ?? null,
-      nearMissEl: ctx.nearMissEl ?? null,
       nearMissHideIn,
       steer1,
       steer2,
@@ -725,18 +715,11 @@ export function updateFrame(dt: number, ctx: FrameUpdateContext): FrameUpdateRes
   }
 
   return {
-    shouldRender: true,
-    countdownJustFinished: false,
+    ...emptyFrameResult(ctx, dt),
     lastActivePlayer,
     boostActive,
     lastCollisionCount,
     collisionFlash,
-    challengeTimer: ctx.challengeTimer,
-    challengeScore: ctx.challengeScore,
-    dailyBadge: ctx.dailyBadge,
-    boostBar: ctx.boostBar,
-    boostBar2: ctx.boostBar2 ?? null,
-    nearMissEl: ctx.nearMissEl ?? null,
     nearMissHideIn,
     steer1,
     steer2,

@@ -57,6 +57,8 @@ const AVOID_X_TOL = 1.2
 const AVOID_STEP = 0.8
 /** 避让变道目标 offset 幅度（clamp |offset| ≤ 该值） */
 const AVOID_LANE_EDGE = 0.85
+/** 几乎同车道判定容差（|车 offset - 玩家 x| 小于该值视为并排/同车道，按"远离玩家侧"避让） */
+const AVOID_SAME_LANE_TOL = 0.3
 
 /**
  * 环形前向距离（跨圈语义的单一真源）：从 from 沿赛道前进到 to 的距离，结果恒 ∈ [0, lapLength)。
@@ -140,13 +142,28 @@ export function updateTraffic(
     const d = ringForwardDistance(player.z, car.z, lapLength)
     if (d > 0 && d < AVOID_Z_DIST && Math.abs(car.offset - player.x) < AVOID_X_TOL) {
       // —— 触发避让：向远离玩家的一侧渐变（步进 AVOID_STEP*dt，clamp ±AVOID_LANE_EDGE）——
-      const target = player.x > 0 ? -AVOID_LANE_EDGE : AVOID_LANE_EDGE
+      // 修复：避让方向基于**车相对玩家位置**——车在玩家右侧（rel > 0）则向左避让（负目标），
+      // 车在玩家左侧（rel < 0）则向右避让（正目标）——车流交换到玩家对侧车道横向错开；
+      // 几乎同车道（|rel| < AVOID_SAME_LANE_TOL）时远离玩家所在侧。
+      // 原实现只看玩家 x 符号，与车自身位置脱钩（车在玩家左侧时反而向玩家方向靠拢）。
+      // 物理约束：玩家近中心（|x| ≤ AVOID_X_TOL，避让触发窗口内）时车流若交换车道
+      // 必然横穿玩家路径（左右车道车流向中心汇聚）→ 碰撞恶化，该场景退化为「远离玩家侧」
+      // 取目标（与旧逻辑方向一致，bot/分屏回归零恶化）。
+      const rel = car.offset - player.x
+      const target =
+        Math.abs(rel) < AVOID_SAME_LANE_TOL || Math.abs(player.x) <= AVOID_X_TOL
+          ? player.x > 0
+            ? -AVOID_LANE_EDGE
+            : AVOID_LANE_EDGE
+          : rel > 0
+            ? -AVOID_LANE_EDGE
+            : AVOID_LANE_EDGE
       const step = AVOID_STEP * dt
       const delta = target > car.offset ? Math.min(step, target - car.offset) : Math.max(-step, target - car.offset)
       car.offset += delta
       car.offset = Math.max(-AVOID_LANE_EDGE, Math.min(AVOID_LANE_EDGE, car.offset))
       // 记录避让方向（车灯随变道转向）：目标侧为负 → -1，为正 → 1
-      car.shiftDir = player.x > 0 ? -1 : 1
+      car.shiftDir = target > 0 ? 1 : -1
     } else {
       // —— 未触发避让（远离 / 横向不接近）：渐变恢复巡航偏移 ——
       // 恢复速率同避让（AVOID_STEP*dt，clamp ±AVOID_LANE_EDGE）；恢复途中 shiftDir 指示恢复方向

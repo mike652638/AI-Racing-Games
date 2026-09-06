@@ -21,6 +21,7 @@ import {
   SPLIT_TOUCH_HINT,
   WEATHER_MODE_LABEL,
 } from '../../src/ui/copy'
+import { ACHIEVEMENT_ID_LIST } from '../../src/ui/save'
 
 describe('copy.ts UI 文案常量', () => {
   it('倒计时提示恰好三条且不为空', () => {
@@ -77,7 +78,7 @@ describe('copy.ts UI 文案常量', () => {
     expect(MEDAL_LABEL.S).toBe('S')
     expect(MEDAL_LABEL.A).toBe('A')
     expect(MEDAL_LABEL.B).toBe('B')
-    expect(Object.keys(ACHIEVEMENTS).length).toBeGreaterThanOrEqual(6)
+    expect(Object.keys(ACHIEVEMENTS).length).toBe(ACHIEVEMENT_ID_LIST.length)
     for (const a of Object.values(ACHIEVEMENTS)) {
       expect(a.name.length).toBeGreaterThan(0)
       expect(a.desc.length).toBeGreaterThan(0)

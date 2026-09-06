@@ -114,15 +114,18 @@ function drawForkBranch(
   curvePrefixSum: Float64Array,
   forkZ: number,
   dirOffset: number,
-  baseCenter: number,
   rgb: string,
   alpha: number,
 ): void {
   const samples: Array<{ x: number; y: number }> = []
   for (let z = forkZ; z <= forkZ + ROUTE_FORK_LENGTH; z += ROUTE_FORK_SAMPLE_STEP) {
-    // 分支中心：当前道路中心 + 按距离线性插值到目标分叉偏移
+    // 分支中心：当前道路中心 + 按距离线性插值到目标分叉偏移。
+    // 修复：不再叠加 baseCenter——curveOffsetAtZ(z) 已返回 z 处道路中心线的**绝对**曲率偏移
+    // （自赛道起点累计，forkZ 处即等于 baseCenter），再叠加 baseCenter 会双重计入绝对偏移
+    // （弯道处分支被错误地多偏移一个 baseCenter）。去掉后分支在 forkZ 起点仍对齐 baseCenter
+    // （curveOffsetAtZ(forkZ) === baseCenter），直道（曲线=0）从 0 出发、弯道沿中心线正确跟随。
     const progress = (z - forkZ) / ROUTE_FORK_LENGTH
-    const centerOffset = curveOffsetAtZ(track, curvePrefixSum, z) + baseCenter + dirOffset * Math.min(progress, 1)
+    const centerOffset = curveOffsetAtZ(track, curvePrefixSum, z) + dirOffset * Math.min(progress, 1)
     const p = project(opts, camera, { x: centerOffset, y: 0, z })
     if (p && p.scale > 0.01) {
       samples.push({ x: p.x, y: p.y })
@@ -166,8 +169,6 @@ export function drawRouteFork(
   }
   // 分叉起点：相机前方 ROUTE_FORK_START_DELAY（道路末端在相机前方，从道路尾端开始分叉）
   const forkZ = camera.z + ROUTE_FORK_START_DELAY
-  // 取分叉起点的当前道路中心线曲率偏移（作为左右分支偏移的基准）
-  const baseCenter = curveOffsetAtZ(track, curvePrefixSum, forkZ)
   // 左分支（偏移向左 → 负）、右分支（偏移向右 → 正）；颜色：左青右橙（与 UI 按钮配色一致）
   drawForkBranch(
     ctx,
@@ -177,7 +178,6 @@ export function drawRouteFork(
     curvePrefixSum,
     forkZ,
     -Math.abs(routeFork.leftOffset),
-    baseCenter,
     '0, 217, 255',
     0.7 * forkAlpha,
   )
@@ -189,7 +189,6 @@ export function drawRouteFork(
     curvePrefixSum,
     forkZ,
     Math.abs(routeFork.rightOffset),
-    baseCenter,
     '255, 160, 60',
     0.7 * forkAlpha,
   )

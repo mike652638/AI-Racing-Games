@@ -642,7 +642,6 @@ describe('F-1 起步倒计时冻结（2026-08-05 审计）', () => {
     const mode = makeStubMode()
     const race = createRaceState()
     race.countdownRemaining = 2.4
-    race.phase = PHASE_RACING
     const ctx = makeCtx({
       mode,
       race,
@@ -671,7 +670,6 @@ describe('F-1 起步倒计时冻结（2026-08-05 审计）', () => {
     const mode = makeStubMode()
     const race = createRaceState()
     race.countdownRemaining = DT // 恰好一帧后归零
-    race.phase = PHASE_RACING
     const ctx = makeCtx({ mode, race })
     const r = updateFrame(DT, ctx)
     expect(race.countdownRemaining).toBe(0)

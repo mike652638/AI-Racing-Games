@@ -110,6 +110,23 @@ describe('drawPlayerCar 玩家车辆精灵（P0）', () => {
     expect(boostCanvas.__ctx.__calls.arc ?? 0).toBeGreaterThan(normalCanvas.__ctx.__calls.arc ?? 0)
   })
 
+  test('修复：BOOST 尾焰在 save/rotate 变换内绘制（随车身 steer 倾斜，非绝对坐标）', () => {
+    const canvas = createMockCanvas(800, 600)
+    // 仅 boosting（无 night）：唯一 arc 即尾焰；带 steer 倾斜
+    drawPlayerCar(canvas.__ctx, opts, { boosting: true, steer: 0.8 })
+    const order = canvas.__ctx.__order
+    const saveIdx = order.indexOf('save')
+    const restoreIdx = order.indexOf('restore')
+    const arcIdxs = order.map((m, i) => (m === 'arc' ? i : -1)).filter((i) => i >= 0)
+    expect(saveIdx).toBeGreaterThanOrEqual(0)
+    expect(restoreIdx).toBeGreaterThan(saveIdx)
+    // 尾焰 arc 位于 save 与 restore 之间（变换生效），且 rotate 已先应用
+    expect(arcIdxs).toHaveLength(1)
+    expect(arcIdxs[0]).toBeGreaterThan(saveIdx)
+    expect(arcIdxs[0]).toBeLessThan(restoreIdx)
+    expect(order.indexOf('rotate')).toBeLessThan(arcIdxs[0])
+  })
+
   test('尾翼/支柱/反光/尾灯/车牌 fillRect 颜色与位置（P2 细节）', () => {
     const canvas = createMockCanvas(800, 600)
     drawPlayerCar(canvas.__ctx, opts)

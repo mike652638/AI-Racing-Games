@@ -196,6 +196,10 @@ export class Renderer {
   private mountainsNight: MountainLayer[] = []
   /** M17 当前环境（懒重建远山缓存用：环境切换时才重建离屏位图，运行时零成本） */
   private currentEnv: LightingEnvironment = 'plains'
+  /** 最近一次远山离屏缓存构建的宽度（修复：缓存 key = 环境 + 宽度——分屏渲染时
+   *  renderWithOpts 的 opts.width 为半屏宽，若沿用全屏 this.opts.width 缓存，
+   *  drawMountainLayerCached 用半屏 opts 平铺全屏宽位图会错位/浪费；宽度变化同样触发重建） */
+  private mountainCacheWidth = 0
   /** 赛道曲率前缀和，用于 O(1) 查询累计曲率 */
   private curvePrefixSum: Float64Array
   /** 路边景物段索引（键 = floor(z / SEGMENT_LENGTH)），drawSprites 用 O(候选段数) 查询替代线性扫描 */
@@ -284,6 +288,7 @@ export class Renderer {
     const env = getEnvironmentProfile(this.currentEnv)
     this.mountains = this.buildMountains(width, env.mountainFar, env.mountainNear)
     this.mountainsNight = this.buildMountains(width, env.mountainFarNight, env.mountainNearNight)
+    this.mountainCacheWidth = width
   }
 
   /** 确定性生成雨滴数据（种子 2026；x 归一化 0-1，setViewport 改变画布尺寸时无需重算）。
@@ -471,10 +476,12 @@ export class Renderer {
     }
     this.camera.z = cameraZ
     // M17：按环境懒重建远山离屏缓存（不同环境配色不同；切换赛道时重建一次，运行时稳定复用）
+    // 修复：改用当前渲染 opts.width（分屏为半屏宽）+ 缓存 key 含宽度——
+    // 环境未变但宽度变化（分屏/全屏切换、resize）时同样重建，保证位图宽度与绘制宽度一致
     const envForMountains = (view?.environment ?? 'plains') as LightingEnvironment
-    if (envForMountains !== this.currentEnv) {
+    if (envForMountains !== this.currentEnv || opts.width !== this.mountainCacheWidth) {
       this.currentEnv = envForMountains
-      this.rebuildMountains(this.opts.width)
+      this.rebuildMountains(opts.width)
     }
     // 天气循环：晴/阴/雨三态各 45 秒循环（phase 0 晴 / 1 阴 / 2 雨，timeSec 为渲染用累计时间）
     // R6 收敛：phase 判定走 lighting.resolveWeatherPhase 单一真源——M23 方案 11 支持对局天气变体

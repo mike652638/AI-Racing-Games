@@ -57,7 +57,10 @@ export function aheadCurve(ctx: BotContext, cameraZ: number): number {
 
 export function decideBotInput(ctx: BotContext, state: CarState, cameraZ: number): CarInput {
   const { config } = ctx
-  const rawSteer = -state.position * config.steerGain
+  // NaN 防御（2026-09-06）：position 非有限（NaN/±Infinity）时回退 0 再 clamp，
+  // 避免 rawSteer 传播 NaN 导致 bot 转向失控/判定失效
+  const pos = Number.isFinite(state.position) ? state.position : 0
+  const rawSteer = -pos * config.steerGain
   const steer = rawSteer === 0 ? 0 : Math.max(-1, Math.min(1, rawSteer))
   const isCorner = aheadCurve(ctx, cameraZ) > config.cornerCurveThreshold
   let limit = isCorner ? config.targetSpeed * config.cornerSpeedFactor : config.targetSpeed

@@ -66,6 +66,8 @@ export class MusicPlayer {
   private accumulator = 0
   /** 调度步长：30Hz，比 setInterval 更抗节流、更平滑 */
   private readonly STEP = 1 / 30
+  /** 踩镲白噪声缓冲（4096 采样，按实例惰性缓存——2026-09-06 起不再每 4 拍新建 AudioBuffer） */
+  private hatBuffer: AudioBuffer | null = null
 
   constructor(
     private readonly ctx: AudioContext,
@@ -142,19 +144,25 @@ export class MusicPlayer {
     osc.stop(when + duration)
   }
 
-  /** 白噪声踩镲：短促高频衰减 */
+  /** 白噪声踩镲：短促高频衰减（缓冲按实例缓存复用，见 hatBuffer） */
   private hat(when: number): void {
+    this.hatBuffer ??= this.createHatBuffer()
+    const src = this.ctx.createBufferSource()
+    const gain = this.ctx.createGain()
+    src.buffer = this.hatBuffer
+    gain.gain.setValueAtTime(0.04, when)
+    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.05)
+    src.connect(gain).connect(this.output)
+    src.start(when)
+  }
+
+  /** 构造 4096 采样白噪声线性衰减缓冲（仅首次踩镲时创建；同实例后续复用同一 AudioBuffer） */
+  private createHatBuffer(): AudioBuffer {
     const buffer = this.ctx.createBuffer(1, 4096, this.ctx.sampleRate)
     const data = buffer.getChannelData(0)
     for (let i = 0; i < data.length; i++) {
       data[i] = (Math.random() * 2 - 1) * (1 - i / data.length)
     }
-    const src = this.ctx.createBufferSource()
-    const gain = this.ctx.createGain()
-    src.buffer = buffer
-    gain.gain.setValueAtTime(0.04, when)
-    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.05)
-    src.connect(gain).connect(this.output)
-    src.start(when)
+    return buffer
   }
 }

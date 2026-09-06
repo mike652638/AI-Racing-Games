@@ -31,7 +31,7 @@ describe('createRaceState / resetRaceState', () => {
     expect(race.lastLap).toBe(1)
     expect(race.lapTimes2).toEqual([])
     expect(race.lastLap2).toBe(1)
-    expect(race.phase).toBe('menu')
+    // race.phase 已于 2026-09-06 删除（GameLoop 实例字段管理阶段，RaceState 不含阶段）
     expect(race.finishShown).toBe(false)
     // 双玩家各持独立赛道上下文与独立车流数组（分屏各用其一）
     expect(race.tracks).toHaveLength(2)

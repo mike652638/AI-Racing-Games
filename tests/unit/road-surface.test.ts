@@ -71,3 +71,38 @@ describe('M18 路缘柔和过渡（road-surface）', () => {
     expect(a).toEqual(b)
   })
 })
+
+describe('中心虚线奇偶一致性（fallback 用绝对段号）', () => {
+  it('baseIndex 为奇数时：中心虚线画在绝对偶数段（与 road-strip 烘焙同一判定）', () => {
+    const styles: string[] = []
+    // cameraZ = 3×SEGMENT_LENGTH → baseIndex = 3；k=0 段 z=cameraZ 被跳过，
+    // 实际绘制从绝对段 baseIndex+1 = 4 起（120 段覆盖绝对 4..123）
+    renderFallback(SEGMENT_LENGTH * 3, styles)
+    // 段首标记 = 路面第 2 带（factor 1.02）：偶段 #494949 / 奇段 #414141，每段恰好 1 次（第 1/3 带同为 0.97 色）
+    const evenBand1 = shadeColor('#484848', 1.02)
+    const oddBand1 = shadeColor('#404040', 1.02)
+    const segments: string[][] = []
+    let cur: string[] | null = null
+    for (const s of styles) {
+      if (s === evenBand1 || s === oddBand1) {
+        cur = []
+        segments.push(cur)
+      }
+      cur?.push(s)
+    }
+    expect(segments.length).toBeGreaterThan(10) // 覆盖足够多段
+    segments.forEach((fills, i) => {
+      const segIndex = 4 + i // 实际绘制段的绝对段号（baseIndex+1 起）
+      const whiteCount = fills.filter((s) => s === '#e8e8e8').length
+      if (segIndex % 2 === 0) {
+        // 绝对偶数段：路缘红 #d03030，白色仅来自中心虚线（恰好 1 次）
+        expect(whiteCount, `绝对偶数段 ${segIndex} 应画中心虚线`).toBe(1)
+      } else {
+        // 绝对奇数段：白色来自左右路缘（恰好 2 次），不画中心虚线
+        expect(whiteCount, `绝对奇数段 ${segIndex} 不应画中心虚线`).toBe(2)
+      }
+    })
+    // 反证：相对段号 k=0（绝对 3）虽被 z<=cameraZ 跳过，但相对偶数 k=2,4,… 对应绝对 5,7,…
+    // （奇数段）——旧实现在这些段画中心线（whiteCount=3），本断言锁定新实现仅在绝对偶数段画线
+  })
+})

@@ -1,6 +1,6 @@
 /** 最佳圈速存档（按赛道 ID 分 key，localStorage 不可用时安全降级；分屏 P2 用 -p2 后缀独立存档） */
 import type { MedalGrade } from '../shared/medal'
-import type { DailyState } from '../game/daily'
+import type { DailyState } from '../shared/types'
 
 const BEST_TIME_PREFIX = 'outrun-pseudo3d-best-'
 const BEST_DRIFT_PREFIX = 'outrun-pseudo3d-best-drift-'

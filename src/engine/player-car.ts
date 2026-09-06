@@ -92,14 +92,6 @@ export function drawPlayerCar(
   const cx = opts.width / 2 + laneOffsetToPx(laneOffset, opts, carW)
   const bottomY = opts.height - opts.height * PLAYER_CAR_BOTTOM_GAP_RATIO
 
-  // BOOST 车尾尾焰（画在车身之前，被车身下缘部分覆盖）
-  if (boosting) {
-    ctx.fillStyle = BOOST_FLAME_COLOR
-    ctx.beginPath()
-    ctx.arc(cx, bottomY, carH * 0.17, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
   // 转向倾斜：围绕车底中心 save/rotate/restore（steer 缺省由 laneOffset 推导，保持纯函数风格）
   const steer = options?.steer ?? Math.max(-1, Math.min(1, laneOffset * 1.2))
   const angle = (steer * PLAYER_CAR_MAX_TILT_DEG * Math.PI) / 180
@@ -107,6 +99,15 @@ export function drawPlayerCar(
   ctx.translate(cx, bottomY)
   ctx.rotate(angle)
   ctx.translate(-cx, -bottomY)
+
+  // BOOST 车尾尾焰（画在车身之前，被车身下缘部分覆盖；修复：移入 save/rotate 变换内绘制，
+  // 随车身 steer 倾斜——原实现在变换外以绝对坐标绘制，转向时尾焰不随车身摆动）
+  if (boosting) {
+    ctx.fillStyle = BOOST_FLAME_COLOR
+    ctx.beginPath()
+    ctx.arc(cx, bottomY, carH * 0.17, 0, Math.PI * 2)
+    ctx.fill()
+  }
 
   // 尾翼（车顶后端深色横条，伸出车身两侧；最先绘制作为底层——车身覆盖其中段，
   // 仅两侧伸出部分可见，模拟横贯车顶的扰流板；纯渲染细节，不影响任何数学）

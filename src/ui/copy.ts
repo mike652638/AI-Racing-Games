@@ -9,7 +9,7 @@
  * 每次更新部署时递增 BUILD 号并更新 BUILD_DATE，方便用户确认线上已是最新版。
  * 当前对应 M21 里程碑（2026-08-07 菜单沉浸感优化批次：赛道预览背景层/响应式修复/整体感优化/子路径部署修复）。
  */
-export const APP_VERSION = 'v1.21.0'
+export const APP_VERSION = 'v1.22.0'
 export const APP_VERSION_DATE = '2026-08-08'
 
 /** 起步倒计时覆盖层操作提示（#countdown-overlay .countdown-hints，由 startCountdown 填充） */

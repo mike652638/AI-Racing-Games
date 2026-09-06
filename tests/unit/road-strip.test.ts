@@ -166,6 +166,26 @@ describe('renderRoadStripToCanvas', () => {
     expect(findRect(canvas, { y: 8, w: lineHalf * 2, fillStyle: '#e8e8e8' })).toBeDefined()
   })
 
+  it('should use ABSOLUTE segment index for center-line parity (奇数起始 strip 不偏移奇偶判定)', () => {
+    // strip 从绝对段 3（奇数）开始：段内 i=0 → 绝对 3（奇数，不画线）、i=1 → 绝对 4（偶数，画线）。
+    // 若按 strip 内相对段号判定，i=1（相对奇数）会错误地不画线——与 road-surface fallback
+    // （shouldDrawCenterLine(baseIndex + k)）保持一致是本测试要锁定的契约。
+    const strip3: RoadStrip = { startSeg: 3, endSeg: 7, startZ: 3 * 200, endZ: 7 * 200, curveAvg: 0 }
+    const canvas = renderRoadStripToCanvas(strip3, { width: WIDTH }) as unknown as MockOffscreenCanvas
+    const total = 2 * ROAD_HALF_WIDTH + 2 * EDGE_WIDTH
+    const roadHalf = (WIDTH * ((2 * ROAD_HALF_WIDTH) / total)) / 2
+    const lineHalf = roadHalf * 2 * 0.06 * 0.5
+    // 绝对奇数段 3（y=0）：无中心线
+    expect(findRect(canvas, { y: 0, w: lineHalf * 2, fillStyle: '#e8e8e8' })).toBeUndefined()
+    // 绝对偶数段 4（y=4）：画中心线
+    const lineRect = findRect(canvas, { y: 4, w: lineHalf * 2, fillStyle: '#e8e8e8' })
+    expect(lineRect).toBeDefined()
+    expect(lineRect?.x).toBeCloseTo(WIDTH / 2 - lineHalf)
+    // 绝对奇数段 5（y=8）：无中心线；绝对偶数段 6（y=12）：画线
+    expect(findRect(canvas, { y: 8, w: lineHalf * 2, fillStyle: '#e8e8e8' })).toBeUndefined()
+    expect(findRect(canvas, { y: 12, w: lineHalf * 2, fillStyle: '#e8e8e8' })).toBeDefined()
+  })
+
   it('should keep road shoulders within side width (路面/路缘比例正确、无越界)', () => {
     const canvas = renderRoadStripToCanvas(strip04, { width: WIDTH }) as unknown as MockOffscreenCanvas
     const total = 2 * ROAD_HALF_WIDTH + 2 * EDGE_WIDTH

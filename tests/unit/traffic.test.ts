@@ -267,4 +267,33 @@ describe('车流避让与恢复', () => {
     updateTraffic([car], DT, 20000, { z: 2000, x: 0.5 })
     expect(car.offset).toBeCloseTo(-0.81, 6)
   })
+
+  // —— 避让方向基于「车相对玩家位置」的修复回归（原实现只看玩家 x 符号）——
+  test('修复：车在玩家右侧（rel > 0）且玩家明显偏左 → 向左避让（交换到对侧，远离玩家）', () => {
+    const car = stillCar(100, -0.4)
+    const player = { z: 0, x: -1.5 }
+    // rel = -0.4-(-1.5) = 1.1 > 0 → 车在右 → 向左避让（负目标）；旧实现 player.x<0 → 向右（贴向车流）
+    updateTraffic([car], DT, 20000, player)
+    expect(car.offset).toBeCloseTo(-0.4 - 0.04, 6)
+    expect(car.shiftDir).toBe(-1)
+  })
+
+  test('修复：车在玩家左侧（rel < 0）且玩家明显偏右 → 向右避让（交换到对侧，远离玩家）', () => {
+    const car = stillCar(100, 0.4)
+    const player = { z: 0, x: 1.5 }
+    // rel = 0.4-1.5 = -1.1 < 0 → 车在左 → 向右避让（正目标）；旧实现 player.x>0 → 向左（贴向车流）
+    updateTraffic([car], DT, 20000, player)
+    expect(car.offset).toBeCloseTo(0.4 + 0.04, 6)
+    expect(car.shiftDir).toBe(1)
+  })
+
+  test('玩家近中心（|x| ≤ AVOID_X_TOL）：车流远离玩家侧（防横穿玩家路径，与旧逻辑方向一致）', () => {
+    const car = stillCar(100, -0.6)
+    const player = { z: 0, x: 0 }
+    // rel = -0.6（车在左）但玩家居中：若按"交换车道"车流向右会横穿玩家路径 → 退化远离玩家侧
+    // （player.x=0 → 向右 +0.85），保持旧逻辑方向零回归
+    updateTraffic([car], DT, 20000, player)
+    expect(car.offset).toBeCloseTo(-0.6 + 0.04, 6)
+    expect(car.shiftDir).toBe(1)
+  })
 })

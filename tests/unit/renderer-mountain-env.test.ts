@@ -56,6 +56,11 @@ function mountainFarColor(renderer: Renderer): string {
   return (renderer as unknown as { mountains: { color: string }[] }).mountains[0].color
 }
 
+/** 读取 day 路径远山离屏位图宽度（缓存 key 含宽度的断言用） */
+function mountainFarWidth(renderer: Renderer): number {
+  return (renderer as unknown as { mountains: { offscreen: { width: number } }[] }).mountains[0].offscreen.width
+}
+
 describe('远山缓存环境一致性（P0-3）', () => {
   beforeEach(() => {
     stubDocument()
@@ -122,5 +127,25 @@ describe('远山缓存环境一致性（P0-3）', () => {
 
     renderer.setViewport(canvas, 640, 480)
     expect(mountainFarColor(renderer)).toBe(getEnvironmentProfile('desert').mountainFar)
+  })
+
+  it('修复：缓存 key 含宽度——分屏半屏宽渲染按渲染宽度重建（不沿用全屏宽缓存）', () => {
+    const canvas = createMockCanvas(800, 600)
+    const renderer = new Renderer(canvas, createStraightTrack(10), 800, 600)
+    const canyon = makeView('canyon')
+    // 全屏渲染（width=800）触发懒重建
+    renderer.render(0, [], 0, canyon)
+    expect(mountainFarWidth(renderer)).toBe(800)
+    expect(mountainFarColor(renderer)).toBe(getEnvironmentProfile('canyon').mountainFar)
+    // 分屏半屏宽 400：环境未变但宽度变 → 必须重建（修复前沿用全屏 800 宽缓存，位图与绘制宽度错配）
+    renderer.renderRegion(0, 0, 400, [], 0, canyon)
+    expect(mountainFarWidth(renderer)).toBe(400)
+    expect(mountainFarColor(renderer)).toBe(getEnvironmentProfile('canyon').mountainFar)
+    // 同宽再渲染：不重建（缓存稳定，宽度保持 400）
+    renderer.renderRegion(0, 0, 400, [], 0, canyon)
+    expect(mountainFarWidth(renderer)).toBe(400)
+    // 回到全屏宽度：重建回 800
+    renderer.render(0, [], 0, canyon)
+    expect(mountainFarWidth(renderer)).toBe(800)
   })
 })

@@ -22,6 +22,32 @@ import type { RaceState } from '../shared/types'
 export type RouteAdvanceAction = 'none' | 'finish' | 'choice'
 
 /**
+ * 纯解析路线定义与起始段赛道下标（不写 race，2026-09-06 拆分）：
+ * startGame 中需先取得 startTrackIndex 才能 selectTrackFor（其内部触发 resetRace，
+ * resetRaceState 现重置 route 六字段），故 route 字段写入推迟到 selectTrackFor 之后。
+ */
+export function parseRouteRun(routeId: string | null): { routeDef: RouteDef | null; startTrackIndex: number } {
+  const routeDef = routeId !== null ? getRouteDef(routeId) : null
+  if (!routeDef) {
+    return { routeDef: null, startTrackIndex: -1 }
+  }
+  const startStage = getRouteStage(routeDef, routeDef.startStageId)
+  return { routeDef, startTrackIndex: TRACK_DEFS.findIndex((d) => d.id === startStage?.trackId) }
+}
+
+/** 写入路线起始段状态（resetRace 清空 route 字段后由调用方重写；幂等） */
+export function applyRouteStart(race: RaceState, routeDef: RouteDef): void {
+  const startStage = getRouteStage(routeDef, routeDef.startStageId)
+  race.routeStageId = routeDef.startStageId
+  race.routeStageCount = routeStageCount(routeDef)
+  race.routeStageIndex = routeStageIndex(routeDef, routeDef.startStageId)
+  // 起始段即终段时置位（防 resetRaceState 清空后误判非终段）
+  race.routeIsFinish = startStage?.isFinish === true
+  race.routeCumulativeTime = 0
+  race.routeCumulativeDriftScore = 0
+}
+
+/**
  * 路线模式开局初始化（原 startGame 内联块）：加载路线定义、置起始阶段、
  * 清累计用时/得分，返回起始段赛道在 TRACK_DEFS 的下标（-1 = 不可用）。
  */
@@ -29,17 +55,11 @@ export function initRouteRun(
   routeId: string | null,
   race: RaceState,
 ): { routeDef: RouteDef | null; startTrackIndex: number } {
-  const routeDef = routeId !== null ? getRouteDef(routeId) : null
-  if (!routeDef) {
-    return { routeDef: null, startTrackIndex: -1 }
+  const parsed = parseRouteRun(routeId)
+  if (parsed.routeDef) {
+    applyRouteStart(race, parsed.routeDef)
   }
-  const startStage = getRouteStage(routeDef, routeDef.startStageId)
-  race.routeStageId = routeDef.startStageId
-  race.routeStageCount = routeStageCount(routeDef)
-  race.routeStageIndex = routeStageIndex(routeDef, routeDef.startStageId)
-  race.routeCumulativeTime = 0
-  race.routeCumulativeDriftScore = 0
-  return { routeDef, startTrackIndex: TRACK_DEFS.findIndex((d) => d.id === startStage?.trackId) }
+  return parsed
 }
 
 /**

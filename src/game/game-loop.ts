@@ -36,9 +36,10 @@ import { applyMenuChrome } from './menu-setup'
 import { bindModeSelector, type ModeSelectorHandle } from './mode-settings'
 import {
   advanceRouteForkAlpha,
+  applyRouteStart,
   hideRouteChoiceOverlay,
-  initRouteRun,
   openRouteChoice,
+  parseRouteRun,
   routeAdvanceAction,
   selectRouteBranch,
 } from './route-choice'
@@ -817,7 +818,6 @@ export class GameLoop {
       this.hotseatPlayer = 2
       this.resetRace()
       // resetRaceState 已重置 finishShown=false（state.ts 确认），P2 回合结算可再次填充
-      this.race.phase = PHASE_RACING
       this.applyPhase(PHASE_RACING)
       // P0 修复（热座 P2）：P1 完赛时 frame() 因 shouldRender=false 直接 return，
       // 未自续 RAF；P2 回合直接进入 RACING 后 RAF 链已断——applyPhase(RACING) 内 ensureLoop 重启帧循环，
@@ -869,15 +869,21 @@ export class GameLoop {
         this.weatherMode === 'random'
           ? (['sunny', 'rain', 'night'] as const)[Math.floor(Math.random() * 3)]
           : this.weatherMode
-      // M28 方案 9：路线模式开局初始化——加载路线定义、置起始阶段、切换到起始段赛道并重置对局
-      //（下沉 route-choice.ts initRouteRun）。仅菜单阶段（真正开局）执行；RACING/FINISHED 兜底
-      // 调用不重初始化（段切换由 routeStageAdvance 驱动）。
+      // M28 方案 9：路线模式开局初始化——解析路线定义、置起始阶段、切换到起始段赛道并重置对局
+      //（route-choice.ts：parseRouteRun 纯解析 + applyRouteStart 写入）。仅菜单阶段（真正开局）执行；
+      // RACING/FINISHED 兜底调用不重初始化（段切换由 routeStageAdvance 驱动）。
+      // 2026-09-06 顺序调整：resetRaceState 现重置 route 六字段，selectTrackFor 触发的
+      // resetRace 会清空 initRouteRun 的写入——故先纯解析拿赛道下标，selectTrackFor 之后
+      // 再 applyRouteStart 写入起始段状态（单次写入，避免"写→清→重写"）。
       if (this.mode.routeMode && this.routeId !== null) {
-        const { routeDef, startTrackIndex } = initRouteRun(this.routeId, this.race)
+        const { routeDef, startTrackIndex } = parseRouteRun(this.routeId)
         this.routeDef = routeDef
         if (startTrackIndex >= 0) {
           // 起始段赛道：切换赛道（触发 resetRace 与渲染缓存重建）
           this.selectTrackFor(0, startTrackIndex)
+        }
+        if (routeDef) {
+          applyRouteStart(this.race, routeDef)
         }
       }
       // A2：每日挑战赛中徽章——当前赛道 == 今日赛道才显示（?daily=0 关闭时不显示；
@@ -965,11 +971,28 @@ export class GameLoop {
    * 无该方向出口（终段/单出口缺省）时不动作。
    */
   private chooseRouteBranch(dir: 'left' | 'right'): void {
-    // 累计本段时间/得分 + 段状态更新下沉 route-choice.ts selectRouteBranch（纯计算）
+    // 累计本段时间/得分 + 段状态更新下沉 route-choice.ts selectRouteBranch（纯计算 + 写入 race）
     const result = selectRouteBranch({ routeDef: this.routeDef, race: this.race, dir })
     if (!result) return
-    // 切到下一段赛道（触发 resetRace 清本段玩家状态/计时，保留 routeCumulative* 与 routeStage*）
+    // 快照 selectRouteBranch 写入的段状态：resetRaceState（2026-09-06 起重置 route 六字段）
+    // 会在 selectTrackFor 内清空——route 字段由路线模块生命周期管理，切段后需恢复
+    const stageSnapshot = {
+      stageId: this.race.routeStageId,
+      stageIndex: this.race.routeStageIndex,
+      stageCount: this.race.routeStageCount,
+      isFinish: this.race.routeIsFinish,
+      cumulativeTime: this.race.routeCumulativeTime,
+      cumulativeDrift: this.race.routeCumulativeDriftScore,
+    }
+    // 切到下一段赛道（触发 resetRace 清本段玩家状态/计时，routeCumulative* 与 routeStage* 经快照恢复）
     this.selectTrackFor(0, result.trackIndex)
+    // 恢复段状态快照（resetRace 清空后重写——语义与原"保留 routeCumulative* 与 routeStage*"一致）
+    this.race.routeStageId = stageSnapshot.stageId
+    this.race.routeStageIndex = stageSnapshot.stageIndex
+    this.race.routeStageCount = stageSnapshot.stageCount
+    this.race.routeIsFinish = stageSnapshot.isFinish
+    this.race.routeCumulativeTime = stageSnapshot.cumulativeTime
+    this.race.routeCumulativeDriftScore = stageSnapshot.cumulativeDrift
     this.routeChoosing = false
     this.routeFork = null
     this.routeForkAlpha = 0

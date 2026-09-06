@@ -20,7 +20,6 @@ import type { TrafficCar } from '../engine/traffic'
 import type { WeatherOverride } from '../engine/lighting'
 import type { CarState } from '../physics/car'
 import type { DriftState } from '../physics/drift'
-import type { Phase } from './phase'
 
 /**
  * 单个玩家的完整赛道世界上下文：赛道定义、分段数据、圈长/圈数、
@@ -125,8 +124,6 @@ export interface RaceState {
   lapTimes2: number[]
   /** P2 当前已完成圈数（1 基） */
   lastLap2: number
-  /** 游戏阶段（菜单/比赛/暂停/结算） */
-  phase: Phase
   /**
    * 起步倒计时剩余冻结时长（秒，2026-08-05 审计 F-1）：
    * >0 时比赛未正式开始（raceTime/车流/玩家物理冻结，帧更新段按 dt 递减）；
@@ -157,4 +154,20 @@ export interface RaceState {
   routeStageIndex: number
   /** M28 方案 9：当前阶段是否为终点（完赛判定：终点段跑满 1 圈即完赛；段切换更新） */
   routeIsFinish: boolean
+}
+
+/**
+ * 每日挑战存档状态（2026-09-06 自 game/daily 提升：ui/save.ts 以 import type 消费，
+ * 类型提升到 shared 后 ui → game 依赖方向进一步收紧；运行时仅类型，零依赖）。
+ * 持久化由 ui/save.ts 负责；date 为 YYYY-MM-DD 本地日期字符串。
+ */
+export interface DailyState {
+  /** 挑战日期（YYYY-MM-DD，本地时区） */
+  date: string
+  /** 今日赛道 id（由 daily.dailyTrackIdFor 确定性生成） */
+  trackId: string
+  /** 今日挑战是否已完成（该赛道完赛即完成，只升不降直到日期变更） */
+  done: boolean
+  /** 连续完成挑战天数（断签归 1；今天完成第 1 天为 1） */
+  streak: number
 }
