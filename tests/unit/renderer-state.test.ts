@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest'
 import { Renderer, type BoostParticle, type RenderView } from '../../src/engine/renderer'
-import { SEGMENT_LENGTH } from '../../src/engine/track'
+import { SEGMENT_LENGTH, trackIndexForCameraZ } from '../../src/engine/track'
 import { createStraightTrack } from '../helpers/track'
 import { createTrackFromDef, TRACK_DEFS } from '../../src/engine/tracks'
 import { createTraffic, type TrafficCar } from '../../src/engine/traffic'
@@ -736,7 +736,8 @@ describe('Renderer 状态切换', () => {
       // 期望投影：景物中心取相机相对累计曲率（与 renderRoadSurface 的 curveSum 同坐标系）
       const opts = { width: 800, height: 600, horizon: 600 * 0.35, depth: 800 * 0.84 }
       const camera = { x: 0, y: 1, z: cameraZ }
-      const relCenter = curveOffsetAtZ(track, prefix, spriteZ) - camCurve
+      const relCenter =
+        curveOffsetAtZ(track, prefix, spriteZ) - prefix[(trackIndexForCameraZ(track, cameraZ) + 1) % track.length]
       const expected = project(opts, camera, { x: relCenter + 1.4, y: 0, z: spriteZ })
       const wrongCandidate = project(opts, camera, {
         x: curveOffsetAtZ(track, prefix, spriteZ) + 1.4,

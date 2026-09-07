@@ -662,7 +662,11 @@ export class Renderer {
   /** 绘制路边景物与车流的合并景深通道（2026-08-05）：两类世界物体各自投影后按 z 降序
    *  双指针归并绘制（画家算法）——近处树/路灯正确遮挡远处车流，远处车流不再覆盖近处景物。
    *  景物中心同时减去相机自身曲率偏移（坐标系修正）：路面渲染的曲率累计以相机为起点归零，
-   *  curveOffsetAtZ 返回赛道绝对前缀和，不减相机偏移会在弯道上系统性漂移（实测最大 0.36 世界单位）。 */
+   *  景物中心减去 camCurve 对齐路面相对坐标系。2026-09-07 修复「景物漂进路中央」：
+   *  旧零点 curveOffsetAtZ(cameraZ) 多含 c[camIndex]×(1−fracCam)：
+   *  弯道处景物相对路面横移最多一整个段曲率，把 ±1.55 的路边树漂进路中央，
+   *  且随相机段内位置“游动”（用户截图实测）。零点改为 baseIndex+1 段起点前缀和。
+   */
   private drawWorldObjects(
     cameraZ: number,
     opts: ProjectionOptions,
@@ -680,7 +684,9 @@ export class Renderer {
     // lapLength 传入以启用车流环形语义：车流 z 恒在 [0, lapLength) 内循环，而 cameraZ 单调累加，
     // 第二圈起若不环形化，车流既不渲染也不碰撞（2026-09-04 P0-1 修复）。
     const cars = projectTraffic(v.traffic, cameraZ, this.camera.x, opts, this.camera, v.track.length * SEGMENT_LENGTH)
-    const camCurve = curveOffsetAtZ(v.track, v.curvePrefixSum, cameraZ)
+    // 零点对齐说明见 drawSpriteProjected 上方注释（2026-09-07 漂移修复）
+    const camIndex = trackIndexForCameraZ(v.track, cameraZ)
+    const camCurve = v.curvePrefixSum[(camIndex + 1) % v.track.length]
     // spriteScratch 近→远（索引 0 最近），cars 远→近（索引 0 最远）；双指针从远端向近端归并
     let si = count - 1
     let ti = 0
